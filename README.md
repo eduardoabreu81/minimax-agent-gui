@@ -57,14 +57,38 @@ minimax-agent-gui/
 └── workspace/              # Agent working directory & conversations
 ```
 
-## Token Plan Plus (Monthly $20)
+## Token Plans
 
-| Feature | Limit |
-|---------|-------|
-| M2.7 | 4,500 requests/5hrs |
-| Speech 2.8 | 4,000 chars/day |
-| image-01 | 50 images/day |
-| MCP (web_search, understand_image) | Unlimited |
+All plans include M2.7 access. Choose based on your usage needs.
+
+### Standard Plans
+
+| Feature | Standard | Plus ($20/mo) | Premium ($50/mo) |
+|---------|----------|---------------|------------------|
+| M2.7 | 1,500 req/5hrs | 4,500 req/5hrs | 15,000 req/5hrs |
+| Speech 2.8 | — | 4,000 chars/day | 11,000 chars/day |
+| image-01 | — | 50 images/day | 120 images/day |
+| Hailuo-2.3-Fast 768P 6s | — | — | 2/day |
+| Hailuo-2.3 768P 6s | — | — | 2/day |
+| Music-2.5 | — | — | 4 songs/day |
+
+### Highspeed Plans (Dedicated M2.7-highspeed)
+
+| Feature | Standard | Plus | Premium |
+|---------|----------|------|---------|
+| M2.7-highspeed | 4,500 req/5hrs | 15,000 req/5hrs | 30,000 req/5hrs |
+| Speech 2.8 | 9,000 chars/day | 19,000 chars/day | 50,000 chars/day |
+| image-01 | 100 images/day | 200 images/day | 800 images/day |
+| Hailuo-2.3-Fast 768P 6s | — | 3/day | 5/day |
+| Hailuo-2.3 768P 6s | — | 3/day | 5/day |
+| Music-2.5 | — | 7 songs/day | 15 songs/day |
+
+### MCP Tools
+
+| Feature | Availability |
+|---------|--------------|
+| web_search | Unlimited (with active subscription) |
+| understand_image | Unlimited (with active subscription) |
 
 ## Requirements
 
