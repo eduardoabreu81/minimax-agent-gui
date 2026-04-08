@@ -1,0 +1,43 @@
+[project]
+name = "minimax-agent-gui"
+version = "0.1.0"
+description = "Personal AI Agent GUI with MiniMax M2.7, TTS, Image Gen, and MCP tools"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+    {name = "Eduardo"}
+]
+license = {text = "MIT"}
+
+dependencies = [
+    # GUI
+    "PyQt6>=6.6.0",
+    # Mini-Agent core
+    "pydantic>=2.0.0",
+    "pyyaml>=6.0.0",
+    "httpx>=0.27.0",
+    "mcp>=1.0.0",
+    "pytest>=8.4.2",
+    "requests>=2.31.0",
+    "tiktoken>=0.5.0",
+    "prompt-toolkit>=3.0.0",
+    "anthropic>=0.39.0",
+    "openai>=1.57.4",
+    "agent-client-protocol>=0.6.0",
+]
+
+[project.scripts]
+mini-agent = "mini_agent.cli:main"
+mini-agent-gui = "gui.main:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["gui"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+cache_dir = "workspace/.pytest_cache"
+asyncio_mode = "auto"
