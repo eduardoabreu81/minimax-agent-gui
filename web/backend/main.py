@@ -204,10 +204,12 @@ class SessionManager:
         )
 
         workspace_dir = self.config.get("agent", {}).get("workspace_dir", "./workspace")
+        workspace_path = PROJECT_ROOT / workspace_dir
+        workspace_path.mkdir(parents=True, exist_ok=True)
         tools = [
-            ReadTool(workspace_dir=workspace_dir),
-            WriteTool(workspace_dir=workspace_dir),
-            BashTool(),
+            ReadTool(workspace_dir=str(workspace_path)),
+            WriteTool(workspace_dir=str(workspace_path)),
+            BashTool(workspace_dir=str(workspace_path)),
         ]
 
         try:
@@ -256,7 +258,7 @@ Be concise, friendly, and helpful."""
             system_prompt=system_prompt,
             tools=tools,
             max_steps=self.config.get("agent", {}).get("max_steps", 50),
-            workspace_dir=workspace_dir,
+            workspace_dir=str(workspace_path),
         )
         self.sessions[session_id] = agent
         return agent
