@@ -730,7 +730,7 @@ export default function CodingPanel() {
                     className="w-full bg-card border border-border rounded-lg px-3 py-2 text-xs text-foreground placeholder:text-muted resize-none focus:outline-none focus:border-primary"
                   />
                   {showSkills && filteredSkills.length > 0 && (
-                    <div className="absolute top-full left-0 w-full bg-card border border-border rounded-lg shadow-lg z-50 py-1 mt-1 max-h-48 overflow-y-auto">
+                    <div className="absolute bottom-full left-0 w-full bg-card border border-border rounded-lg shadow-lg z-50 py-1 mb-1 max-h-48 overflow-y-auto">
                       {filteredSkills.map((skill, i) => (
                         <div
                           key={skill.name}
