@@ -14,121 +14,53 @@
 [![Tailwind](https://img.shields.io/badge/Tailwind-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-## Screenshots
-
-| | |
-|---|---|
-| **Chat & Attachments** — Upload images, toggle tools, persistent history | **Image Generation** — T2I / I2I with aspect ratio picker and gallery |
-| **Code Workspace** — File explorer, editor, terminal, and code-chat | **Settings & i18n** — 6 languages, tool toggles, model config |
-
 ## Features
 
-- **Responsive Design** — Works seamlessly across desktop, tablet, and mobile
-- **Persistent Chat** — Auto-save conversations with load, rename, and delete
-- **Code Workspace** — Full IDE with file explorer, editor, terminal, git integration, and code-chat sessions
-- **Image Generation** — Text-to-image and image-to-image with 8 aspect ratios, batch generation, and gallery
-- **Video Generation** — Hailuo-2.3 text/image-to-video with multiple durations and resolutions
-- **Music Generation** — Music-2.5 from prompts or lyrics, instrumental mode, cover from reference audio
-- **Text-to-Speech** — Speech 2.8 with 30+ voices, speed control, and streaming playback
-- **MCP Tools** — Web search and image understanding toggles, configurable per session
-- **Multi-language** — English, Português (BR), 日本語, 한국어, Español, 中文 (简体)
-- **Markdown Rendering** — Syntax-highlighted code blocks with one-click copy
-- **File Attachments** — Upload images (analyzed via VLM) and text files to chat
-- **WebSocket Streaming** — Real-time responses with typing indicators
-- **Quota Dashboard** — Track API usage and remaining limits
+- **Chat & Code** — Persistent conversations, file attachments, image understanding, markdown with code copy
+- **Image Generation** — Text-to-image and image-to-image with aspect ratio, batch, and gallery
+- **Video** — Hailuo-2.3 text/image-to-video with multiple durations and resolutions
+- **Music** — Music-2.5 generation from prompts or lyrics, instrumental mode, cover from reference audio
+- **Speech** — TTS with 30+ voices, speed control, streaming playback
+- **MCP Tools** — Web search and image understanding toggles
+- **Multi-language** — English, Português (BR), 日本語, 한국어, Español, 中文
 
-## Quick Start
+## Install
 
-### Self-Hosted (Local)
-
-The fastest way to run on your own machine. Requires **Python 3.10+** and **Node.js 18+**.
+Requires **Python 3.10+**, **Node.js 18+**, and a [MiniMax API key](https://platform.minimax.io).
 
 ```bash
 git clone https://github.com/eduardoabreu81/minimax-agent-gui.git
 cd minimax-agent-gui
 
-# Install Python dependencies (core + backend)
+# Core Python dependencies (CLI, MCP, agent framework)
 pip install -e .
+
+# Web backend dependencies (FastAPI, WebSocket, file upload)
 pip install -r web/backend/requirements.txt
 
-# Install frontend dependencies
+# Frontend dependencies
 cd web && npm install
-
-# Configure your MiniMax API key
-cp mini_agent/config/config-example.yaml config/config.yaml
-# Edit config/config.yaml with your key
 ```
 
-```yaml
-minimax:
-  api_key: sk-cp-your-key-here
-  api_base: https://api.minimax.io
-```
+Configure your API key via `config/config.yaml` or the `MINIMAX_API_KEY` environment variable.
 
 ```bash
-# Start both backend and frontend
+cp mini_agent/config/config-example.yaml config/config.yaml
+# Edit config/config.yaml and add your key
+```
+
+## Quick Start
+
+```bash
+cd web
 npm run dev
 ```
 
-Open `http://localhost:3000` — the app will discover your config automatically.
+This starts:
+- **Backend** — FastAPI on `http://localhost:8000`
+- **Frontend** — Vite dev server on `http://localhost:3000`
 
-> Don't have Python or Node? Get them at [python.org](https://python.org) and [nodejs.org](https://nodejs.org).
-
-### CLI Usage
-
-You can also use the agent directly from the terminal without the web UI:
-
-```bash
-mini-agent
-```
-
-This starts an interactive CLI session with the same tools and configuration.
-
----
-
-## Which option is right for you?
-
-| | Web App (Self-Hosted) | CLI Only |
-|---|---|---|
-| **Best for** | Visual interaction with all features | Terminal users, scripting, automation |
-| **How you access it** | Browser at `localhost:3000` | Terminal |
-| **Setup** | Python + Node install | Python install only |
-| **Chat history** | Persistent with UI | Session-based |
-| **Image/Video/Music** | Full UI panels | Command-line only |
-| **File explorer** | Yes | No |
-| **Cost** | Free, open source | Free, open source |
-
-> All options require your own MiniMax API subscription — this project provides the interface, not the AI.
-
----
-
-## Security & Tools Configuration
-
-**🔒 Important Notice**: MCP tools (Web Search, Image Understanding) are **available but disabled by default** in new sessions.
-
-### Enabling Tools
-
-1. Open **Settings** — Click the gear icon in the sidebar or use `Ctrl+Shift+S`
-2. Go to the **Tools** tab
-3. Toggle **Web Search** and/or **Image Understanding** as needed
-4. Click **Save** — preferences are persisted to `config/config.yaml`
-
----
-
-## Configuration
-
-| File | Purpose |
-|------|---------|
-| `config/config.yaml` | API key, region (`global` or `cn`), default model, tool toggles |
-
-Environment variables:
-
-| Variable | Purpose |
-|----------|---------|
-| `MINIMAX_API_KEY` | Override API key |
-| `MINIMAX_API_BASE` | Override base URL |
-
----
+Open `http://localhost:3000` and start chatting.
 
 ## Usage
 
@@ -162,28 +94,42 @@ Enter a prompt and optional lyrics to generate songs. Enable instrumental mode f
 
 Describe a scene or upload an image to generate video with progress tracking.
 
----
+## Configuration
 
-## Community & Support
+| File | Purpose |
+|------|---------|
+| `config/config.yaml` | API key, region (`global` or `cn`), default model, tool toggles |
 
-- **Documentation** — This README and AGENTS.md for development details
-- **Bug Reports** — [GitHub Issues](https://github.com/eduardoabreu81/minimax-agent-gui/issues)
-- **Feature Requests** — [GitHub Issues](https://github.com/eduardoabreu81/minimax-agent-gui/issues)
+Environment variables:
 
----
+| Variable | Purpose |
+|----------|---------|
+| `MINIMAX_API_KEY` | Override API key |
+| `MINIMAX_API_BASE` | Override base URL |
 
-## Acknowledgments
+## Roadmap
 
-### Built With
+Features planned and in progress. See [ANALISE_COMPARATIVA.md](ANALISE_COMPARATIVA.md) for the full gap analysis.
 
-- **MiniMax M2.7** — The AI engine powering conversations
-- **FastAPI** — Python web framework for the backend
-- **React 18** — UI library
-- **Vite** — Fast build tool and dev server
-- **Tailwind CSS** — Utility-first CSS framework
-- **XTerm.js** — Terminal emulator for the code workspace
+### Phase 1 — Foundation
+- [ ] **Command Palette (Ctrl+K)** — Universal navigation like Spotlight/VS Code
+- [ ] **PWA / Mobile** — Installable app, responsive design, touch targets
+- [ ] **Live Todo Progress** — Real-time task tracking while the agent works
 
----
+### Phase 2 — Productivity
+- [ ] **Task Board (Kanban)** — Project planning with todo/in-progress/done columns
+- [ ] **Session Protection** — Prevent accidental context loss when navigating
+- [ ] **Quick Settings Panel** — Fast access to provider, model, and permission settings
+
+### Phase 3 — Extensibility
+- [ ] **MCP Integration** — Configurable MCP servers (stdio, SSE, HTTP)
+- [ ] **Plugin System** — Community extensibility with custom tabs and backends
+- [ ] **Skills/Templates** — Specialized workflows per project type
+
+### Phase 4 — Polish
+- [ ] **Sandboxed Preview** — Secure iframe preview for generated code
+- [ ] **Onboarding Flow** — Interactive tutorial for first-time users
+- [ ] **Permission System** — Granular auto/ask/reject per tool
 
 ## License
 
