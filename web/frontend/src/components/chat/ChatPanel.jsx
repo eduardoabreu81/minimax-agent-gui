@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Send, User, Bot, Loader2, Paperclip, X, Image as ImageIcon, FileText, MessageSquarePlus, Trash2, ChevronDown } from 'lucide-react'
+import { Send, User, Bot, Loader2, Paperclip, X, Image as ImageIcon, FileText, MessageSquarePlus, Trash2, ChevronDown, Pencil } from 'lucide-react'
 import MarkdownRenderer from '../MarkdownRenderer'
 
 function generateId() {
@@ -21,6 +21,8 @@ export default function ChatPanel({ onProcessingChange }) {
   const [showSkills, setShowSkills] = useState(false)
   const [skillIndex, setSkillIndex] = useState(0)
   const [thinkingDuration, setThinkingDuration] = useState(0)
+  const [editingId, setEditingId] = useState(null)
+  const [editingTitle, setEditingTitle] = useState('')
   const wsRef = useRef(null)
   const scrollRef = useRef(null)
   const fileInputRef = useRef(null)
@@ -135,6 +137,25 @@ export default function ChatPanel({ onProcessingChange }) {
     } catch (err) { console.error('Delete failed:', err) }
   }
 
+  const startRename = (e, conv) => {
+    e.stopPropagation()
+    setEditingId(conv.id)
+    setEditingTitle(conv.title)
+  }
+
+  const submitRename = async (convId) => {
+    try {
+      await fetch(`/api/conversations/${convId}/rename`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: editingTitle })
+      })
+      setConversations(prev => prev.map(c => c.id === convId ? { ...c, title: editingTitle } : c))
+    } catch (err) { console.error('Rename failed:', err) }
+    setEditingId(null)
+    setEditingTitle('')
+  }
+
   const activateSkill = (skillName) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: 'activate_skill', skill: skillName }))
@@ -246,16 +267,42 @@ export default function ChatPanel({ onProcessingChange }) {
                   className={`flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-surface transition-colors ${conv.id === sessionId ? 'bg-primary/10' : ''}`}
                 >
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium text-foreground truncate">{conv.title}</p>
-                    <p className="text-[10px] text-muted">{conv.message_count} messages</p>
+                    {editingId === conv.id ? (
+                      <input
+                        autoFocus
+                        value={editingTitle}
+                        onChange={(e) => setEditingTitle(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') submitRename(conv.id)
+                          if (e.key === 'Escape') { setEditingId(null); setEditingTitle('') }
+                        }}
+                        onBlur={() => submitRename(conv.id)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-full bg-card border border-border rounded px-2 py-1 text-xs text-foreground focus:outline-none focus:border-primary"
+                      />
+                    ) : (
+                      <>
+                        <p className="text-xs font-medium text-foreground truncate">{conv.title}</p>
+                        <p className="text-[10px] text-muted">{conv.message_count} messages</p>
+                      </>
+                    )}
                   </div>
-                  <button
-                    onClick={(e) => deleteConversation(e, conv.id)}
-                    className="p-1 rounded hover:bg-error/10 text-muted hover:text-error transition-colors"
-                    title="Delete conversation"
-                  >
-                    <Trash2 size={10} />
-                  </button>
+                  <div className="flex items-center gap-0.5">
+                    <button
+                      onClick={(e) => startRename(e, conv)}
+                      className="p-1 rounded hover:bg-primary/10 text-muted hover:text-primary transition-colors"
+                      title="Rename conversation"
+                    >
+                      <Pencil size={10} />
+                    </button>
+                    <button
+                      onClick={(e) => deleteConversation(e, conv.id)}
+                      className="p-1 rounded hover:bg-error/10 text-muted hover:text-error transition-colors"
+                      title="Delete conversation"
+                    >
+                      <Trash2 size={10} />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
