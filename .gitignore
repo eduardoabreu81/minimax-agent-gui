@@ -44,6 +44,12 @@ gui/
 # Config with secrets (keep but ignore in git)
 config/config.yaml
 
+# Internal docs — never commit analysis, roadmaps, or project logs
+ANALISE_*.md
+PROJECT_*.md
+ROADMAP_*.md
+*.local.md
+
 # Node.js
 node_modules/
 dist/

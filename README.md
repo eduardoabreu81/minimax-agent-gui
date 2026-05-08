@@ -109,8 +109,6 @@ Environment variables:
 
 ## Roadmap
 
-Features planned and in progress. See [ANALISE_COMPARATIVA.md](ANALISE_COMPARATIVA.md) for the full gap analysis.
-
 ### Phase 1 — Foundation
 - [ ] **Command Palette (Ctrl+K)** — Universal navigation like Spotlight/VS Code
 - [ ] **PWA / Mobile** — Installable app, responsive design, touch targets
