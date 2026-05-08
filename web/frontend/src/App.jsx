@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useTheme } from './context/ThemeContext'
 import Sidebar from './components/Sidebar'
 import ChatPanel from './components/chat/ChatPanel'
 import TTSPanel from './components/media/TTSPanel'
@@ -15,15 +16,11 @@ import CommandPalette from './components/command-palette/CommandPalette'
 
 function App() {
   const { t } = useTranslation()
+  const { isDark, toggleDark } = useTheme()
   const [activeTab, setActiveTab] = useState('chat')
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsModalOpen, setSettingsModalOpen] = useState(false)
-  const [isDark, setIsDark] = useState(() => {
-    const hasDark = document.documentElement.classList.contains('dark')
-    if (!hasDark) document.documentElement.classList.add('dark')
-    return true
-  })
   const [chatKey, setChatKey] = useState(0)
   const [isProcessing, setIsProcessing] = useState(false)
   const [pendingTab, setPendingTab] = useState(null)
@@ -89,26 +86,7 @@ function App() {
     }
   }, [])
 
-  const toggleTheme = useCallback(() => {
-    setIsDark(prev => {
-      const next = !prev
-      if (next) {
-        document.documentElement.classList.add('dark')
-      } else {
-        document.documentElement.classList.remove('dark')
-      }
-      return next
-    })
-  }, [])
 
-  // Initialize theme on mount
-  useEffect(() => {
-    if (isDark) {
-      document.documentElement.classList.add('dark')
-    } else {
-      document.documentElement.classList.remove('dark')
-    }
-  }, [])
 
   return (
     <div className="flex h-screen w-screen bg-background text-foreground overflow-hidden">
@@ -132,13 +110,13 @@ function App() {
         isOpen={settingsOpen}
         onClose={() => setSettingsOpen(false)}
         isDark={isDark}
-        onToggleTheme={toggleTheme}
+        onToggleTheme={toggleDark}
       />
       <SettingsModal
         isOpen={settingsModalOpen}
         onClose={() => setSettingsModalOpen(false)}
         isDark={isDark}
-        onToggleTheme={toggleTheme}
+        onToggleTheme={toggleDark}
       />
       {showSessionGuard && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
@@ -176,7 +154,7 @@ function App() {
         onAction={handleAction}
         currentTab={activeTab}
         isDark={isDark}
-        onToggleTheme={toggleTheme}
+        onToggleTheme={toggleDark}
       />
     </div>
   )
