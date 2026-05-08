@@ -5,11 +5,13 @@ import {
   GitCommit, GitPullRequest, X, Send, Bot, User, Loader2, Sparkles,
   Wand2, Bug, FileCheck, Lightbulb, ChevronRight, Play, Square,
   MessageSquarePlus, Trash2, Paperclip, Image as ImageIcon, FileText, ChevronDown,
-  Search, Zap
+  Search, Zap, LayoutTemplate, Columns
 } from 'lucide-react'
 import XTermTerminal from './XTermTerminal'
 import MarkdownRenderer from '../MarkdownRenderer'
 import WorkspaceSidebar from './WorkspaceSidebar'
+import AgentChatPanel from './AgentChatPanel'
+import { useCodingChat } from './useCodingChat'
 
 const CODING_SYSTEM_PROMPT = `You are MiniMax Coding Agent, an expert software engineer powered by MiniMax-M2.7.
 You help users write, debug, refactor, and understand code.
@@ -55,6 +57,10 @@ export default function CodingPanel() {
   const [agentMode, setAgentMode] = useState(() => {
     try { return localStorage.getItem('agent-mode') || 'agent' } catch { return 'agent' }
   })
+  const [layoutMode, setLayoutMode] = useState(() => {
+    try { return localStorage.getItem('coding-layout') || 'ide' } catch { return 'ide' }
+  })
+  const [showEditorDrawer, setShowEditorDrawer] = useState(false)
 
   const MODES = [
     { id: 'plan', label: 'Plan', icon: Search, color: 'text-amber-400', bg: 'bg-amber-400/10', border: 'border-amber-400/30' },
@@ -400,6 +406,18 @@ export default function CodingPanel() {
           })()}
           <button
             onClick={() => {
+              const next = layoutMode === 'ide' ? 'agent' : 'ide'
+              setLayoutMode(next)
+              try { localStorage.setItem('coding-layout', next) } catch {}
+            }}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 ${layoutMode === 'agent' ? 'bg-primary/10 text-primary' : 'bg-surface border border-border hover:border-primary text-muted-foreground'}`}
+            title={layoutMode === 'ide' ? 'IDE Mode — click for Agent Mode' : 'Agent Mode — click for IDE Mode'}
+          >
+            {layoutMode === 'ide' ? <LayoutTemplate size={12} /> : <Columns size={12} />}
+            {layoutMode === 'ide' ? 'IDE' : 'Agent'}
+          </button>
+          <button
+            onClick={() => {
               const next = !workspaceSidebarVisible
               setWorkspaceSidebarVisible(next)
               try { localStorage.setItem('workspace-sidebar-visible', String(next)) } catch {}
@@ -452,7 +470,22 @@ export default function CodingPanel() {
           </div>
         </div>
 
-        {/* Center: Editor + Bottom Panel */}
+        {layoutMode === 'agent' ? (
+          <AgentChatPanel
+            activeFile={activeFile}
+            openFiles={openFiles}
+            fileContents={fileContents}
+            onOpenFile={setActiveFile}
+            onCloseFile={(path) => setOpenFiles(prev => prev.filter(f => f.path !== path))}
+            onSaveFile={saveFile}
+            getLanguage={getLanguage}
+            gitStatus={gitStatus}
+            changedFiles={changedFiles}
+            runGitCommand={runGitCommand}
+            loadGitStatus={loadGitStatus}
+          />
+        ) : (
+        /* ─── IDE MODE: Editor + Bottom Panel ─── */
         <div className="flex-1 flex flex-col min-w-0">
           {/* Editor Tabs */}
           {openFiles.length > 0 && (
@@ -555,6 +588,7 @@ export default function CodingPanel() {
             </div>
           </div>
         </div>
+        )}
 
         {/* Right: Workspace Sidebar (Plan/Todos/Tasks/Agents) */}
         {workspaceSidebarVisible && (
@@ -568,7 +602,8 @@ export default function CodingPanel() {
           />
         )}
 
-        {/* Right: Coding Agent Chat (Copilot-style) */}
+        {/* Right: Coding Agent Chat (IDE mode only) */}
+        {layoutMode === 'ide' && (
         <div className="w-80 flex flex-col border-l border-border bg-card shrink-0">
           {/* Chat Header */}
           <div className="h-12 flex items-center justify-between px-4 border-b border-border bg-surface/50 shrink-0">
@@ -849,6 +884,7 @@ export default function CodingPanel() {
             </div>
           </div>
         </div>
+        )}
       </div>
     </div>
   )
