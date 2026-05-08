@@ -172,24 +172,6 @@ web/
 
 ---
 
-## 🖥️ Desktop GUI
-
-A PyQt6 desktop application is also available.
-
-```bash
-# Run the GUI
-python -m gui.main
-# or
-mini-agent-gui
-```
-
-```bash
-# Run the CLI
-mini-agent
-```
-
----
-
 ## 🗂️ Project Structure
 
 ```
@@ -292,7 +274,7 @@ All plans include M2.7 access. Choose based on your usage needs.
 - **TTS** — Speech 2.8 synthesis
 - **Image Gen** — image-01 text-to-image
 - **MCP Tools** — web_search, understand_image
-- **PyQt6 GUI** — Dark-themed desktop interface
+- **Web App** — Browser-based interface with React + FastAPI
 
 ---
 
