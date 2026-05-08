@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="docs/assets/minimax-agent-gui-banner.svg" alt="MiniMax Agent GUI" width="100%"/>
+  <img src="docs/assets/minimax-agent-gui-banner.png" alt="MiniMax Agent GUI" width="100%"/>
 </div>
 
 # 🤖 MiniMax Agent
