@@ -4,7 +4,7 @@ function generateId() {
   return Math.random().toString(36).substring(2, 10)
 }
 
-export function useCodingChat() {
+export function useCodingChat({ onActivity } = {}) {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [isConnected, setIsConnected] = useState(false)
@@ -47,18 +47,39 @@ export function useCodingChat() {
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data)
       if (data.type === 'history') {
-        setMessages(data.messages || [])
+        // Filter out step_start and tool_result from history — they belong in sidebar
+        const chatMessages = (data.messages || []).filter(m =>
+          m.type !== 'step_start' && m.type !== 'tool_result' && m.type !== 'tool_calls'
+        )
+        setMessages(chatMessages)
         setIsThinking(false)
       } else if (data.type === 'status' && data.content === 'thinking...') {
         setIsThinking(true)
+        onActivity?.({ type: 'thinking', active: true })
       } else if (data.type === 'user') {
         setIsThinking(true)
+        onActivity?.({ type: 'thinking', active: true })
       } else if (data.type === 'skill_activated') {
         setIsThinking(false)
         setMessages((prev) => [...prev, { type: 'system', content: `Skill '${data.skill}' activated` }])
+        onActivity?.({ type: 'thinking', active: false })
+      } else if (data.type === 'step_start') {
+        onActivity?.({ type: 'step_start', step: data.step, maxSteps: data.max_steps })
+      } else if (data.type === 'tool_result') {
+        setIsThinking(false)
+        onActivity?.({ type: 'tool_result', ...data })
+        // Only add assistant/error messages to chat, not tool metadata
+        if (data.error) {
+          setMessages(prev => [...prev, { type: 'system', content: `Tool error: ${data.error}` }])
+        }
+      } else if (data.type === 'thinking') {
+        onActivity?.({ type: 'thinking', active: true, content: data.content })
+      } else if (data.type === 'tool_calls') {
+        onActivity?.({ type: 'tool_calls', tools: data.tools })
       } else {
         setIsThinking(false)
         setMessages((prev) => [...prev, data])
+        onActivity?.({ type: 'thinking', active: false })
       }
     }
   }, [])

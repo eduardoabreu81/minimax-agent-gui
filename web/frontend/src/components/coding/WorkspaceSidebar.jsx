@@ -2,8 +2,10 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Search, CheckSquare, ListTodo, Bot, PanelRightClose, PanelRightOpen,
-  Loader2, Circle, CircleDot, Sparkles
+  Loader2, Circle, CircleDot, Sparkles, CheckCircle2, XCircle,
+  Wrench, Clock, Terminal
 } from 'lucide-react'
+import { useAgentActivity } from '../../context/AgentActivityContext'
 
 const TABS = [
   { id: 'plan', label: 'Plan', icon: Search },
@@ -14,16 +16,20 @@ const TABS = [
 
 export default function WorkspaceSidebar({ visible, onToggle }) {
   const { t } = useTranslation()
-  const [activeTab, setActiveTab] = useState('plan')
+  const [activeTab, setActiveTab] = useState('tasks')
+  const activity = useAgentActivity()
 
   if (!visible) {
     return (
       <button
-        onClick={onToggle}
+        onClick={() => { onToggle(); activity.acknowledgeActivity() }}
         className="absolute right-0 top-1/2 -translate-y-1/2 z-30 p-1.5 bg-card border border-border border-r-0 rounded-l-lg text-muted-foreground hover:text-foreground hover:bg-surface transition-colors shadow-lg"
         title="Open sidebar"
       >
         <PanelRightOpen size={16} />
+        {activity.hasNewActivity && (
+          <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-primary rounded-full animate-pulse" />
+        )}
       </button>
     )
   }
@@ -47,6 +53,9 @@ export default function WorkspaceSidebar({ visible, onToggle }) {
             >
               <Icon size={13} />
               <span className="hidden sm:inline">{tab.label}</span>
+              {tab.id === 'tasks' && activity.hasNewActivity && (
+                <span className="w-1.5 h-1.5 bg-primary rounded-full" />
+              )}
             </button>
           )
         })}
@@ -71,36 +80,63 @@ export default function WorkspaceSidebar({ visible, onToggle }) {
 }
 
 function PlanPanel() {
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-2 text-xs text-muted">
-        <Sparkles size={12} />
-        <span>No active plan</span>
-      </div>
-      <p className="text-[11px] text-muted leading-relaxed">
-        The agent will create a plan here before making changes.
-        Switch to <strong>Plan mode</strong> to see the planning in action.
-      </p>
-      <div className="p-3 rounded-lg bg-surface border border-border border-dashed">
-        <p className="text-[10px] text-muted uppercase tracking-wider mb-2">Example plan steps</p>
-        <div className="space-y-2">
-          <div className="flex items-start gap-2 text-[11px]">
-            <CircleDot size={12} className="text-primary mt-0.5 shrink-0" />
-            <span className="text-foreground">Explore codebase structure</span>
-          </div>
-          <div className="flex items-start gap-2 text-[11px]">
-            <Circle size={12} className="text-muted mt-0.5 shrink-0" />
-            <span className="text-muted">Identify relevant files</span>
-          </div>
-          <div className="flex items-start gap-2 text-[11px]">
-            <Circle size={12} className="text-muted mt-0.5 shrink-0" />
-            <span className="text-muted">Implement changes</span>
-          </div>
-          <div className="flex items-start gap-2 text-[11px]">
-            <Circle size={12} className="text-muted mt-0.5 shrink-0" />
-            <span className="text-muted">Verify and test</span>
+  const activity = useAgentActivity()
+
+  if (activity.plan.items.length === 0) {
+    return (
+      <div className="space-y-3">
+        <div className="flex items-center gap-2 text-xs text-muted">
+          <Sparkles size={12} />
+          <span>No active plan</span>
+        </div>
+        <p className="text-[11px] text-muted leading-relaxed">
+          The agent will create a plan here before making changes.
+          Switch to <strong>Plan mode</strong> to see the planning in action.
+        </p>
+        <div className="p-3 rounded-lg bg-surface border border-border border-dashed">
+          <p className="text-[10px] text-muted uppercase tracking-wider mb-2">Example plan steps</p>
+          <div className="space-y-2">
+            <div className="flex items-start gap-2 text-[11px]">
+              <CircleDot size={12} className="text-primary mt-0.5 shrink-0" />
+              <span className="text-foreground">Explore codebase structure</span>
+            </div>
+            <div className="flex items-start gap-2 text-[11px]">
+              <Circle size={12} className="text-muted mt-0.5 shrink-0" />
+              <span className="text-muted">Identify relevant files</span>
+            </div>
+            <div className="flex items-start gap-2 text-[11px]">
+              <Circle size={12} className="text-muted mt-0.5 shrink-0" />
+              <span className="text-muted">Implement changes</span>
+            </div>
+            <div className="flex items-start gap-2 text-[11px]">
+              <Circle size={12} className="text-muted mt-0.5 shrink-0" />
+              <span className="text-muted">Verify and test</span>
+            </div>
           </div>
         </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2 text-xs text-foreground font-medium">
+        <Sparkles size={12} className="text-primary" />
+        <span>Active Plan</span>
+      </div>
+      <div className="space-y-2">
+        {activity.plan.items.map((item) => (
+          <div key={item.id} className="flex items-start gap-2 text-[11px]">
+            {item.status === 'done' ? (
+              <CheckCircle2 size={12} className="text-green-500 mt-0.5 shrink-0" />
+            ) : (
+              <Circle size={12} className="text-primary mt-0.5 shrink-0" />
+            )}
+            <span className={item.status === 'done' ? 'text-muted line-through' : 'text-foreground'}>
+              {item.text}
+            </span>
+          </div>
+        ))}
       </div>
     </div>
   )
@@ -145,58 +181,133 @@ function TodosPanel() {
 }
 
 function TasksPanel() {
+  const activity = useAgentActivity()
+
+  if (activity.steps.length === 0 && activity.toolResults.length === 0) {
+    return (
+      <div className="space-y-3">
+        <div className="flex items-center gap-2 text-xs text-muted">
+          <Loader2 size={12} className="animate-spin" />
+          <span>No active tasks</span>
+        </div>
+        <p className="text-[11px] text-muted leading-relaxed">
+          Tasks appear here when the agent is working.
+          Each step of the agent loop will show as a task card.
+        </p>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-2 text-xs text-muted">
-        <Loader2 size={12} className="animate-spin" />
-        <span>No active tasks</span>
-      </div>
-      <p className="text-[11px] text-muted leading-relaxed">
-        Tasks appear here when the agent is working.
-        Each step of the agent loop will show as a task card.
-      </p>
-      <div className="space-y-2">
-        <div className="p-2.5 rounded-lg bg-surface border border-border">
-          <div className="flex items-center gap-2 mb-1">
-            <Loader2 size={11} className="animate-spin text-primary" />
-            <span className="text-[11px] font-medium text-foreground">Analyzing request...</span>
-          </div>
-          <p className="text-[10px] text-muted">Step 1 of 5</p>
+      {/* Steps */}
+      {activity.steps.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-[10px] text-muted uppercase tracking-wider">Steps</p>
+          {activity.steps.map((step) => (
+            <div
+              key={step.step}
+              className={`p-2.5 rounded-lg border ${
+                step.status === 'running'
+                  ? 'bg-surface border-primary/30'
+                  : 'bg-surface/50 border-border/50'
+              }`}
+            >
+              <div className="flex items-center gap-2 mb-1">
+                {step.status === 'running' ? (
+                  <Loader2 size={11} className="animate-spin text-primary" />
+                ) : (
+                  <CheckCircle2 size={11} className="text-green-500" />
+                )}
+                <span className={`text-[11px] font-medium ${
+                  step.status === 'running' ? 'text-foreground' : 'text-muted'
+                }`}>
+                  Step {step.step} of {step.maxSteps}
+                </span>
+              </div>
+            </div>
+          ))}
         </div>
-        <div className="p-2.5 rounded-lg bg-surface/50 border border-border/50 opacity-60">
-          <div className="flex items-center gap-2 mb-1">
-            <Circle size={11} className="text-muted" />
-            <span className="text-[11px] font-medium text-muted">Execute tools</span>
-          </div>
-          <p className="text-[10px] text-muted">Step 2 of 5</p>
+      )}
+
+      {/* Tool Results */}
+      {activity.toolResults.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-[10px] text-muted uppercase tracking-wider">Tools</p>
+          {activity.toolResults.slice(-10).map((tr, i) => (
+            <details key={i} className="group">
+              <summary className="flex items-center gap-2 p-2 rounded-lg bg-surface border border-border cursor-pointer hover:bg-surface/80 transition-colors list-none">
+                <Wrench size={11} className="text-primary shrink-0" />
+                <span className="text-[11px] font-medium text-foreground truncate flex-1">{tr.tool}</span>
+                {tr.success ? (
+                  <CheckCircle2 size={11} className="text-green-500 shrink-0" />
+                ) : (
+                  <XCircle size={11} className="text-red-500 shrink-0" />
+                )}
+              </summary>
+              <div className="mt-1 p-2 rounded bg-surface/50 text-[10px] space-y-1">
+                {tr.arguments?.path && (
+                  <div className="text-muted">📁 {tr.arguments.path}</div>
+                )}
+                {tr.content && (
+                  <pre className="text-muted whitespace-pre-wrap break-all max-h-32 overflow-y-auto">{tr.content}</pre>
+                )}
+                {tr.error && (
+                  <div className="text-red-400">❌ {tr.error}</div>
+                )}
+              </div>
+            </details>
+          ))}
         </div>
-      </div>
+      )}
     </div>
   )
 }
 
 function AgentsPanel() {
+  const activity = useAgentActivity()
+
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-2 text-xs text-muted">
-        <Bot size={12} />
-        <span>No sub-agents active</span>
-      </div>
-      <p className="text-[11px] text-muted leading-relaxed">
-        Sub-agents will appear here when spawned.
-        Each agent can work on a specific task in parallel.
-      </p>
+      {/* Main Agent */}
       <div className="p-3 rounded-lg bg-surface border border-border">
         <div className="flex items-center gap-2">
           <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center">
             <Bot size={12} className="text-primary" />
           </div>
-          <div>
+          <div className="flex-1 min-w-0">
             <p className="text-[11px] font-medium text-foreground">MiniMax-M2.7</p>
-            <p className="text-[10px] text-muted">Main agent · Active</p>
+            <p className="text-[10px] text-muted truncate">
+              {activity.thinking.active ? 'Thinking...' : 'Idle'}
+            </p>
           </div>
         </div>
+        {activity.thinking.active && activity.thinking.duration > 0 && (
+          <div className="flex items-center gap-1.5 mt-2 text-[10px] text-muted">
+            <Clock size={10} />
+            <span>{activity.thinking.duration}s</span>
+          </div>
+        )}
+        {activity.lastTool && (
+          <div className="flex items-center gap-1.5 mt-2 text-[10px] text-muted">
+            <Terminal size={10} />
+            <span className="truncate">Last: {activity.lastTool.tool}</span>
+          </div>
+        )}
       </div>
+
+      {/* Thinking Content */}
+      {activity.thinking.content && (
+        <details className="group">
+          <summary className="flex items-center gap-2 text-[11px] text-muted cursor-pointer hover:text-foreground transition-colors">
+            <Loader2 size={11} className="animate-spin" />
+            Thinking process
+          </summary>
+          <pre className="mt-1 p-2 rounded bg-surface text-[10px] text-muted whitespace-pre-wrap max-h-48 overflow-y-auto">
+            {activity.thinking.content}
+          </pre>
+        </details>
+      )}
     </div>
   )
 }

@@ -12,6 +12,7 @@ import MarkdownRenderer from '../MarkdownRenderer'
 import WorkspaceSidebar from './WorkspaceSidebar'
 import AgentChatPanel from './AgentChatPanel'
 import { useCodingChat } from './useCodingChat'
+import { useAgentActivity } from '../../context/AgentActivityContext'
 
 const CODING_SYSTEM_PROMPT = `You are MiniMax Coding Agent, an expert software engineer powered by MiniMax-M2.7.
 You help users write, debug, refactor, and understand code.
@@ -42,6 +43,7 @@ const QUICK_ACTIONS = [
 
 export default function CodingPanel() {
   const { t } = useTranslation()
+  const activity = useAgentActivity()
   const [files, setFiles] = useState([])
   const [openFiles, setOpenFiles] = useState([])
   const [activeFile, setActiveFile] = useState(null)
@@ -223,25 +225,41 @@ export default function CodingPanel() {
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data)
       if (data.type === 'history') {
-        setCodingMessages(data.messages || [])
+        const chatMessages = (data.messages || []).filter(m =>
+          m.type !== 'step_start' && m.type !== 'tool_result' && m.type !== 'tool_calls'
+        )
+        setCodingMessages(chatMessages)
         setCodingThinking(false)
+        activity.clearActivity()
       } else if (data.type === 'status' && data.content === 'thinking...') {
         setCodingThinking(true)
+        activity.setThinkingState(true)
       } else if (data.type === 'user') {
-        // User message was already added locally, ignore WebSocket echo
         setCodingThinking(true)
+        activity.setThinkingState(true)
       } else if (data.type === 'tool_result') {
         setCodingThinking(false)
-        setCodingMessages((prev) => [...prev, data])
+        activity.addToolResult(data)
+        activity.completeStep(data.step || activity.steps.length)
         if (data.tool === 'write_file' || data.tool === 'edit_file') {
           loadFiles()
         }
+        if (data.error) {
+          setCodingMessages(prev => [...prev, { type: 'system', content: `Tool error: ${data.error}` }])
+        }
+      } else if (data.type === 'step_start') {
+        activity.addStep(data.step, data.max_steps)
+        activity.setThinkingState(true)
+      } else if (data.type === 'thinking') {
+        activity.setThinkingState(true, data.content)
       } else if (data.type === 'skill_activated') {
         setCodingThinking(false)
         setCodingMessages((prev) => [...prev, { type: 'system', content: `Skill '${data.skill}' activated` }])
+        activity.setThinkingState(false)
       } else {
         setCodingThinking(false)
         setCodingMessages((prev) => [...prev, data])
+        activity.setThinkingState(false)
       }
     }
 
@@ -379,6 +397,383 @@ export default function CodingPanel() {
       )
     : []
 
+  const renderChat = (isAgent) => {
+    return (
+      <div className={isAgent ? 'flex-1 flex flex-col min-w-0 bg-card relative' : 'w-80 flex flex-col border-l border-border bg-card shrink-0'}>
+        {/* Chat Header */}
+        <div className={isAgent ? 'h-14 flex items-center justify-between px-6 border-b border-border bg-surface/50 shrink-0' : 'h-12 flex items-center justify-between px-4 border-b border-border bg-surface/50 shrink-0'}>
+          <div className="flex items-center gap-2 relative" ref={codingConvListRef}>
+            <Bot size={isAgent ? 20 : 16} className="text-primary" />
+            <button
+              onClick={() => setShowCodingConvList(!showCodingConvList)}
+              className="flex items-center gap-1 text-sm font-semibold text-foreground hover:text-primary transition-colors"
+            >
+              {codingConversations.find(c => c.id === codingSessionId)?.title || 'Code Chat'}
+              <ChevronDown size={12} className={`transition-transform ${showCodingConvList ? 'rotate-180' : ''}`} />
+            </button>
+            {showCodingConvList && (
+              <div className="absolute top-full left-0 mt-1 w-64 bg-card border border-border rounded-xl shadow-lg z-50 py-2 max-h-72 overflow-y-auto">
+                <button
+                  onClick={startNewCodingChat}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-primary hover:bg-primary/10 transition-colors"
+                >
+                  <MessageSquarePlus size={12} /> New Code Chat
+                </button>
+                <div className="border-t border-border my-1" />
+                {codingConversations.length === 0 && (
+                  <p className="px-3 py-2 text-xs text-muted">No previous code chats</p>
+                )}
+                {codingConversations.map((conv) => (
+                  <div
+                    key={conv.id}
+                    onClick={() => loadCodingConversation(conv)}
+                    className={`flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-surface transition-colors ${conv.id === codingSessionId ? 'bg-primary/10' : ''}`}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-foreground truncate">{conv.title}</p>
+                      <p className="text-[10px] text-muted">{conv.message_count} messages</p>
+                    </div>
+                    <button
+                      onClick={(e) => deleteCodingConversation(e, conv.id)}
+                      className="p-1 rounded hover:bg-error/10 text-muted hover:text-error transition-colors"
+                      title="Delete"
+                    >
+                      <Trash2 size={10} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {isAgent && (
+              <button
+                onClick={() => setShowEditorDrawer(!showEditorDrawer)}
+                className={`ml-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 ${showEditorDrawer ? 'bg-primary/10 text-primary' : 'bg-surface border border-border hover:border-primary text-muted-foreground'}`}
+              >
+                <Code2 size={12} /> Editor
+              </button>
+            )}
+          </div>
+          <div className="flex items-center gap-1">
+            <button onClick={startNewCodingChat} className={isAgent ? 'p-2 rounded hover:bg-surface text-muted hover:text-foreground transition-colors' : 'p-1.5 rounded hover:bg-surface text-muted hover:text-foreground transition-colors'} title="New chat">
+              <MessageSquarePlus size={isAgent ? 14 : 12} />
+            </button>
+            <div className={`w-2 h-2 rounded-full ${codingConnected ? 'bg-success' : 'bg-error'}`} />
+          </div>
+        </div>
+
+        {/* Quick Actions */}
+        {activeFile && (
+          <div className={isAgent ? 'px-4 py-3 border-b border-border shrink-0' : 'px-3 py-2 border-b border-border shrink-0'}>
+            <div className={isAgent ? 'grid grid-cols-2 gap-2' : 'grid grid-cols-2 gap-1.5'}>
+              {QUICK_ACTIONS.map((action) => {
+                const Icon = action.icon
+                return (
+                  <button
+                    key={action.id}
+                    onClick={() => handleQuickAction(action)}
+                    disabled={codingThinking}
+                    className={isAgent ? 'flex items-center gap-1.5 px-3 py-2 rounded-lg bg-surface border border-border hover:border-primary text-sm text-foreground transition-colors disabled:opacity-40' : 'flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-surface border border-border hover:border-primary text-xs text-foreground transition-colors disabled:opacity-40'}
+                  >
+                    <Icon size={isAgent ? 14 : 12} className="text-primary" />
+                    {action.label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Chat Messages */}
+        <div ref={codingChatRef} className={isAgent ? 'flex-1 overflow-y-auto p-6 space-y-5' : 'flex-1 overflow-y-auto p-3 space-y-3'}>
+          {codingMessages.length === 0 && (
+            <div className="flex flex-col items-center justify-center h-full text-muted text-center">
+              {isAgent ? <Bot size={48} className="mb-4 opacity-30" /> : <Sparkles size={32} className="mb-3 opacity-30" />}
+              <p className={isAgent ? 'text-sm' : 'text-xs'}>Ask me about your code</p>
+              <p className={isAgent ? 'text-xs mt-1 opacity-50' : 'text-[10px] mt-1 opacity-50'}>I can see the file you have open</p>
+            </div>
+          )}
+
+          {codingMessages.map((msg, idx) => {
+            if (msg.type === 'system') {
+              return (
+                <div key={idx} className="flex justify-center my-2">
+                  <span className={isAgent ? 'text-sm text-muted bg-surface border border-border px-3 py-1 rounded-full' : 'text-xs text-muted bg-surface border border-border px-3 py-1 rounded-full'}>{msg.content}</span>
+                </div>
+              )
+            }
+            return (
+              <div key={idx} className={`flex gap-2 ${msg.type === 'user' ? 'flex-row-reverse' : ''}`}>
+                <div className={`
+                  rounded-full flex items-center justify-center flex-shrink-0
+                  ${isAgent ? 'w-8 h-8' : 'w-6 h-6'}
+                  ${msg.type === 'user' ? 'bg-primary' : 'bg-surface border border-border'}
+                `}>
+                  {msg.type === 'user' ? <User size={isAgent ? 14 : 10} className="text-white" /> : <Bot size={isAgent ? 14 : 10} className="text-primary" />}
+                </div>
+                <div className={`
+                  leading-relaxed
+                  ${isAgent ? 'max-w-[80%] px-4 py-3 rounded-2xl text-sm' : 'max-w-[85%] px-3 py-2 rounded-xl text-xs'}
+                  ${msg.type === 'user'
+                    ? 'bg-primary text-white rounded-br-md'
+                    : 'bg-surface border border-border text-foreground rounded-bl-md'
+                  }
+                `}>
+                  <MarkdownRenderer content={msg.content} />
+                  {msg.attachment && (
+                    <div className="mt-2 pt-2 border-t border-white/20">
+                      {/\.(png|jpg|jpeg|webp|gif)$/i.test(msg.attachment) ? (
+                        <img
+                          src={`/api/files/download?path=${encodeURIComponent(msg.attachment)}`}
+                          alt="attachment"
+                          className={isAgent ? 'max-w-[240px] max-h-[160px] rounded-lg object-cover' : 'max-w-[180px] max-h-[120px] rounded-lg object-cover'}
+                          onError={(e) => { e.target.style.display = 'none' }}
+                        />
+                      ) : (
+                        <div className="flex items-center gap-2 opacity-90">
+                          <FileText size={isAgent ? 14 : 12} />
+                          <span className={isAgent ? 'truncate max-w-[240px]' : 'truncate max-w-[180px]'}>{msg.attachment.split('/').pop()}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+
+          {codingThinking && (
+            <div className="flex gap-2">
+              <div className={`
+                rounded-full bg-surface border border-border flex items-center justify-center
+                ${isAgent ? 'w-8 h-8' : 'w-6 h-6'}
+              `}>
+                <Bot size={isAgent ? 14 : 10} className="text-primary" />
+              </div>
+              <div className={`
+                bg-surface border border-border rounded-2xl rounded-bl-md
+                ${isAgent ? 'px-4 py-3' : 'px-3 py-2'}
+              `}>
+                <Loader2 size={isAgent ? 16 : 14} className="animate-spin text-muted" />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Chat Input */}
+        <div className={isAgent ? 'p-4 border-t border-border bg-surface/50 shrink-0' : 'p-3 border-t border-border bg-surface/50 shrink-0'}>
+          {codingAttachment && (
+            <div className={isAgent ? 'flex items-center gap-2 mb-3 px-4 py-2 bg-primary/10 border border-primary/20 rounded-lg w-fit' : 'flex items-center gap-2 mb-2 px-3 py-1 bg-primary/10 border border-primary/20 rounded-lg w-fit'}>
+              {codingAttachment.type?.startsWith('image/') ? <ImageIcon size={isAgent ? 14 : 12} className="text-primary" /> : <FileText size={isAgent ? 14 : 12} className="text-primary" />}
+              <span className={isAgent ? 'text-sm text-primary' : 'text-xs text-primary'}>{codingAttachment.name}</span>
+              <button onClick={() => setCodingAttachment(null)} className="text-primary hover:text-primary/70">
+                <X size={isAgent ? 14 : 12} />
+              </button>
+            </div>
+          )}
+          <div className={isAgent ? 'max-w-4xl mx-auto flex gap-2' : 'flex gap-2'}>
+            <div className="flex-1">
+              <div className="relative">
+                <textarea
+                  value={codingInput}
+                  onChange={(e) => {
+                    const value = e.target.value
+                    setCodingInput(value)
+                    if (value.startsWith('/')) {
+                      if (!showSkills) fetchSkills()
+                      setShowSkills(true)
+                      setSkillIndex(0)
+                    } else {
+                      setShowSkills(false)
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (showSkills && filteredSkills.length > 0) {
+                      if (e.key === 'ArrowDown') {
+                        e.preventDefault()
+                        setSkillIndex(i => (i + 1) % filteredSkills.length)
+                        return
+                      }
+                      if (e.key === 'ArrowUp') {
+                        e.preventDefault()
+                        setSkillIndex(i => (i - 1 + filteredSkills.length) % filteredSkills.length)
+                        return
+                      }
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        activateSkill(filteredSkills[skillIndex].name)
+                        return
+                      }
+                      if (e.key === 'Escape') {
+                        setShowSkills(false)
+                        return
+                      }
+                    }
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault()
+                      sendCodingMessage()
+                    }
+                  }}
+                  placeholder="Ask about your code..."
+                  rows={isAgent ? 3 : 2}
+                  className={isAgent ? 'w-full bg-card border border-border rounded-xl px-4 py-3 text-sm text-foreground placeholder:text-muted resize-none focus:outline-none focus:border-primary' : 'w-full bg-card border border-border rounded-lg px-3 py-2 text-xs text-foreground placeholder:text-muted resize-none focus:outline-none focus:border-primary'}
+                />
+                {showSkills && filteredSkills.length > 0 && (
+                  <div className={isAgent ? 'absolute bottom-full left-0 w-full bg-card border border-border rounded-xl shadow-lg z-50 py-1 mb-1 max-h-48 overflow-y-auto' : 'absolute bottom-full left-0 w-full bg-card border border-border rounded-lg shadow-lg z-50 py-1 mb-1 max-h-48 overflow-y-auto'}>
+                    {filteredSkills.map((skill, i) => (
+                      <div
+                        key={skill.name}
+                        ref={el => { if (i === skillIndex && el) el.scrollIntoView({ block: 'nearest' }) }}
+                        onClick={() => activateSkill(skill.name)}
+                        className={`px-3 py-2 cursor-pointer ${i === skillIndex ? 'bg-primary/10 text-primary' : 'text-foreground hover:bg-surface'}`}
+                      >
+                        <div className="text-sm font-medium">{skill.name}</div>
+                        <div className="text-xs text-muted">{skill.description}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="flex justify-between items-center mt-1">
+                <p className={isAgent ? 'text-xs text-muted' : 'text-[9px] text-muted'}>Enter to send · Shift+Enter for new line</p>
+                <p className={isAgent ? 'text-xs text-primary font-medium' : 'text-[9px] text-primary font-medium'}>MiniMax-M2.7</p>
+              </div>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <input
+                type="file"
+                ref={codingFileInputRef}
+                onChange={handleCodingFileSelect}
+                accept="image/*,.txt,.md,.json,.js,.jsx,.ts,.tsx,.py,.html,.css"
+                className="hidden"
+              />
+              <button
+                onClick={() => codingFileInputRef.current?.click()}
+                disabled={!codingConnected}
+                className={isAgent ? 'px-3 py-3 bg-surface hover:bg-surface-hover border border-border disabled:opacity-40 text-foreground rounded-lg transition-colors flex items-center justify-center' : 'px-2.5 py-2 bg-surface hover:bg-surface-hover border border-border disabled:opacity-40 text-foreground rounded-lg transition-colors flex items-center justify-center'}
+                title="Attach file or image"
+              >
+                <Paperclip size={isAgent ? 16 : 14} />
+              </button>
+              <button
+                onClick={sendCodingMessage}
+                disabled={(!codingInput.trim() && !codingAttachment) || !codingConnected || codingThinking}
+                className={isAgent ? 'px-4 py-3 bg-primary hover:bg-primary-hover disabled:opacity-40 text-white rounded-lg transition-colors flex items-center gap-1' : 'px-3 py-2 bg-primary hover:bg-primary-hover disabled:opacity-40 text-white rounded-lg transition-colors flex items-center gap-1'}
+              >
+                <Send size={isAgent ? 16 : 14} />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Agent Mode: Editor Drawer */}
+        {isAgent && showEditorDrawer && (
+          <div className="absolute bottom-0 left-0 right-0 h-[60%] bg-card border-t border-border flex flex-col z-20 shadow-2xl">
+            {/* Editor Tabs */}
+            {openFiles.length > 0 && (
+              <div className="flex border-b border-border bg-surface/30 overflow-x-auto shrink-0">
+                {openFiles.map((file) => (
+                  <div
+                    key={file.path}
+                    onClick={() => setActiveFile(file.path)}
+                    className={`flex items-center gap-2 px-3 py-2 text-xs font-medium border-r border-border transition-colors whitespace-nowrap group cursor-pointer ${
+                      activeFile === file.path
+                        ? 'bg-surface text-foreground border-t-2 border-t-primary'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-surface/50'
+                    }`}
+                  >
+                    <FileCode size={12} />
+                    <span>{file.name}</span>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); closeFile(file.path) }}
+                      className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-error/20 transition-opacity"
+                    >
+                      <X size={10} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Editor */}
+            <div className="flex-1 min-h-0 relative">
+              {activeFile ? (
+                <textarea
+                  value={fileContents[activeFile] || ''}
+                  onChange={(e) => setFileContents((prev) => ({ ...prev, [activeFile]: e.target.value }))}
+                  className="w-full h-full bg-card text-foreground p-4 font-mono text-sm resize-none focus:outline-none"
+                  spellCheck={false}
+                  placeholder={`// ${getLanguage(activeFile.split('/').pop())}`}
+                />
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full text-muted">
+                  <Code2 size={48} className="mb-4 opacity-20" />
+                  <p className="text-sm">{t('coding.selectFile')}</p>
+                  <p className="text-xs mt-1 opacity-60">{t('coding.selectFileHint')}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Bottom Panel: Terminal / Git */}
+            <div className="h-48 border-t border-border flex flex-col shrink-0">
+              <div className="flex border-b border-border bg-surface/30 shrink-0">
+                <button
+                  onClick={() => setActiveBottomTab('terminal')}
+                  className={`px-4 py-2 text-xs font-medium transition-colors flex items-center gap-1.5 ${activeBottomTab === 'terminal' ? 'text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground'}`}
+                >
+                  <Terminal size={12} /> {t('coding.terminal')}
+                </button>
+                <button
+                  onClick={() => { setActiveBottomTab('git'); loadGitStatus() }}
+                  className={`px-4 py-2 text-xs font-medium transition-colors flex items-center gap-1.5 ${activeBottomTab === 'git' ? 'text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground'}`}
+                >
+                  <GitBranch size={12} /> {t('coding.git')}
+                </button>
+              </div>
+              <div className="flex-1 overflow-hidden">
+                {activeBottomTab === 'terminal' && <XTermTerminal />}
+                {activeBottomTab === 'git' && (
+                  <div className="h-full overflow-y-auto p-3 text-xs space-y-2">
+                    <div className="flex items-center gap-2">
+                      <GitBranch size={14} className="text-primary" />
+                      <span className="font-mono text-foreground">{gitStatus?.branch || 'N/A'}</span>
+                    </div>
+                    {changedFiles.length > 0 ? (
+                      <>
+                        {changedFiles.map((f, i) => (
+                          <div key={i} className="flex items-center gap-2 px-2 py-1 rounded bg-surface">
+                            <span className={`font-mono ${f.staged ? 'text-green-500' : 'text-amber-500'}`}>{f.status}</span>
+                            <span className="text-foreground">{f.path}</span>
+                          </div>
+                        ))}
+                        <div className="flex gap-2 pt-2">
+                          <input
+                            value={commitMessage}
+                            onChange={(e) => setCommitMessage(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && runGitCommand(`git add -A && git commit -m "${commitMessage}"`)}
+                            placeholder={t('coding.commitMessage')}
+                            className="flex-1 bg-surface border border-border rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-primary"
+                          />
+                          <button
+                            onClick={() => { runGitCommand(`git add -A && git commit -m "${commitMessage}"`); setCommitMessage(''); loadGitStatus() }}
+                            className="px-3 py-1.5 bg-primary hover:bg-primary-hover text-white rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5"
+                          >
+                            <GitCommit size={12} /> {t('coding.commit')}
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <p className="text-muted text-center py-4">{t('coding.workingTreeClean')}</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col h-full bg-card">
       {/* Header */}
@@ -470,124 +865,112 @@ export default function CodingPanel() {
           </div>
         </div>
 
-        {layoutMode === 'agent' ? (
-          <AgentChatPanel
-            activeFile={activeFile}
-            openFiles={openFiles}
-            fileContents={fileContents}
-            onOpenFile={setActiveFile}
-            onCloseFile={(path) => setOpenFiles(prev => prev.filter(f => f.path !== path))}
-            onSaveFile={saveFile}
-            getLanguage={getLanguage}
-            gitStatus={gitStatus}
-            changedFiles={changedFiles}
-            runGitCommand={runGitCommand}
-            loadGitStatus={loadGitStatus}
-          />
-        ) : (
-        /* ─── IDE MODE: Editor + Bottom Panel ─── */
-        <div className="flex-1 flex flex-col min-w-0">
-          {/* Editor Tabs */}
-          {openFiles.length > 0 && (
-            <div className="flex border-b border-border bg-surface/30 overflow-x-auto shrink-0">
-              {openFiles.map((file) => (
-                <div
-                  key={file.path}
-                  onClick={() => setActiveFile(file.path)}
-                  className={`flex items-center gap-2 px-3 py-2 text-xs font-medium border-r border-border transition-colors whitespace-nowrap group cursor-pointer ${
-                    activeFile === file.path
-                      ? 'bg-surface text-foreground border-t-2 border-t-primary'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-surface/50'
-                  }`}
-                >
-                  <FileCode size={12} />
-                  <span>{file.name}</span>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); closeFile(file.path) }}
-                    className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-error/20 transition-opacity"
+        {/* Center */}
+        {layoutMode === 'ide' ? (
+          <div className="flex-1 flex flex-col min-w-0">
+            {/* Editor Tabs */}
+            {openFiles.length > 0 && (
+              <div className="flex border-b border-border bg-surface/30 overflow-x-auto shrink-0">
+                {openFiles.map((file) => (
+                  <div
+                    key={file.path}
+                    onClick={() => setActiveFile(file.path)}
+                    className={`flex items-center gap-2 px-3 py-2 text-xs font-medium border-r border-border transition-colors whitespace-nowrap group cursor-pointer ${
+                      activeFile === file.path
+                        ? 'bg-surface text-foreground border-t-2 border-t-primary'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-surface/50'
+                    }`}
                   >
-                    <X size={10} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Editor */}
-          <div className="flex-1 min-h-0 relative">
-            {activeFile ? (
-              <textarea
-                value={fileContents[activeFile] || ''}
-                onChange={(e) => setFileContents((prev) => ({ ...prev, [activeFile]: e.target.value }))}
-                className="w-full h-full bg-card text-foreground p-4 font-mono text-sm resize-none focus:outline-none"
-                spellCheck={false}
-                placeholder={`// ${getLanguage(activeFile.split('/').pop())}`}
-              />
-            ) : (
-              <div className="flex flex-col items-center justify-center h-full text-muted">
-                <Code2 size={48} className="mb-4 opacity-20" />
-                <p className="text-sm">{t('coding.selectFile')}</p>
-                <p className="text-xs mt-1 opacity-60">{t('coding.selectFileHint')}</p>
+                    <FileCode size={12} />
+                    <span>{file.name}</span>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); closeFile(file.path) }}
+                      className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-error/20 transition-opacity"
+                    >
+                      <X size={10} />
+                    </button>
+                  </div>
+                ))}
               </div>
             )}
-          </div>
 
-          {/* Bottom Panel: Terminal / Git */}
-          <div className="h-48 border-t border-border flex flex-col shrink-0">
-            <div className="flex border-b border-border bg-surface/30 shrink-0">
-              <button
-                onClick={() => setActiveBottomTab('terminal')}
-                className={`px-4 py-2 text-xs font-medium transition-colors flex items-center gap-1.5 ${activeBottomTab === 'terminal' ? 'text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground'}`}
-              >
-                <Terminal size={12} /> {t('coding.terminal')}
-              </button>
-              <button
-                onClick={() => { setActiveBottomTab('git'); loadGitStatus() }}
-                className={`px-4 py-2 text-xs font-medium transition-colors flex items-center gap-1.5 ${activeBottomTab === 'git' ? 'text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground'}`}
-              >
-                <GitBranch size={12} /> {t('coding.git')}
-              </button>
-            </div>
-            <div className="flex-1 overflow-hidden">
-              {activeBottomTab === 'terminal' && <XTermTerminal />}
-              {activeBottomTab === 'git' && (
-                <div className="h-full overflow-y-auto p-3 text-xs space-y-2">
-                  <div className="flex items-center gap-2">
-                    <GitBranch size={14} className="text-primary" />
-                    <span className="font-mono text-foreground">{gitStatus?.branch || 'N/A'}</span>
-                  </div>
-                  {changedFiles.length > 0 ? (
-                    <>
-                      {changedFiles.map((f, i) => (
-                        <div key={i} className="flex items-center gap-2 px-2 py-1 rounded bg-surface">
-                          <span className={`font-mono ${f.staged ? 'text-green-500' : 'text-amber-500'}`}>{f.status}</span>
-                          <span className="text-foreground">{f.path}</span>
-                        </div>
-                      ))}
-                      <div className="flex gap-2 pt-2">
-                        <input
-                          value={commitMessage}
-                          onChange={(e) => setCommitMessage(e.target.value)}
-                          onKeyDown={(e) => e.key === 'Enter' && runGitCommand(`git add -A && git commit -m "${commitMessage}"`)}
-                          placeholder={t('coding.commitMessage')}
-                          className="flex-1 bg-surface border border-border rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-primary"
-                        />
-                        <button
-                          onClick={() => { runGitCommand(`git add -A && git commit -m "${commitMessage}"`); setCommitMessage(''); loadGitStatus() }}
-                          className="px-3 py-1.5 bg-primary hover:bg-primary-hover text-white rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5"
-                        >
-                          <GitCommit size={12} /> {t('coding.commit')}
-                        </button>
-                      </div>
-                    </>
-                  ) : (
-                    <p className="text-muted text-center py-4">{t('coding.workingTreeClean')}</p>
-                  )}
+            {/* Editor */}
+            <div className="flex-1 min-h-0 relative">
+              {activeFile ? (
+                <textarea
+                  value={fileContents[activeFile] || ''}
+                  onChange={(e) => setFileContents((prev) => ({ ...prev, [activeFile]: e.target.value }))}
+                  className="w-full h-full bg-card text-foreground p-4 font-mono text-sm resize-none focus:outline-none"
+                  spellCheck={false}
+                  placeholder={`// ${getLanguage(activeFile.split('/').pop())}`}
+                />
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full text-muted">
+                  <Code2 size={48} className="mb-4 opacity-20" />
+                  <p className="text-sm">{t('coding.selectFile')}</p>
+                  <p className="text-xs mt-1 opacity-60">{t('coding.selectFileHint')}</p>
                 </div>
               )}
             </div>
+
+            {/* Bottom Panel: Terminal / Git */}
+            <div className="h-48 border-t border-border flex flex-col shrink-0">
+              <div className="flex border-b border-border bg-surface/30 shrink-0">
+                <button
+                  onClick={() => setActiveBottomTab('terminal')}
+                  className={`px-4 py-2 text-xs font-medium transition-colors flex items-center gap-1.5 ${activeBottomTab === 'terminal' ? 'text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground'}`}
+                >
+                  <Terminal size={12} /> {t('coding.terminal')}
+                </button>
+                <button
+                  onClick={() => { setActiveBottomTab('git'); loadGitStatus() }}
+                  className={`px-4 py-2 text-xs font-medium transition-colors flex items-center gap-1.5 ${activeBottomTab === 'git' ? 'text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground'}`}
+                >
+                  <GitBranch size={12} /> {t('coding.git')}
+                </button>
+              </div>
+              <div className="flex-1 overflow-hidden">
+                {activeBottomTab === 'terminal' && <XTermTerminal />}
+                {activeBottomTab === 'git' && (
+                  <div className="h-full overflow-y-auto p-3 text-xs space-y-2">
+                    <div className="flex items-center gap-2">
+                      <GitBranch size={14} className="text-primary" />
+                      <span className="font-mono text-foreground">{gitStatus?.branch || 'N/A'}</span>
+                    </div>
+                    {changedFiles.length > 0 ? (
+                      <>
+                        {changedFiles.map((f, i) => (
+                          <div key={i} className="flex items-center gap-2 px-2 py-1 rounded bg-surface">
+                            <span className={`font-mono ${f.staged ? 'text-green-500' : 'text-amber-500'}`}>{f.status}</span>
+                            <span className="text-foreground">{f.path}</span>
+                          </div>
+                        ))}
+                        <div className="flex gap-2 pt-2">
+                          <input
+                            value={commitMessage}
+                            onChange={(e) => setCommitMessage(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && runGitCommand(`git add -A && git commit -m "${commitMessage}"`)}
+                            placeholder={t('coding.commitMessage')}
+                            className="flex-1 bg-surface border border-border rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-primary"
+                          />
+                          <button
+                            onClick={() => { runGitCommand(`git add -A && git commit -m "${commitMessage}"`); setCommitMessage(''); loadGitStatus() }}
+                            className="px-3 py-1.5 bg-primary hover:bg-primary-hover text-white rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5"
+                          >
+                            <GitCommit size={12} /> {t('coding.commit')}
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <p className="text-muted text-center py-4">{t('coding.workingTreeClean')}</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
-        </div>
+        ) : (
+          renderChat(true)
         )}
 
         {/* Right: Workspace Sidebar (Plan/Todos/Tasks/Agents) */}
@@ -602,289 +985,8 @@ export default function CodingPanel() {
           />
         )}
 
-        {/* Right: Coding Agent Chat (IDE mode only) */}
-        {layoutMode === 'ide' && (
-        <div className="w-80 flex flex-col border-l border-border bg-card shrink-0">
-          {/* Chat Header */}
-          <div className="h-12 flex items-center justify-between px-4 border-b border-border bg-surface/50 shrink-0">
-            <div className="flex items-center gap-2 relative" ref={codingConvListRef}>
-              <Bot size={16} className="text-primary" />
-              <button
-                onClick={() => setShowCodingConvList(!showCodingConvList)}
-                className="flex items-center gap-1 text-sm font-semibold text-foreground hover:text-primary transition-colors"
-              >
-                {codingConversations.find(c => c.id === codingSessionId)?.title || 'Code Chat'}
-                <ChevronDown size={12} className={`transition-transform ${showCodingConvList ? 'rotate-180' : ''}`} />
-              </button>
-              {showCodingConvList && (
-                <div className="absolute top-full left-0 mt-1 w-64 bg-card border border-border rounded-xl shadow-lg z-50 py-2 max-h-72 overflow-y-auto">
-                  <button
-                    onClick={startNewCodingChat}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-primary hover:bg-primary/10 transition-colors"
-                  >
-                    <MessageSquarePlus size={12} /> New Code Chat
-                  </button>
-                  <div className="border-t border-border my-1" />
-                  {codingConversations.length === 0 && (
-                    <p className="px-3 py-2 text-xs text-muted">No previous code chats</p>
-                  )}
-                  {codingConversations.map((conv) => (
-                    <div
-                      key={conv.id}
-                      onClick={() => loadCodingConversation(conv)}
-                      className={`flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-surface transition-colors ${conv.id === codingSessionId ? 'bg-primary/10' : ''}`}
-                    >
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium text-foreground truncate">{conv.title}</p>
-                        <p className="text-[10px] text-muted">{conv.message_count} messages</p>
-                      </div>
-                      <button
-                        onClick={(e) => deleteCodingConversation(e, conv.id)}
-                        className="p-1 rounded hover:bg-error/10 text-muted hover:text-error transition-colors"
-                        title="Delete"
-                      >
-                        <Trash2 size={10} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-            <div className="flex items-center gap-1">
-              <button onClick={startNewCodingChat} className="p-1.5 rounded hover:bg-surface text-muted hover:text-foreground transition-colors" title="New chat">
-                <MessageSquarePlus size={12} />
-              </button>
-              <div className={`w-2 h-2 rounded-full ${codingConnected ? 'bg-success' : 'bg-error'}`} />
-            </div>
-          </div>
-
-          {/* Quick Actions */}
-          {activeFile && (
-            <div className="px-3 py-2 border-b border-border shrink-0">
-              <div className="grid grid-cols-2 gap-1.5">
-                {QUICK_ACTIONS.map((action) => {
-                  const Icon = action.icon
-                  return (
-                    <button
-                      key={action.id}
-                      onClick={() => handleQuickAction(action)}
-                      disabled={codingThinking}
-                      className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-surface border border-border hover:border-primary text-xs text-foreground transition-colors disabled:opacity-40"
-                    >
-                      <Icon size={12} className="text-primary" />
-                      {action.label}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Chat Messages */}
-          <div ref={codingChatRef} className="flex-1 overflow-y-auto p-3 space-y-3">
-            {codingMessages.length === 0 && (
-              <div className="flex flex-col items-center justify-center h-full text-muted text-center">
-                <Sparkles size={32} className="mb-3 opacity-30" />
-                <p className="text-xs">Ask me about your code</p>
-                <p className="text-[10px] mt-1 opacity-50">I can see the file you have open</p>
-              </div>
-            )}
-
-            {codingMessages.map((msg, idx) => {
-              if (msg.type === 'tool_result') {
-                return (
-                  <div key={idx} className="my-2 p-2 bg-slate-800/50 rounded border border-slate-700/50">
-                    <div className="flex items-center gap-2 text-sm">
-                      <span className="text-cyan-400">🔧 {msg.tool}</span>
-                      <span className="text-slate-400">{msg.success ? '✅' : '❌'}</span>
-                    </div>
-                    {msg.arguments?.path && (
-                      <div className="text-xs text-slate-500 mt-1">{msg.arguments.path}</div>
-                    )}
-                  </div>
-                )
-              }
-              if (msg.type === 'thinking') {
-                const isCurrent = codingThinking && idx === codingMessages.length - 1
-                return (
-                  <details key={idx} className="my-1">
-                    <summary className="text-xs text-slate-500 cursor-pointer">
-                      💭 thinking{isCurrent && thinkingDuration > 0 ? ` · ${thinkingDuration}s` : '...'}
-                    </summary>
-                    <pre className="text-xs text-slate-400 p-2 bg-slate-900/50 rounded mt-1">{msg.content}</pre>
-                  </details>
-                )
-              }
-              if (msg.type === 'step_start') {
-                return (
-                  <div key={idx} className="text-xs text-slate-500 my-1">
-                    Step {msg.step}/{msg.max_steps}
-                  </div>
-                )
-              }
-              if (msg.type === 'system') {
-                return (
-                  <div key={idx} className="flex justify-center my-2">
-                    <span className="text-xs text-muted bg-surface border border-border px-3 py-1 rounded-full">{msg.content}</span>
-                  </div>
-                )
-              }
-              return (
-                <div key={idx} className={`flex gap-2 ${msg.type === 'user' ? 'flex-row-reverse' : ''}`}>
-                  <div className={`
-                    w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0
-                    ${msg.type === 'user' ? 'bg-primary' : 'bg-surface border border-border'}
-                  `}>
-                    {msg.type === 'user' ? <User size={10} className="text-white" /> : <Bot size={10} className="text-primary" />}
-                  </div>
-                  <div className={`
-                    max-w-[85%] px-3 py-2 rounded-xl text-xs leading-relaxed
-                    ${msg.type === 'user'
-                      ? 'bg-primary text-white rounded-br-md'
-                      : 'bg-surface border border-border text-foreground rounded-bl-md'
-                    }
-                  `}>
-                    <MarkdownRenderer content={msg.content} />
-                    {msg.attachment && (
-                      <div className="mt-2 pt-2 border-t border-white/20">
-                        {/\.(png|jpg|jpeg|webp|gif)$/i.test(msg.attachment) ? (
-                          <img
-                            src={`/api/files/download?path=${encodeURIComponent(msg.attachment)}`}
-                            alt="attachment"
-                            className="max-w-[180px] max-h-[120px] rounded-lg object-cover"
-                            onError={(e) => { e.target.style.display = 'none' }}
-                          />
-                        ) : (
-                          <div className="flex items-center gap-2 opacity-90">
-                            <FileText size={12} />
-                            <span className="truncate max-w-[180px]">{msg.attachment.split('/').pop()}</span>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )
-            })}
-
-            {codingThinking && (
-              <div className="flex gap-2">
-                <div className="w-6 h-6 rounded-full bg-surface border border-border flex items-center justify-center">
-                  <Bot size={10} className="text-primary" />
-                </div>
-                <div className="bg-surface border border-border rounded-2xl rounded-bl-md px-3 py-2">
-                  <Loader2 size={14} className="animate-spin text-muted" />
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Chat Input */}
-          <div className="p-3 border-t border-border bg-surface/50 shrink-0">
-            {codingAttachment && (
-              <div className="flex items-center gap-2 mb-2 px-3 py-1 bg-primary/10 border border-primary/20 rounded-lg w-fit">
-                {codingAttachment.type?.startsWith('image/') ? <ImageIcon size={12} className="text-primary" /> : <FileText size={12} className="text-primary" />}
-                <span className="text-xs text-primary">{codingAttachment.name}</span>
-                <button onClick={() => setCodingAttachment(null)} className="text-primary hover:text-primary/70">
-                  <X size={12} />
-                </button>
-              </div>
-            )}
-            <div className="flex gap-2">
-              <div className="flex-1">
-                <div className="relative">
-                  <textarea
-                    value={codingInput}
-                    onChange={(e) => {
-                      const value = e.target.value
-                      setCodingInput(value)
-                      if (value.startsWith('/')) {
-                        if (!showSkills) fetchSkills()
-                        setShowSkills(true)
-                        setSkillIndex(0)
-                      } else {
-                        setShowSkills(false)
-                      }
-                    }}
-                    onKeyDown={(e) => {
-                      if (showSkills && filteredSkills.length > 0) {
-                        if (e.key === 'ArrowDown') {
-                          e.preventDefault()
-                          setSkillIndex(i => (i + 1) % filteredSkills.length)
-                          return
-                        }
-                        if (e.key === 'ArrowUp') {
-                          e.preventDefault()
-                          setSkillIndex(i => (i - 1 + filteredSkills.length) % filteredSkills.length)
-                          return
-                        }
-                        if (e.key === 'Enter') {
-                          e.preventDefault()
-                          activateSkill(filteredSkills[skillIndex].name)
-                          return
-                        }
-                        if (e.key === 'Escape') {
-                          setShowSkills(false)
-                          return
-                        }
-                      }
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault()
-                        sendCodingMessage()
-                      }
-                    }}
-                    placeholder="Ask about your code..."
-                    rows={2}
-                    className="w-full bg-card border border-border rounded-lg px-3 py-2 text-xs text-foreground placeholder:text-muted resize-none focus:outline-none focus:border-primary"
-                  />
-                  {showSkills && filteredSkills.length > 0 && (
-                    <div className="absolute bottom-full left-0 w-full bg-card border border-border rounded-lg shadow-lg z-50 py-1 mb-1 max-h-48 overflow-y-auto">
-                      {filteredSkills.map((skill, i) => (
-                        <div
-                          key={skill.name}
-                          onClick={() => activateSkill(skill.name)}
-                          className={`px-3 py-2 cursor-pointer ${i === skillIndex ? 'bg-primary/10 text-primary' : 'text-foreground hover:bg-surface'}`}
-                        >
-                          <div className="text-sm font-medium">{skill.name}</div>
-                          <div className="text-xs text-muted">{skill.description}</div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <div className="flex justify-between items-center mt-0.5">
-                  <p className="text-[9px] text-muted">Enter to send · Shift+Enter for new line</p>
-                  <p className="text-[9px] text-primary font-medium">MiniMax-M2.7</p>
-                </div>
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <input
-                  type="file"
-                  ref={codingFileInputRef}
-                  onChange={handleCodingFileSelect}
-                  accept="image/*,.txt,.md,.json,.js,.jsx,.ts,.tsx,.py,.html,.css"
-                  className="hidden"
-                />
-                <button
-                  onClick={() => codingFileInputRef.current?.click()}
-                  disabled={!codingConnected}
-                  className="px-2.5 py-2 bg-surface hover:bg-surface-hover border border-border disabled:opacity-40 text-foreground rounded-lg transition-colors flex items-center justify-center"
-                  title="Attach file or image"
-                >
-                  <Paperclip size={14} />
-                </button>
-                <button
-                  onClick={sendCodingMessage}
-                  disabled={(!codingInput.trim() && !codingAttachment) || !codingConnected || codingThinking}
-                  className="px-3 py-2 bg-primary hover:bg-primary-hover disabled:opacity-40 text-white rounded-lg transition-colors flex items-center gap-1"
-                >
-                  <Send size={14} />
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-        )}
+        {/* Right: Coding Agent Chat (Copilot-style) */}
+        {layoutMode === 'ide' && renderChat(false)}
       </div>
     </div>
   )

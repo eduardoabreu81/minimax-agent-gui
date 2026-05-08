@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useTheme } from './context/ThemeContext'
+import { AgentActivityProvider } from './context/AgentActivityContext'
 import Sidebar from './components/Sidebar'
 import ChatPanel from './components/chat/ChatPanel'
 import MatrixRain from './components/effects/MatrixRain'
@@ -33,7 +34,11 @@ function App() {
     image: <ImagePanel />,
     music: <MusicPanel />,
     video: <VideoPanel />,
-    code: <CodingPanel />,
+    code: (
+      <AgentActivityProvider>
+        <CodingPanel />
+      </AgentActivityProvider>
+    ),
     tasks: <TaskBoard />,
   }
 

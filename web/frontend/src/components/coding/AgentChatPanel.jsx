@@ -6,11 +6,19 @@ import {
 import MarkdownRenderer from '../MarkdownRenderer'
 import XTermTerminal from './XTermTerminal'
 import { useCodingChat } from './useCodingChat'
+import { useAgentActivity } from '../../context/AgentActivityContext'
 import { useState } from 'react'
 
-export default function AgentChatPanel({ activeFile, openFiles, fileContents, onOpenFile, onCloseFile, onSaveFile, getLanguage, gitStatus, changedFiles, runGitCommand, loadGitStatus }) {
+export default function AgentChatPanel({ activeFile, openFiles, fileContents, onOpenFile, onCloseFile, onSaveFile, getLanguage, gitStatus, changedFiles, runGitCommand, loadGitStatus, onFileChange }) {
   const { t } = useTranslation()
-  const chat = useCodingChat()
+  const chat = useCodingChat({
+    onActivity: (data) => {
+      if (data.type === 'tool_result' && (data.tool === 'write_file' || data.tool === 'edit_file')) {
+        onFileChange?.()
+      }
+    }
+  })
+  const activity = useAgentActivity()
   const [showEditorDrawer, setShowEditorDrawer] = useState(false)
   const [activeBottomTab, setActiveBottomTab] = useState('editor')
   const [commitMessage, setCommitMessage] = useState('')
@@ -87,37 +95,6 @@ export default function AgentChatPanel({ activeFile, openFiles, fileContents, on
         )}
 
         {chat.messages.map((msg, idx) => {
-          if (msg.type === 'tool_result') {
-            return (
-              <div key={idx} className="my-2 p-3 bg-slate-800/50 rounded border border-slate-700/50">
-                <div className="flex items-center gap-2 text-sm">
-                  <span className="text-cyan-400">🔧 {msg.tool}</span>
-                  <span className="text-slate-400">{msg.success ? '✅' : '❌'}</span>
-                </div>
-                {msg.arguments?.path && (
-                  <div className="text-xs text-slate-500 mt-1">{msg.arguments.path}</div>
-                )}
-              </div>
-            )
-          }
-          if (msg.type === 'thinking') {
-            const isCurrent = chat.isThinking && idx === chat.messages.length - 1
-            return (
-              <details key={idx} className="my-1">
-                <summary className="text-xs text-slate-500 cursor-pointer">
-                  💭 thinking{isCurrent && chat.thinkingDuration > 0 ? ` · ${chat.thinkingDuration}s` : '...'}
-                </summary>
-                <pre className="text-xs text-slate-400 p-2 bg-slate-900/50 rounded mt-1">{msg.content}</pre>
-              </details>
-            )
-          }
-          if (msg.type === 'step_start') {
-            return (
-              <div key={idx} className="text-xs text-slate-500 my-1">
-                Step {msg.step}/{msg.max_steps}
-              </div>
-            )
-          }
           if (msg.type === 'system') {
             return (
               <div key={idx} className="flex justify-center my-2">
