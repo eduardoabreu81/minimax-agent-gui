@@ -111,13 +111,12 @@ Environment variables:
 
 ### Phase 1 — Foundation
 - [ ] **Command Palette (Ctrl+K)** — Universal navigation like Spotlight/VS Code
-- [ ] **PWA / Mobile** — Installable app, responsive design, touch targets
 - [ ] **Live Todo Progress** — Real-time task tracking while the agent works
 
 ### Phase 2 — Productivity
 - [ ] **Task Board (Kanban)** — Project planning with todo/in-progress/done columns
 - [ ] **Session Protection** — Prevent accidental context loss when navigating
-- [ ] **Quick Settings Panel** — Fast access to provider, model, and permission settings
+- [ ] **Quick Settings Panel** — Fast access to model and tool settings
 
 ### Phase 3 — Extensibility
 - [ ] **MCP Integration** — Configurable MCP servers (stdio, SSE, HTTP)
@@ -126,7 +125,6 @@ Environment variables:
 
 ### Phase 4 — Polish
 - [ ] **Sandboxed Preview** — Secure iframe preview for generated code
-- [ ] **Onboarding Flow** — Interactive tutorial for first-time users
 - [ ] **Permission System** — Granular auto/ask/reject per tool
 
 ## License
