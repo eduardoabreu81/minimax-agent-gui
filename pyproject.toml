@@ -10,8 +10,6 @@ authors = [
 license = {text = "MIT"}
 
 dependencies = [
-    # GUI
-    "PyQt6>=6.6.0",
     # Mini-Agent core
     "pydantic>=2.0.0",
     "pyyaml>=6.0.0",
@@ -28,14 +26,13 @@ dependencies = [
 
 [project.scripts]
 mini-agent = "mini_agent.cli:main"
-mini-agent-gui = "gui.main:main"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["gui"]
+packages = ["mini_agent", "mini_max_mcp"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

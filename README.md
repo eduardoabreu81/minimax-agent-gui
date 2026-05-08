@@ -31,8 +31,14 @@ Requires **Python 3.10+**, **Node.js 18+**, and a [MiniMax API key](https://plat
 ```bash
 git clone https://github.com/eduardoabreu81/minimax-agent-gui.git
 cd minimax-agent-gui
+
+# Core Python dependencies (CLI, MCP, agent framework)
 pip install -e .
 
+# Web backend dependencies (FastAPI, WebSocket, file upload)
+pip install -r web/backend/requirements.txt
+
+# Frontend dependencies
 cd web
 npm install
 ```
