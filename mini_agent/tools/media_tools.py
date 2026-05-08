@@ -44,7 +44,7 @@ class ImageGenerateTool(Tool):
             },
         }
 
-    async def execute(self, prompt: str, aspect_ratio: str = "1:1", output_name: str = "generated_image.png") -> ToolResult:
+    async def execute(self, prompt: str, aspect_ratio: str = "1:1", output_name: str = "generations/images/generated_image.png") -> ToolResult:
         output_path = self.workspace_dir / output_name
         output_path.parent.mkdir(parents=True, exist_ok=True)
         try:
@@ -104,7 +104,7 @@ class MusicGenerateTool(Tool):
             },
         }
 
-    async def execute(self, prompt: str = "", lyrics: str = "", is_instrumental: bool = False, output_name: str = "generated_music.mp3") -> ToolResult:
+    async def execute(self, prompt: str = "", lyrics: str = "", is_instrumental: bool = False, output_name: str = "generations/music/generated_music.mp3") -> ToolResult:
         output_path = self.workspace_dir / output_name
         output_path.parent.mkdir(parents=True, exist_ok=True)
         try:
@@ -164,7 +164,7 @@ class TTSTool(Tool):
             },
         }
 
-    async def execute(self, text: str, voice: str = "male-qn-qingque", speed: float = 1.2, output_name: str = "tts_output.mp3") -> ToolResult:
+    async def execute(self, text: str, voice: str = "male-qn-qingque", speed: float = 1.2, output_name: str = "generations/tts/tts_output.mp3") -> ToolResult:
         output_path = self.workspace_dir / output_name
         output_path.parent.mkdir(parents=True, exist_ok=True)
         try:
@@ -219,7 +219,7 @@ class VideoGenerateTool(Tool):
             },
         }
 
-    async def execute(self, prompt: str, model: str = "MiniMax-Hailuo-2.3", output_name: str = "generated_video.mp4") -> ToolResult:
+    async def execute(self, prompt: str, model: str = "MiniMax-Hailuo-2.3", output_name: str = "generations/videos/generated_video.mp4") -> ToolResult:
         output_path = self.workspace_dir / output_name
         output_path.parent.mkdir(parents=True, exist_ok=True)
         try:

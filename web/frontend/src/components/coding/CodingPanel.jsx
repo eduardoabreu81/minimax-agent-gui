@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import {
   Code2, FileCode, Folder, GitBranch, Terminal, Save, RefreshCw,
   GitCommit, GitPullRequest, X, Send, Bot, User, Loader2, Sparkles,
-  Wand2, Bug, FileCheck, Lightbulb, ChevronRight, Play, Square,
+  ChevronRight, Play, Square,
   MessageSquarePlus, Trash2, Paperclip, Image as ImageIcon, FileText, ChevronDown,
   Search, Zap, LayoutTemplate, Columns, Pencil, ArrowUp, Home
 } from 'lucide-react'
@@ -34,12 +34,7 @@ When asked to debug:
 
 Always be concise but thorough. Use markdown for code blocks.`
 
-const QUICK_ACTIONS = [
-  { id: 'explain', label: 'Explain', icon: Lightbulb, prompt: 'Explain this code in detail. What does it do and how does it work?' },
-  { id: 'fix', label: 'Fix', icon: Bug, prompt: 'Find and fix any bugs or issues in this code. Explain what was wrong.' },
-  { id: 'test', label: 'Tests', icon: FileCheck, prompt: 'Write unit tests for this code. Use best practices.' },
-  { id: 'refactor', label: 'Refactor', icon: Wand2, prompt: 'Refactor this code to improve readability, performance, and maintainability.' },
-]
+// Quick actions removed — agent now works directly from chat context
 
 export default function CodingPanel() {
   const { t } = useTranslation()
@@ -340,21 +335,7 @@ export default function CodingPanel() {
     e.target.value = ''
   }
 
-  const handleQuickAction = (action) => {
-    if (!activeFile || !fileContents[activeFile]) return
-    const fileName = activeFile.split('/').pop()
-    const code = fileContents[activeFile].slice(0, 3000)
-    const prompt = `${action.prompt}\n\nFile: \`${fileName}\`\n\n\`\`\`\n${code}\n\`\`\``
-
-    // Show the quick-action message in chat so user knows what was sent
-    setCodingMessages(prev => [...prev, {
-      type: 'user',
-      content: `${action.label}: ${fileName}`,
-      attachment: null
-    }])
-    codingWs.send(JSON.stringify({ message: prompt }))
-    setCodingThinking(true)
-  }
+  // Quick actions removed — agent works directly from chat context
 
   const clearCodingChat = () => setCodingMessages([])
 
@@ -515,33 +496,6 @@ export default function CodingPanel() {
             <div className={`w-2 h-2 rounded-full ${codingConnected ? 'bg-success' : 'bg-error'}`} />
           </div>
         </div>
-
-        {/* Quick Actions */}
-        {activeFile && (
-          <div className={isAgent ? 'px-4 py-3 border-b border-border shrink-0' : 'px-3 py-2 border-b border-border shrink-0'}>
-            <div className={isAgent ? 'grid grid-cols-2 gap-2' : 'grid grid-cols-2 gap-1.5'}>
-              {QUICK_ACTIONS.map((action) => {
-                const Icon = action.icon
-                const targetFile = activeFile ? activeFile.split('/').pop() : ''
-                return (
-                  <button
-                    key={action.id}
-                    onClick={() => handleQuickAction(action)}
-                    disabled={codingThinking || !activeFile}
-                    className={isAgent ? 'flex items-center gap-1.5 px-3 py-2 rounded-lg bg-surface border border-border hover:border-primary text-sm text-foreground transition-colors disabled:opacity-40' : 'flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-surface border border-border hover:border-primary text-xs text-foreground transition-colors disabled:opacity-40'}
-                    title={targetFile ? `${action.label} ${targetFile}` : 'Open a file first'}
-                  >
-                    <Icon size={isAgent ? 14 : 12} className="text-primary" />
-                    <span className="truncate max-w-[100px]">{action.label}</span>
-                    {targetFile && (
-                      <span className="truncate max-w-[80px] text-muted-foreground opacity-70">{targetFile}</span>
-                    )}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-        )}
 
         {/* Chat Messages */}
         <div ref={codingChatRef} className={isAgent ? 'flex-1 overflow-y-auto p-6 space-y-5' : 'flex-1 overflow-y-auto p-3 space-y-3'}>

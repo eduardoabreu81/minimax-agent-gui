@@ -308,6 +308,9 @@ session_manager = SessionManager()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     _logger.info("MiniMax Agent Web starting up...")
+    # Ensure generations directories exist
+    for subdir in ("images", "videos", "music", "tts"):
+        (PROJECT_ROOT / "workspace" / "generations" / subdir).mkdir(parents=True, exist_ok=True)
     yield
     _logger.info("Shutting down...")
 
