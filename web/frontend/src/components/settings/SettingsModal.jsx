@@ -3,8 +3,9 @@ import { useTranslation } from 'react-i18next'
 import {
   X, Globe, Moon, Sun, Key, Cpu, Shield, Keyboard,
   Info, Check, AlertCircle, Save, RotateCcw, Eye, EyeOff,
-  MapPin, BarChart3, Lock, Unlock, Search
+  MapPin, BarChart3, Lock, Unlock, Search, Monitor
 } from 'lucide-react'
+import { useTheme } from '../../context/ThemeContext'
 
 const TABS = [
   { id: 'general', label: 'General', icon: Globe },
@@ -44,6 +45,7 @@ const SHORTCUTS = [
 
 export default function SettingsModal({ isOpen, onClose, isDark, onToggleTheme }) {
   const { t, i18n } = useTranslation()
+  const { theme, setTheme, toggleDark, themes: THEME_LIST } = useTheme()
   const [activeTab, setActiveTab] = useState('general')
   const [config, setConfig] = useState({})
   const [savedMessage, setSavedMessage] = useState('')
@@ -195,25 +197,44 @@ export default function SettingsModal({ isOpen, onClose, isDark, onToggleTheme }
                 </div>
 
                 <div>
-                  <h3 className="text-xs font-semibold text-muted uppercase tracking-wider mb-3">Appearance</h3>
+                  <h3 className="text-xs font-semibold text-muted uppercase tracking-wider mb-3">Theme</h3>
+                  <div className="grid grid-cols-3 gap-2 mb-4">
+                    {THEME_LIST.map((t) => (
+                      <button
+                        key={t.id}
+                        onClick={() => setTheme(t.id)}
+                        className={`flex flex-col items-center gap-2 px-3 py-3 rounded-lg border transition-colors ${
+                          theme === t.id
+                            ? 'bg-primary/10 border-primary text-primary'
+                            : 'bg-surface border-border text-muted-foreground hover:border-primary'
+                        }`}
+                        title={t.name}
+                      >
+                        <div className={`w-8 h-8 rounded-full ${t.color} ring-2 ring-offset-2 ring-offset-card ${theme === t.id ? 'ring-primary' : 'ring-transparent'}`} />
+                        <span className="text-[10px] font-medium">{t.name}</span>
+                      </button>
+                    ))}
+                  </div>
+
+                  <h3 className="text-xs font-semibold text-muted uppercase tracking-wider mb-3">Mode</h3>
                   <div className="flex gap-3">
                     <button
-                      onClick={() => { if (isDark) onToggleTheme() }}
+                      onClick={() => { if (isDark) toggleDark() }}
                       className={`flex-1 flex flex-col items-center gap-2 px-4 py-3 rounded-lg border transition-colors ${
                         !isDark ? 'bg-primary/10 border-primary text-primary' : 'bg-surface border-border text-muted-foreground hover:border-primary'
                       }`}
                     >
                       <Sun size={20} />
-                      <span className="text-xs" title="Switch to light theme">Light</span>
+                      <span className="text-xs">Light</span>
                     </button>
                     <button
-                      onClick={() => { if (!isDark) onToggleTheme() }}
+                      onClick={() => { if (!isDark) toggleDark() }}
                       className={`flex-1 flex flex-col items-center gap-2 px-4 py-3 rounded-lg border transition-colors ${
                         isDark ? 'bg-primary/10 border-primary text-primary' : 'bg-surface border-border text-muted-foreground hover:border-primary'
                       }`}
                     >
                       <Moon size={20} />
-                      <span className="text-xs" title="Switch to dark theme">Dark</span>
+                      <span className="text-xs">Dark</span>
                     </button>
                   </div>
                 </div>
