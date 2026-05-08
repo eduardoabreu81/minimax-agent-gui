@@ -43,6 +43,11 @@ workspace/
 # Config with secrets (keep but ignore in git)
 config/config.yaml
 
+# Node.js
+node_modules/
+dist/
+build/
+
 # OS
 .DS_Store
 Thumbs.db

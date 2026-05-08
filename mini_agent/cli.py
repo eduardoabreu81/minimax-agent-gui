@@ -513,7 +513,7 @@ async def run_agent(workspace_dir: Path, task: str = None):
         print(f"{Colors.DIM}    • Download configuration files{Colors.RESET}")
         print(f"{Colors.DIM}    • Guide you to add your API Key{Colors.RESET}")
         print()
-        print(f"{Colors.BRIGHT_YELLOW}📝 Manual Setup:{Colors.RESET}")
+        print(f"{Colors.BRIGHT_YELLOW}[SETUP] Manual Setup:{Colors.RESET}")
         user_config_dir = Path.home() / ".mini-agent" / "config"
         example_config = Config.get_package_dir() / "config" / "config-example.yaml"
         print(f"  {Colors.DIM}mkdir -p {user_config_dir}{Colors.RESET}")

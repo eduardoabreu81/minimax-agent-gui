@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import logging
 from pathlib import Path
 from time import perf_counter
 from typing import Optional
@@ -13,6 +14,8 @@ from .logger import AgentLogger
 from .schema import Message
 from .tools.base import Tool, ToolResult
 from .utils import calculate_display_width
+
+_logger = logging.getLogger(__name__)
 
 
 # ANSI color codes
@@ -118,7 +121,7 @@ class Agent:
         removed_count = len(self.messages) - last_assistant_idx
         if removed_count > 0:
             self.messages = self.messages[:last_assistant_idx]
-            print(f"{Colors.DIM}   Cleaned up {removed_count} incomplete message(s){Colors.RESET}")
+            _logger.debug(f"Cleaned up {removed_count} incomplete message(s)")
 
     def _estimate_tokens(self) -> int:
         """Accurately calculate token count for message history using tiktoken
@@ -204,17 +207,15 @@ class Agent:
         if not should_summarize:
             return
 
-        print(
-            f"\n{Colors.BRIGHT_YELLOW}📊 Token usage - Local estimate: {estimated_tokens}, API reported: {self.api_total_tokens}, Limit: {self.token_limit}{Colors.RESET}"
-        )
-        print(f"{Colors.BRIGHT_YELLOW}🔄 Triggering message history summarization...{Colors.RESET}")
+        _logger.debug(f"Token usage - Local estimate: {estimated_tokens}, API reported: {self.api_total_tokens}, Limit: {self.token_limit}")
+        _logger.debug("Triggering message history summarization...")
 
         # Find all user message indices (skip system prompt)
         user_indices = [i for i, msg in enumerate(self.messages) if msg.role == "user" and i > 0]
 
         # Need at least 1 user message to perform summary
         if len(user_indices) < 1:
-            print(f"{Colors.BRIGHT_YELLOW}⚠️  Insufficient messages, cannot summarize{Colors.RESET}")
+            _logger.warning("Insufficient messages, cannot summarize")
             return
 
         # Build new message list
@@ -255,9 +256,9 @@ class Agent:
         self._skip_next_token_check = True
 
         new_tokens = self._estimate_tokens()
-        print(f"{Colors.BRIGHT_GREEN}✓ Summary completed, local tokens: {estimated_tokens} → {new_tokens}{Colors.RESET}")
-        print(f"{Colors.DIM}  Structure: system + {len(user_indices)} user messages + {summary_count} summaries{Colors.RESET}")
-        print(f"{Colors.DIM}  Note: API token count will update on next LLM call{Colors.RESET}")
+        _logger.info(f"Summary completed, local tokens: {estimated_tokens} to {new_tokens}")
+        _logger.debug(f"Structure: system + {len(user_indices)} user messages + {summary_count} summaries")
+        _logger.debug("Note: API token count will update on next LLM call")
 
     async def _create_summary(self, messages: list[Message], round_num: int) -> str:
         """Create summary for one execution round
@@ -310,11 +311,11 @@ Requirements:
             )
 
             summary_text = response.content
-            print(f"{Colors.BRIGHT_GREEN}✓ Summary for round {round_num} generated successfully{Colors.RESET}")
+            _logger.info(f"Summary for round {round_num} generated successfully")
             return summary_text
 
         except Exception as e:
-            print(f"{Colors.BRIGHT_RED}✗ Summary generation failed for round {round_num}: {e}{Colors.RESET}")
+            _logger.error(f"Summary generation failed for round {round_num}: {e}")
             # Use simple text summary on failure
             return summary_content
 
@@ -335,7 +336,7 @@ Requirements:
 
         # Start new run, initialize log file
         self.logger.start_new_run()
-        print(f"{Colors.DIM}📝 Log file: {self.logger.get_log_file_path()}{Colors.RESET}")
+        _logger.debug(f"Log file: {self.logger.get_log_file_path()}")
 
         step = 0
         run_start_time = perf_counter()
@@ -345,7 +346,7 @@ Requirements:
             if self._check_cancelled():
                 self._cleanup_incomplete_messages()
                 cancel_msg = "Task cancelled by user."
-                print(f"\n{Colors.BRIGHT_YELLOW}⚠️  {cancel_msg}{Colors.RESET}")
+                _logger.warning(f"[CANCEL] {cancel_msg}")
                 return cancel_msg
 
             step_start_time = perf_counter()
@@ -358,9 +359,7 @@ Requirements:
             step_display_width = calculate_display_width(step_text)
             padding = max(0, BOX_WIDTH - 1 - step_display_width)  # -1 for leading space
 
-            print(f"\n{Colors.DIM}╭{'─' * BOX_WIDTH}╮{Colors.RESET}")
-            print(f"{Colors.DIM}│{Colors.RESET} {step_text}{' ' * padding}{Colors.DIM}│{Colors.RESET}")
-            print(f"{Colors.DIM}╰{'─' * BOX_WIDTH}╯{Colors.RESET}")
+            _logger.debug(f"Step {step}: {step_text}")
 
             # Get tool list for LLM call
             tool_list = list(self.tools.values())
@@ -375,11 +374,11 @@ Requirements:
                 from .retry import RetryExhaustedError
 
                 if isinstance(e, RetryExhaustedError):
-                    error_msg = f"LLM call failed after {e.attempts} retries\nLast error: {str(e.last_exception)}"
-                    print(f"\n{Colors.BRIGHT_RED}❌ Retry failed:{Colors.RESET} {error_msg}")
+                    error_msg = f"LLM call failed after {e.attempts} retries. Last error: {str(e.last_exception)}"
+                    _logger.error(f"Retry failed: {error_msg}")
                 else:
                     error_msg = f"LLM call failed: {str(e)}"
-                    print(f"\n{Colors.BRIGHT_RED}❌ Error:{Colors.RESET} {error_msg}")
+                    _logger.error(f"Error: {error_msg}")
                 return error_msg
 
             # Accumulate API reported token usage
@@ -403,28 +402,26 @@ Requirements:
             )
             self.messages.append(assistant_msg)
 
-            # Print thinking if present
+            # Log thinking if present
             if response.thinking:
-                print(f"\n{Colors.BOLD}{Colors.MAGENTA}🧠 Thinking:{Colors.RESET}")
-                print(f"{Colors.DIM}{response.thinking}{Colors.RESET}")
+                _logger.debug(f"Thinking: {response.thinking}")
 
-            # Print assistant response
+            # Log assistant response
             if response.content:
-                print(f"\n{Colors.BOLD}{Colors.BRIGHT_BLUE}🤖 Assistant:{Colors.RESET}")
-                print(f"{response.content}")
+                _logger.debug(f"Assistant: {response.content}")
 
             # Check if task is complete (no tool calls)
             if not response.tool_calls:
                 step_elapsed = perf_counter() - step_start_time
                 total_elapsed = perf_counter() - run_start_time
-                print(f"\n{Colors.DIM}⏱️  Step {step + 1} completed in {step_elapsed:.2f}s (total: {total_elapsed:.2f}s){Colors.RESET}")
+                _logger.debug(f"Step {step + 1} completed in {step_elapsed:.2f}s (total: {total_elapsed:.2f}s)")
                 return response.content
 
             # Check for cancellation before executing tools
             if self._check_cancelled():
                 self._cleanup_incomplete_messages()
                 cancel_msg = "Task cancelled by user."
-                print(f"\n{Colors.BRIGHT_YELLOW}⚠️  {cancel_msg}{Colors.RESET}")
+                _logger.warning(f"[CANCEL] {cancel_msg}")
                 return cancel_msg
 
             # Execute tool calls
@@ -433,11 +430,7 @@ Requirements:
                 function_name = tool_call.function.name
                 arguments = tool_call.function.arguments
 
-                # Tool call header
-                print(f"\n{Colors.BRIGHT_YELLOW}🔧 Tool Call:{Colors.RESET} {Colors.BOLD}{Colors.CYAN}{function_name}{Colors.RESET}")
-
-                # Arguments (formatted display)
-                print(f"{Colors.DIM}   Arguments:{Colors.RESET}")
+                _logger.debug(f"Tool call: {function_name}")
                 # Truncate each argument value to avoid overly long output
                 truncated_args = {}
                 for key, value in arguments.items():
@@ -447,8 +440,7 @@ Requirements:
                     else:
                         truncated_args[key] = value
                 args_json = json.dumps(truncated_args, indent=2, ensure_ascii=False)
-                for line in args_json.split("\n"):
-                    print(f"   {Colors.DIM}{line}{Colors.RESET}")
+                _logger.debug(f"Tool arguments: {args_json}")
 
                 # Execute tool
                 if function_name not in self.tools:
@@ -486,10 +478,10 @@ Requirements:
                 if result.success:
                     result_text = result.content
                     if len(result_text) > 300:
-                        result_text = result_text[:300] + f"{Colors.DIM}...{Colors.RESET}"
-                    print(f"{Colors.BRIGHT_GREEN}✓ Result:{Colors.RESET} {result_text}")
+                        result_text = result_text[:300] + "..."
+                    _logger.debug(f"Tool result: {result_text}")
                 else:
-                    print(f"{Colors.BRIGHT_RED}✗ Error:{Colors.RESET} {Colors.RED}{result.error}{Colors.RESET}")
+                    _logger.error(f"Tool error: {result.error}")
 
                 # Add tool result message
                 tool_msg = Message(
@@ -504,18 +496,17 @@ Requirements:
                 if self._check_cancelled():
                     self._cleanup_incomplete_messages()
                     cancel_msg = "Task cancelled by user."
-                    print(f"\n{Colors.BRIGHT_YELLOW}⚠️  {cancel_msg}{Colors.RESET}")
+                    _logger.warning(f"[CANCEL] {cancel_msg}")
                     return cancel_msg
 
             step_elapsed = perf_counter() - step_start_time
             total_elapsed = perf_counter() - run_start_time
-            print(f"\n{Colors.DIM}⏱️  Step {step + 1} completed in {step_elapsed:.2f}s (total: {total_elapsed:.2f}s){Colors.RESET}")
+            _logger.debug(f"Step {step + 1} completed in {step_elapsed:.2f}s (total: {total_elapsed:.2f}s)")
 
             step += 1
 
-        # Max steps reached
         error_msg = f"Task couldn't be completed after {self.max_steps} steps."
-        print(f"\n{Colors.BRIGHT_YELLOW}⚠️  {error_msg}{Colors.RESET}")
+        _logger.warning(f"{error_msg}")
         return error_msg
 
     def get_history(self) -> list[Message]:

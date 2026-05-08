@@ -1,0 +1,262 @@
+# AGENTS.md
+
+> This file provides guidance to AI coding agents working with this repository.
+> Expect the reader to know nothing about the project.
+
+## Project Overview
+
+**MiniMax Agent GUI** is a personal AI agent application powered by the MiniMax M2.7 model. It provides:
+1. A **web app** (FastAPI + React 18 + Vite + Tailwind) — primary and recommended interface
+2. A **CLI framework** — terminal-based interactive agent
+
+> Note: The PyQt6 desktop GUI exists in `gui/` but is no longer actively maintained. All new development targets the web app.
+
+The project wraps MiniMax MCP tools (`web_search`, `understand_image`) as standard agent tools and provides media generation (TTS, Image, Music, Video) via MiniMax APIs.
+
+- **Name**: `minimax-agent-gui`
+- **Version**: `0.3.0`
+- **License**: MIT
+- **Python**: `>=3.10`
+- **Node**: `>=18`
+- **Status**: Active development
+
+## Technology Stack
+
+### Web App
+- **Backend**: FastAPI, Uvicorn, WebSocket
+- **Frontend**: React 18, Vite, Tailwind CSS
+- **HTTP Client**: `httpx` (backend), `fetch` (frontend)
+- **Markdown**: `react-markdown` + `remark-gfm`
+- **i18n**: `react-i18next` (6 languages)
+- **Icons**: `lucide-react`
+
+### Core Framework
+- **LLM Providers**: Anthropic (Claude) and OpenAI-compatible APIs via `mini_agent.llm`
+- **API Backend**: MiniMax API (`api.minimax.io` / `api.minimaxi.com`)
+- **HTTP Client**: `httpx` (sync and async)
+- **Data Validation**: Pydantic v2
+- **Configuration**: YAML (`pyyaml`)
+- **Token Counting**: `tiktoken` (cl100k_base encoder)
+- **CLI Framework**: `prompt-toolkit`
+- **Build System**: `hatchling`
+
+## Project Structure
+
+```
+minimax-agent-gui/
+├── web/                        # Web app (FastAPI + React 18)
+│   ├── backend/
+│   │   └── main.py             # FastAPI: REST API + WebSocket chat
+│   ├── frontend/
+│   │   ├── src/
+│   │   │   ├── components/
+│   │   │   │   ├── chat/       # ChatPanel.jsx — persistent conversations
+│   │   │   │   ├── coding/     # CodingPanel.jsx — IDE workspace
+│   │   │   │   ├── media/      # ImagePanel, MusicPanel, VideoPanel, TTSPanel
+│   │   │   │   ├── settings/   # SettingsPanel — tools toggles, theme, lang
+│   │   │   │   └── MarkdownRenderer.jsx
+│   │   │   ├── i18n/           # 6-language i18n config
+│   │   │   └── App.jsx
+│   │   └── vite.config.js      # Vite + proxy (/api → :8000, /ws → :8000)
+│   └── package.json            # npm run dev = concurrently backend + frontend
+├── gui/                        # PyQt6 desktop application
+│   ├── main.py                 # MainWindow, entry point
+│   └── panels/                 # Chat, TTS, Image, Code, Music, Video panels
+├── mini_agent/                 # Core agent framework (reusable library)
+│   ├── agent.py                # Async agent loop, tool execution, token summarization
+│   ├── cli.py                  # Interactive CLI entry point
+│   ├── config.py               # Pydantic-based config loader
+│   ├── llm/                    # LLMClient (Anthropic/OpenAI routing)
+│   └── tools/                  # Bash, File, Note, MCP, Skill tools
+├── mini_max_mcp/               # MiniMax-specific integrations
+│   ├── client.py               # MiniMaxSyncClient / MiniMaxClient
+│   │                           # TTS, Image (T2I + I2I), Video, Music APIs
+│   ├── mcp_tools.py            # MiniMaxMCPClient (web_search, understand_image)
+│   └── mcp_tool_wrapper.py     # Tool wrappers for Agent
+├── tests/                      # pytest test suite
+├── config/                     # User configuration (gitignored, contains secrets)
+│   └── config.yaml
+├── workspace/                  # Runtime working directory
+│   ├── conversations/          # Auto-saved chat histories (JSON)
+│   ├── uploads/                # Uploaded files from chat/code panels
+│   └── logs/                   # Application logs
+└── examples/                   # Progressive usage examples
+```
+
+## Entry Points
+
+### Web App
+```bash
+cd web
+npm run dev          # Starts FastAPI (:8000) + Vite (:3000) concurrently
+```
+
+### CLI
+```bash
+mini-agent
+```
+
+## Build and Install Commands
+
+```bash
+# Python dependencies
+pip install -e .
+
+# Web dependencies
+cd web && npm install
+
+# Run web app
+cd web && npm run dev
+
+# Run desktop GUI
+python -m gui.main
+
+# Run tests
+pytest -v
+```
+
+## Configuration
+
+### User Config (`config/config.yaml`)
+
+Gitignored file containing secrets:
+
+```yaml
+minimax:
+  api_key: sk-cp-...
+  api_base: https://api.minimax.io
+  region: global  # or "cn" for api.minimaxi.com
+tools:
+  web_search: true
+  understand_image: true
+```
+
+The backend exposes `/api/config` (returns `api_key_configured: boolean`, never the key string) and `/api/config/tools` (POST to toggle tools).
+
+## Web App Architecture
+
+### Backend (`web/backend/main.py`)
+
+FastAPI server with:
+- **REST endpoints** — `/api/image`, `/api/tts`, `/api/music`, `/api/video`, `/api/upload`, `/api/files/*`, `/api/conversations/*`, `/api/config`
+- **WebSocket** — `/ws/chat/{session_id}` for real-time streaming chat
+- **SessionManager** — Creates agent per session with ReadTool, WriteTool, BashTool, and optional WebSearchTool/UnderstandImageTool
+- **Conversation Persistence** — Auto-saves every message to `workspace/conversations/{id}.json`
+  - Chat uses plain IDs; Code uses `coding-{id}` IDs
+  - Backend filters via `?type=coding` query param
+- **File Upload** — `POST /api/upload` saves to `workspace/uploads/`, returns path
+- **File Download** — `GET /api/files/download?path=` serves files (images, audio, etc.)
+
+### Frontend (`web/frontend/src/`)
+
+React 18 with Vite and Tailwind CSS:
+- **ChatPanel** — Persistent conversations, file attachment, markdown rendering, Enter-to-send
+- **CodingPanel** — File explorer, editor, terminal, git, persistent code-chat with context injection
+- **ImagePanel** — T2I + I2I tabs, aspect ratio picker, gallery, batch generation
+- **TTSPanel** — Voice selection with language filter, speed control, batch generation
+- **MusicPanel** — Prompt/lyrics generation with optimizer
+- **VideoPanel** — Text/image-to-video with duration/resolution selection
+- **SettingsPanel** — Tools toggles, theme, language, model settings
+
+### Vite Proxy Config
+
+```js
+proxy: {
+  '/api': { target: 'http://localhost:8000' },
+  '/ws': { target: 'ws://localhost:8000', ws: true }
+}
+```
+
+## Key Frontend Patterns
+
+### Persistent Conversations
+
+Both Chat and Code panels follow the same pattern:
+1. `sessionId` / `codingSessionId` state — current conversation ID
+2. `conversations` state — list fetched from `/api/conversations` or `/api/conversations?type=coding`
+3. Dropdown in header with load/delete/rename actions
+4. `newChat()` / `newCodingChat()` — generates new UUID, clears messages, reconnects WebSocket
+5. History sent as single `{"type": "history", "messages": [...]}` event on WebSocket connect
+6. Messages rendered with `<MarkdownRenderer />`
+
+### File Attachment Flow
+
+1. User selects file → `POST /api/upload` → backend saves to `workspace/uploads/`
+2. Frontend stores `{name, path, type}` in `attachment` state
+3. On send: WebSocket payload includes `{message, attachment}`
+4. Backend: if image → calls `understand_image` MCP and prepends description to prompt
+5. Backend: if text → reads content and prepends to prompt
+6. Message saved with `attachment` field for display on reload
+
+### MarkdownRenderer
+
+- Wrapper around `react-markdown` + `remark-gfm`
+- `className` on wrapper `<div>`, NOT on `<ReactMarkdown>` (v9 removes className prop)
+- Custom `pre` component with copy button (hover to reveal, checkmark feedback)
+- Custom `code` component for inline vs block styling
+
+## Code Organization & Architecture
+
+### 1. Agent Loop (`mini_agent/agent.py`)
+
+Async loop: receive message → call LLM → execute tool_calls → repeat until done.
+- Token summarization at ~80k tokens
+- Cancellation via `asyncio.Event`
+
+### 2. LLM Abstraction (`mini_agent/llm/`)
+
+- `LLMClient` routes to Anthropic or OpenAI based on `provider`
+- For MiniMax endpoints, auto-appends `/anthropic` suffix
+
+### 3. MiniMax Integration (`mini_max_mcp/`)
+
+- `MiniMaxSyncClient` — sync TTS, Image (T2I + I2I), Video, Music via `requests`
+- `MiniMaxClient` — async versions via `httpx`
+- `MiniMaxMCPClient` — `web_search` and `understand_image` tools
+- Endpoints:
+  - TTS: `/v1/t2a_v2`
+  - Image: `/v1/image_generation`
+  - Video: `/v1/video_generation`
+  - Music: `/v1/music_generation`
+  - Web Search: `/v1/coding_plan/search`
+  - Understand Image: `/v1/coding_plan/vlm`
+
+### 4. MCP Tools (`mini_max_mcp/mcp_tools.py`)
+
+Response format uses `base_resp` for error codes and `content` for VLM text / `organic` array for search results.
+
+## Testing Strategy
+
+- **Framework**: `pytest` with `pytest-asyncio`
+- Some tests require live API key in `config/config.yaml`
+- Unit tests for tools can run without API key
+
+## Code Style Guidelines
+
+- **PEP 8** with Python 3.10+ union syntax (`str | None`)
+- **Docstrings**: triple-double-quotes (`"""`)
+- **Naming**: `snake_case` functions/variables, `PascalCase` classes
+- **Logging**: `logging.getLogger(__name__)`
+- **Error Handling**: Tools return `ToolResult(success=False, error=...)` rather than raising
+
+## Security Considerations
+
+- **API Keys**: Stored in `config/config.yaml` (gitignored). Backend NEVER returns the key string.
+- **Bash Tool**: Executes arbitrary shell commands. On Windows uses PowerShell; on Unix uses bash.
+- **File Tools**: Respect `workspace_dir`; paths resolved relative to workspace.
+- **File Download Endpoint**: `GET /api/files/download?path=` checks path is within `PROJECT_ROOT`.
+
+## Windows-Specific Notes
+
+- **Subprocess**: `subprocess.run("mmx ...", shell=True)` required because `mmx` is a `.cmd`
+- **Paths**: Backend uses `Path` objects; frontend receives paths with `/` separators
+
+## Common Pitfalls for Agents
+
+- **Do not** assume `config/config.yaml` exists in a fresh clone — it is gitignored.
+- **Do not** modify the `web/` directory's `node_modules` — use `npm install` in `web/`.
+- When editing `main.py`, the server may need manual restart (Uvicorn StatReload can hang).
+- The `MiniMaxSyncClient` and `MiniMaxClient` have **separate** method signatures — sync uses `requests`, async uses `httpx`.
+- The `image_variations` (I2I) method uses `subject_reference` with `image_file` (data URL), not `image_base64`.
+- Frontend WebSocket connects directly to `ws://localhost:8000` (not through Vite proxy for `/ws/chat/`).
+- Conversation IDs starting with `coding-` are filtered by backend as coding sessions.

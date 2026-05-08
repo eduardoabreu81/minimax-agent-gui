@@ -1,101 +1,296 @@
-"""MiniMax API Client for TTS and Image Generation."""
+"""MiniMax API Client for TTS, Image, Music, and Video Generation."""
 
 import httpx
 import asyncio
 import base64
 import json
+import logging
+import requests
 from pathlib import Path
 from typing import Optional, Tuple
 
+_logger = logging.getLogger(__name__)
 
-# Synchronous client for use in Qt threads (no asyncio.run() needed)
+
+# MiniMax API Error Code definitions
+MINIMAX_ERROR_CODES = {
+    1000: ("unknown error", "Please retry your requests later."),
+    1001: ("request timeout", "Please retry your requests later."),
+    1002: ("rate limit", "Please retry your requests later."),
+    1004: ("not authorized", "Please check your API key and make sure it is correct and active."),
+    1008: ("insufficient balance", "Please check your account balance."),
+    1024: ("internal error", "Please retry your requests later."),
+    1026: ("input new_sensitive", "Please change your input content."),
+    1027: ("output new_sensitive", "Please change your input content."),
+    1033: ("system error", "Please retry your requests later."),
+    1039: ("token limit", "Please retry your requests later."),
+    1041: ("conn limit", "Please contact us if the issue persists."),
+    1042: ("invisible character ratio limit", "Please check your input content for invisible or illegal characters."),
+    1043: ("asr similarity check failed", "Please check file_id and text_validation."),
+    1044: ("clone prompt similarity check failed", "Please check clone prompt audio and prompt words."),
+    2013: ("invalid params", "Please check the request parameters."),
+    20132: ("invalid samples or voice_id", "Please check your file_id (in Voice Cloning API), voice_id (in T2A v2 API) and contact us if the issue persists."),
+    2037: ("voice duration too short/long", "Please adjust the duration of your file_id for voice clone."),
+    2039: ("voice clone voice id duplicate", "Please check the voice_id to ensure no duplication with the existing ones."),
+    2042: ("no access to voice_id", "Please check whether you are the creator of this voice_id and contact us if the issue persists."),
+    2045: ("rate growth limit", "Please avoid sudden increases and decreases in requests."),
+    2048: ("prompt audio too long", "Please adjust the duration of the prompt_audio file (< 8s)."),
+    2049: ("invalid api key", "Please check your API key and make sure it is correct and active."),
+    2056: ("usage limit exceeded", "Please wait for the resource release in the next 5-hour window."),
+}
+
+# MiniMax TTS Voice IDs (from API docs)
+TTS_VOICE_IDS = [
+    # English voices
+    "English_Graceful_Lady", "English_Lyrical_Voice", "English_Classic_Man",
+    "English_Magnetic_Voice", "English_Deep_Male", "English_Standard_Male",
+    # Chinese (Mandarin) voices
+    "Chinese (Mandarin)_Lyrical_Voice", "Chinese (Mandarin)_Warm_Female",
+    "Chinese (Mandarin)_Magnetic_Voice", "Chinese (Mandarin)_Broadcast_Female",
+    # More voices available...
+    "male-qn-qingque", "female-nuo-yan", "male-qn-daxian",
+    "female-yunxi", "male-qn-tiancai", "female-xiaotian"
+]
+
+# TTS Emotions
+TTS_EMOTIONS = ["happy", "sad", "angry", "fearful", "disgusted", "surprised", "calm", "fluent", "whisper"]
+
+# Audio formats
+AUDIO_FORMATS = ["mp3", "pcm", "flac", "wav"]
+AUDIO_SAMPLE_RATES = [8000, 16000, 22050, 24000, 32000, 44100]
+
+
+def get_error_details(status_code: int) -> Tuple[str, str]:
+    """Get error message and solution for a MiniMax API error code."""
+    if status_code in MINIMAX_ERROR_CODES:
+        return MINIMAX_ERROR_CODES[status_code]
+    return ("unknown error", "Please retry your requests later.")
+
+
+def format_api_error(status_code: int, default_msg: str = "") -> str:
+    """Format an API error with code, message, and solution."""
+    error_msg, solution = get_error_details(status_code)
+    return f"[Error {status_code}] {error_msg}. {solution}"
+
+
+# Synchronous client for use in Qt threads (uses requests, not httpx)
 class MiniMaxSyncClient:
-    """Synchronous client for MiniMax API (TTS, Image Gen)."""
+    """Synchronous client for MiniMax API using requests (thread-safe)."""
 
     def __init__(self, api_key: str, api_base: str = "https://api.minimax.io"):
         self.api_key = api_key
         self.api_base = api_base
-        self.http_client = httpx.Client(timeout=120.0)
+        self.session = requests.Session()
+        self.session.headers.update({
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        })
 
     def close(self):
-        """Close HTTP client."""
-        self.http_client.close()
+        """Close HTTP session."""
+        self.session.close()
+
+    def _post_json(self, endpoint: str, data: dict, timeout: float = 120.0) -> Tuple[bool, dict]:
+        """POST JSON and return (success, result_dict or error_dict)."""
+        url = f"{self.api_base}{endpoint}"
+        _logger.debug(f"[_post_json] POST {url} (timeout={timeout}s)")
+        try:
+            resp = self.session.post(url, json=data, timeout=timeout)
+            _logger.debug(f"[_post_json] Response status={resp.status_code}, headers={dict(resp.headers)}, len={len(resp.content)}")
+            resp.raise_for_status()
+            try:
+                json_data = resp.json()
+                _logger.debug(f"[_post_json] JSON parsed OK, keys={list(json_data.keys())[:10]}")
+                return True, json_data
+            except Exception as json_err:
+                _logger.error(f"[_post_json] JSON parse failed: {json_err}. Raw text (first 500 chars): {resp.text[:500]}")
+                # Save raw response for inspection
+                debug_path = Path("workspace/logs/last_error_response.txt")
+                debug_path.parent.mkdir(parents=True, exist_ok=True)
+                debug_path.write_text(resp.text, encoding="utf-8")
+                return False, {"status_msg": f"Invalid JSON response: {json_err}"}
+        except requests.HTTPError as e:
+            _logger.error(f"[_post_json] HTTP error: {e}")
+            try:
+                err_body = e.response.json()
+            except Exception:
+                err_body = {"status_msg": e.response.text}
+            return False, err_body
+        except Exception as e:
+            _logger.exception(f"[_post_json] Exception: {e}")
+            return False, {"status_msg": str(e)}
+
+    def _get_binary(self, url: str, timeout: float = 120.0) -> Tuple[bool, bytes | str]:
+        """GET binary data from URL."""
+        try:
+            resp = self.session.get(url, timeout=timeout)
+            resp.raise_for_status()
+            return True, resp.content
+        except Exception as e:
+            return False, str(e)
 
     def image_generate(
         self,
         prompt: str,
         model: str = "image-01",
-        size: str = "1024x1024",
+        aspect_ratio: str = "1:1",
+        width: int = None,
+        height: int = None,
         output_path: str = "workspace/image.png",
         n: int = 1,
-        prompt_optimizer: bool = False
+        prompt_optimizer: bool = False,
+        watermark: bool = False,
+        seed: int = None
     ) -> Tuple[bool, str]:
         """Generate image from text prompt (sync)."""
-        url = f"{self.api_base}/v1/image_generation"
-
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json"
-        }
-
-        # The size parameter IS the aspect_ratio directly (e.g., "1:1", "16:9", "2:3")
-        aspect_ratio = size
-
         data = {
             "model": model,
             "prompt": prompt,
-            "aspect_ratio": aspect_ratio,
             "response_format": "base64",
             "n": n,
             "prompt_optimizer": prompt_optimizer
         }
+        # Use width/height if provided, otherwise aspect_ratio
+        if width and height:
+            data["width"] = width
+            data["height"] = height
+        else:
+            data["aspect_ratio"] = aspect_ratio
+        if watermark:
+            data["aigc_watermark"] = True
+        if seed is not None:
+            data["seed"] = seed
 
-        print(f"[DEBUG image_sync] Size received: {size}")
-        print(f"[DEBUG image_sync] Aspect ratio used: {aspect_ratio}")
-        print(f"[DEBUG image_sync] Sending request to {url}")
-        print(f"[DEBUG image_sync] Data: {data}")
+        success, result = self._post_json("/v1/image_generation", data)
+        if not success:
+            msg = result.get("status_msg", "Unknown error")
+            code = result.get("status_code", 0)
+            return False, format_api_error(code, msg) if code else msg
 
-        try:
-            response = self.http_client.post(url, headers=headers, json=data)
-            print(f"[DEBUG image_sync] Response status: {response.status_code}")
-            response.raise_for_status()
+        if "base_resp" in result:
+            status_code = result["base_resp"].get("status_code", 0)
+            if status_code != 0:
+                return False, format_api_error(status_code, result["base_resp"].get("status_msg", ""))
 
-            result = response.json()
-            print(f"[DEBUG image_sync] Response JSON: {result}")
+        if "data" in result:
+            if "image_base64" in result["data"]:
+                images = result["data"]["image_base64"]
+            elif "image_urls" in result["data"]:
+                image_urls = result["data"]["image_urls"]
+                if image_urls:
+                    ok, content = self._get_binary(image_urls[0])
+                    if not ok:
+                        return False, content
+                    images = [base64.b64encode(content).decode()]
+            else:
+                return False, "No image data in response"
 
-            # Check for API errors
-            if "base_resp" in result:
-                status_code = result["base_resp"].get("status_code", 0)
-                if status_code != 0:
-                    return False, f"API Error: {result['base_resp'].get('status_msg', 'Unknown error')}"
-
-            if "data" in result:
-                if "image_base64" in result["data"]:
-                    images = result["data"]["image_base64"]
-                elif "image_urls" in result["data"]:
-                    image_urls = result["data"]["image_urls"]
-                    if image_urls:
-                        img_response = self.http_client.get(image_urls[0])
-                        img_response.raise_for_status()
-                        images = [base64.b64encode(img_response.content).decode()]
-                else:
-                    return False, "No image data in response"
-
-                if images:
-                    image_bytes = base64.b64decode(images[0])
-                    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
-                    with open(output_path, "wb") as f:
+            if images:
+                Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+                # Save all generated images
+                saved_paths = []
+                for i, img_b64 in enumerate(images):
+                    image_bytes = base64.b64decode(img_b64)
+                    if len(images) == 1:
+                        path = output_path
+                    else:
+                        stem = Path(output_path).stem
+                        suffix = Path(output_path).suffix
+                        path = str(Path(output_path).with_name(f"{stem}_{i+1}{suffix}"))
+                    with open(path, "wb") as f:
                         f.write(image_bytes)
-                    return True, output_path
+                    saved_paths.append(path)
+                return True, saved_paths[0] if len(saved_paths) == 1 else saved_paths
 
-            return False, "Invalid response format"
+        return False, "Invalid response format"
 
-        except httpx.HTTPStatusError as e:
-            print(f"[DEBUG image_sync] HTTP Error: {e.response.status_code} - {e.response.text}")
-            return False, f"HTTP Error {e.response.status_code}: {e.response.text}"
-        except Exception as e:
-            print(f"[DEBUG image_sync] Exception: {type(e).__name__}: {e}")
-            return False, str(e)
+    def image_variations(
+        self,
+        image_path: str,
+        prompt: str = "",
+        model: str = "image-01",
+        aspect_ratio: str = "1:1",
+        width: int = None,
+        height: int = None,
+        output_path: str = "workspace/image_variation.png",
+        n: int = 1,
+        prompt_optimizer: bool = False,
+        watermark: bool = False,
+        seed: int = None
+    ) -> Tuple[bool, str]:
+        """Generate image variations from reference image (Image-to-Image)."""
+        with open(image_path, "rb") as f:
+            image_base64 = base64.b64encode(f.read()).decode()
+
+        ext = Path(image_path).suffix.lower()
+        mime_types = {'.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp'}
+        mime_type = mime_types.get(ext, 'image/png')
+        image_data_url = f"data:{mime_type};base64,{image_base64}"
+
+        data = {
+            "model": model,
+            "prompt": prompt or "Create a variation of this image",
+            "response_format": "base64",
+            "n": n,
+            "prompt_optimizer": prompt_optimizer,
+            "subject_reference": [
+                {
+                    "type": "character",
+                    "image_file": image_data_url
+                }
+            ]
+        }
+        if width and height:
+            data["width"] = width
+            data["height"] = height
+        else:
+            data["aspect_ratio"] = aspect_ratio
+        if watermark:
+            data["aigc_watermark"] = True
+        if seed is not None:
+            data["seed"] = seed
+
+        success, result = self._post_json("/v1/image_generation", data)
+        if not success:
+            msg = result.get("status_msg", "Unknown error")
+            code = result.get("status_code", 0)
+            return False, format_api_error(code, msg) if code else msg
+
+        if "base_resp" in result:
+            status_code = result["base_resp"].get("status_code", 0)
+            if status_code != 0:
+                return False, format_api_error(status_code, result["base_resp"].get("status_msg", ""))
+
+        if "data" in result:
+            if "image_base64" in result["data"]:
+                images = result["data"]["image_base64"]
+            elif "image_urls" in result["data"]:
+                image_urls = result["data"]["image_urls"]
+                if image_urls:
+                    ok, content = self._get_binary(image_urls[0])
+                    if not ok:
+                        return False, content
+                    images = [base64.b64encode(content).decode()]
+            else:
+                return False, "No image data in response"
+
+            if images:
+                Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+                saved_paths = []
+                for i, img_b64 in enumerate(images):
+                    image_bytes = base64.b64decode(img_b64)
+                    if len(images) == 1:
+                        path = output_path
+                    else:
+                        stem = Path(output_path).stem
+                        suffix = Path(output_path).suffix
+                        path = str(Path(output_path).with_name(f"{stem}_{i+1}{suffix}"))
+                    with open(path, "wb") as f:
+                        f.write(image_bytes)
+                    saved_paths.append(path)
+                return True, saved_paths[0] if len(saved_paths) == 1 else saved_paths
+
+        return False, "Invalid response format"
 
     def tts_synthesize(
         self,
@@ -106,82 +301,281 @@ class MiniMaxSyncClient:
         output_path: str = "workspace/tts_output.mp3"
     ) -> Tuple[bool, str]:
         """Synthesize speech from text (sync)."""
-        url = f"{self.api_base}/v1/t2a_v2"
-
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json"
-        }
-
         data = {
             "model": model,
             "text": text,
-            "voice_setting": {
-                "voice_id": voice,
-                "speed": speed
-            },
-            "response_format": "mp3"
+            "voice_setting": {"voice_id": voice, "speed": speed},
+            "output_format": {"container": "mp3", "sample_rate": 32000, "bitrate": 128000}
         }
-
         try:
-            response = self.http_client.post(url, headers=headers, json=data)
-            response.raise_for_status()
-
-            # Response is binary audio
+            resp = self.session.post(f"{self.api_base}/v1/t2a_v2", json=data, timeout=120.0)
+            resp.raise_for_status()
             Path(output_path).parent.mkdir(parents=True, exist_ok=True)
             with open(output_path, "wb") as f:
-                f.write(response.content)
+                f.write(resp.content)
+            return True, output_path
+        except requests.HTTPError as e:
+            return False, f"HTTP Error {e.response.status_code}: {e.response.text}"
+        except Exception as e:
+            return False, str(e)
+
+    # ============ Music Generation ============
+
+    def music_generate(
+        self,
+        prompt: str = "",
+        lyrics: str = "",
+        model: str = "music-2.6",
+        output_path: str = "workspace/music_output.mp3",
+        audio_setting: Optional[dict] = None,
+        lyrics_optimizer: bool = False,
+        is_instrumental: bool = False,
+        audio_url: str = "",
+        audio_base64: str = "",
+        cover_feature_id: str = "",
+        output_format: str = "hex"
+    ) -> Tuple[bool, str]:
+        """Generate music from prompt and lyrics (sync)."""
+        data: dict = {"model": model, "output_format": output_format}
+        if prompt:
+            data["prompt"] = prompt
+        if lyrics:
+            data["lyrics"] = lyrics
+        if audio_setting:
+            data["audio_setting"] = audio_setting
+        if lyrics_optimizer:
+            data["lyrics_optimizer"] = True
+        if is_instrumental:
+            data["is_instrumental"] = True
+        if audio_url:
+            data["audio_url"] = audio_url
+        if audio_base64:
+            data["audio_base64"] = audio_base64
+        if cover_feature_id:
+            data["cover_feature_id"] = cover_feature_id
+
+        _logger.debug(f"music_generate] Request: {data}")
+        success, result = self._post_json("/v1/music_generation", data, timeout=300.0)
+        _logger.info(f"[Music] _post_json returned: success={success}")
+        if not success:
+            msg = result.get("status_msg", "Unknown error")
+            code = result.get("status_code", 0)
+            _logger.error(f"[Music] _post_json failed: {msg}")
+            return False, format_api_error(code, msg) if code else msg
+
+        # Log response metadata only (avoid printing multi-MB hex strings)
+        _logger.info(f"[Music] Response keys: {list(result.keys())}")
+        if "data" in result and isinstance(result["data"], dict):
+            data_info = {k: (f"<string:{len(v)} chars>" if isinstance(v, str) and len(v) > 500 else v) for k, v in result["data"].items()}
+            _logger.info(f"[Music] Response data (truncated): {data_info}")
+
+        # Save response for potential retry
+        script_dir = Path(__file__).parent.parent
+        last_resp_path = script_dir / "workspace" / ".last_music_response.json"
+        last_resp_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(last_resp_path, "w", encoding="utf-8") as f:
+            json.dump(result, f, ensure_ascii=False, indent=2)
+        _logger.info(f"[Music] Response saved to: {last_resp_path}")
+
+        if "base_resp" in result:
+            status_code = result["base_resp"].get("status_code", 0)
+            if status_code != 0:
+                err_msg = result["base_resp"].get("status_msg", "")
+                _logger.error(f"[Music] base_resp error: {status_code} - {err_msg}")
+                return False, format_api_error(status_code, err_msg)
+
+        if "data" in result:
+            _logger.info(f"[Music] Response has 'data' key: {list(result['data'].keys())}")
+            audio_data = result["data"].get("audio", "")
+            status = result["data"].get("status", 0)
+            _logger.info(f"[Music] status={status}, audio_data_len={len(audio_data)}")
+            if status == 1:
+                _logger.warning("[Music] API returned status=1 (in progress)")
+                return False, "Music still generating (status=1). Please retry in a moment."
+            if audio_data:
+                _logger.info(f"[Music] Audio data received: {len(audio_data)} chars, format={output_format}")
+                if output_format == "hex":
+                    try:
+                        _logger.info("[Music] Decoding hex...")
+                        audio_bytes = bytes.fromhex(audio_data)
+                        _logger.info(f"[Music] Hex decoded: {len(audio_bytes)} bytes")
+                    except ValueError:
+                        _logger.warning("[Music] Hex decode failed, trying base64...")
+                        audio_bytes = base64.b64decode(audio_data)
+                        _logger.info(f"[Music] Base64 decoded: {len(audio_bytes)} bytes")
+                else:
+                    _logger.info(f"[Music] Downloading from URL: {audio_data[:120]}...")
+                    ok, content = self._get_binary(audio_data)
+                    if not ok:
+                        return False, f"Download failed: {content}"
+                    audio_bytes = content
+                    _logger.info(f"[Music] Downloaded {len(audio_bytes)} bytes")
+
+                _logger.info(f"[Music] Writing to {output_path}...")
+                Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+                with open(output_path, "wb") as f:
+                    f.write(audio_bytes)
+                _logger.info(f"[Music] File written successfully: {output_path}")
+                return True, output_path
+            else:
+                _logger.warning("[Music] No audio_data in response data")
+        else:
+            _logger.warning(f"[Music] No 'data' key in response. Keys: {list(result.keys())}")
+
+        return False, f"No audio data in response. Raw: {result}"
+
+    def music_cover_preprocess(
+        self,
+        audio_url: str = "",
+        audio_base64: str = ""
+    ) -> Tuple[bool, dict]:
+        """Preprocess reference audio for cover generation (sync)."""
+        data: dict = {"model": "music-cover"}
+        if audio_url:
+            data["audio_url"] = audio_url
+        if audio_base64:
+            data["audio_base64"] = audio_base64
+
+        success, result = self._post_json("/v1/music_cover_preprocess", data)
+        if not success:
+            return False, {"error": result.get("status_msg", "Preprocess failed")}
+
+        if "base_resp" in result:
+            status_code = result["base_resp"].get("status_code", 0)
+            if status_code != 0:
+                return False, {"error": format_api_error(status_code, result["base_resp"].get("status_msg", ""))}
+
+        return True, result
+
+    # ============ Video Generation ============
+
+    def video_generate(
+        self,
+        prompt: str,
+        model: str = "MiniMax-Hailuo-2.3",
+        first_frame_image: str = "",
+        last_frame_image: str = "",
+        subject_reference: Optional[list] = None,
+        duration: int = 6,
+        resolution: str = "768P",
+        prompt_optimizer: bool = True,
+        fast_pretreatment: bool = False
+    ) -> Tuple[bool, str]:
+        """Create a video generation task (sync)."""
+        data: dict = {
+            "model": model,
+            "prompt": prompt,
+            "duration": duration,
+            "resolution": resolution,
+            "prompt_optimizer": prompt_optimizer,
+            "fast_pretreatment": fast_pretreatment
+        }
+        if first_frame_image:
+            data["first_frame_image"] = first_frame_image
+        if last_frame_image:
+            data["last_frame_image"] = last_frame_image
+        if subject_reference:
+            data["subject_reference"] = subject_reference
+
+        success, result = self._post_json("/v1/video_generation", data)
+        if not success:
+            msg = result.get("status_msg", "Unknown error")
+            code = result.get("status_code", 0)
+            return False, format_api_error(code, msg) if code else msg
+
+        if "base_resp" in result:
+            status_code = result["base_resp"].get("status_code", 0)
+            if status_code != 0:
+                return False, format_api_error(status_code, result["base_resp"].get("status_msg", ""))
+
+        if "task_id" in result:
+            return True, str(result["task_id"])
+
+        return False, "No task_id in response"
+
+    def video_query(self, task_id: str) -> Tuple[bool, dict]:
+        """Query video generation task status (sync)."""
+        try:
+            resp = self.session.get(
+                f"{self.api_base}/v1/query/video_generation",
+                params={"task_id": task_id},
+                timeout=30.0
+            )
+            resp.raise_for_status()
+            result = resp.json()
+
+            if "base_resp" in result:
+                status_code = result["base_resp"].get("status_code", 0)
+                if status_code != 0:
+                    return False, {"error": format_api_error(status_code, result["base_resp"].get("status_msg", ""))}
+
+            return True, result
+        except Exception as e:
+            return False, {"error": str(e)}
+
+    def video_download(self, file_id: str, output_path: str = "workspace/video_output.mp4") -> Tuple[bool, str]:
+        """Download generated video by file_id (sync)."""
+        try:
+            resp = self.session.get(
+                f"{self.api_base}/v1/files/retrieve",
+                params={"file_id": file_id},
+                timeout=30.0
+            )
+            resp.raise_for_status()
+            result = resp.json()
+
+            if "base_resp" in result:
+                status_code = result["base_resp"].get("status_code", 0)
+                if status_code != 0:
+                    return False, format_api_error(status_code, result["base_resp"].get("status_msg", ""))
+
+            download_url = result.get("file", {}).get("download_url", "")
+            if not download_url:
+                return False, "No download URL found"
+
+            ok, content = self._get_binary(download_url)
+            if not ok:
+                return False, content
+
+            Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+            with open(output_path, "wb") as f:
+                f.write(content)
 
             return True, output_path
-
-        except httpx.HTTPStatusError as e:
-            return False, f"HTTP Error {e.response.status_code}: {e.response.text}"
         except Exception as e:
             return False, str(e)
 
 
 class MiniMaxClient:
-    """Client for MiniMax API (TTS, Image Gen)."""
-    
+    """Async client for MiniMax API (TTS, Image Gen) — uses httpx."""
+
     def __init__(self, api_key: str, api_base: str = "https://api.minimax.io"):
         self.api_key = api_key
         self.api_base = api_base
         self.http_client = httpx.AsyncClient(timeout=120.0)
-    
+
     async def close(self):
         """Close HTTP client."""
         await self.http_client.aclose()
-    
+
     # ============ TTS (Text-to-Speech) ============
-    
+
     async def tts_synthesize(
-        self, 
-        text: str, 
+        self,
+        text: str,
         voice: str = "male-qn-qingque",
         speed: float = 1.0,
         model: str = "speech-2.8-turbo",
         output_path: str = "workspace/tts_output.mp3"
     ) -> Tuple[bool, str]:
-        """
-        Synthesize speech from text.
-        
-        Args:
-            text: Text to synthesize (max 10,000 chars per request)
-            voice: Voice ID
-            speed: Speech speed (0.5 to 2.0)
-            model: TTS model (speech-2.8-turbo or speech-2.8-hd)
-            output_path: Path to save output audio
-        
-        Returns:
-            (success, path_or_error)
-        """
+        """Synthesize speech from text."""
         url = f"{self.api_base}/v1/t2a_v2"
-        
+
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json"
         }
-        
+
         data = {
             "model": model,
             "text": text,
@@ -194,31 +588,30 @@ class MiniMaxClient:
                 "sample_rate": 32000
             }
         }
-        
+
         try:
             response = await self.http_client.post(url, headers=headers, json=data)
             response.raise_for_status()
-            
+
             result = response.json()
-            
-            # Save audio from base64 or URL
+
             if "data" in result:
                 audio_base64 = result["data"]
                 audio_bytes = base64.b64decode(audio_base64)
-                
+
                 Path(output_path).parent.mkdir(parents=True, exist_ok=True)
                 with open(output_path, "wb") as f:
                     f.write(audio_bytes)
-                
+
                 return True, output_path
-            
+
             return False, "No audio data in response"
-            
+
         except httpx.HTTPStatusError as e:
             return False, f"HTTP Error {e.response.status_code}: {e.response.text}"
         except Exception as e:
             return False, str(e)
-    
+
     async def tts_async_create(
         self,
         text: str,
@@ -226,19 +619,14 @@ class MiniMaxClient:
         speed: float = 1.0,
         model: str = "speech-2.8-turbo"
     ) -> Tuple[bool, str]:
-        """
-        Create async TTS task for long text (up to 1M chars).
-        
-        Returns:
-            (success, task_id or error)
-        """
+        """Create async TTS task for long text (up to 1M chars)."""
         url = f"{self.api_base}/v1/t2a_v2_async"
-        
+
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json"
         }
-        
+
         data = {
             "model": model,
             "text": text,
@@ -247,46 +635,38 @@ class MiniMaxClient:
                 "speed": speed
             }
         }
-        
+
         try:
             response = await self.http_client.post(url, headers=headers, json=data)
             response.raise_for_status()
-            
+
             result = response.json()
             if "task_id" in result:
                 return True, result["task_id"]
-            
+
             return False, "No task_id in response"
-            
+
         except Exception as e:
             return False, str(e)
-    
+
     async def tts_async_query(self, task_id: str) -> Tuple[bool, dict]:
-        """
-        Query async TTS task status.
-        
-        Returns:
-            (success, result_dict with status, file_id, etc.)
-        """
+        """Query async TTS task status."""
         url = f"{self.api_base}/v1/t2a_v2_async"
-        
-        headers = {
-            "Authorization": f"Bearer {self.api_key}"
-        }
-        
+
+        headers = {"Authorization": f"Bearer {self.api_key}"}
         params = {"task_id": task_id}
-        
+
         try:
             response = await self.http_client.get(url, headers=headers, params=params)
             response.raise_for_status()
-            
+
             return True, response.json()
-            
+
         except Exception as e:
             return False, {"error": str(e)}
-    
+
     # ============ Image Generation ============
-    
+
     async def image_generate(
         self,
         prompt: str,
@@ -296,23 +676,7 @@ class MiniMaxClient:
         n: int = 1,
         prompt_optimizer: bool = False
     ) -> Tuple[bool, str]:
-        """
-        Generate image from text prompt.
-
-        API: POST /v1/image_generation
-        https://platform.minimax.io/docs/api-reference/image-generation-t2i
-
-        Args:
-            prompt: Image description (max 1500 chars)
-            model: Image model (image-01)
-            size: Image size in format "WxH" (e.g., "1024x1024", "1792x1024")
-            output_path: Path to save output image
-            n: Number of images to generate (1-9)
-            prompt_optimizer: Enable automatic prompt optimization
-
-        Returns:
-            (success, path_or_error)
-        """
+        """Generate image from text prompt."""
         url = f"{self.api_base}/v1/image_generation"
 
         headers = {
@@ -320,7 +684,6 @@ class MiniMaxClient:
             "Content-Type": "application/json"
         }
 
-        # Map size to aspect_ratio
         size_to_ratio = {
             "1024x1024": "1:1",
             "1024x1792": "9:16",
@@ -333,33 +696,27 @@ class MiniMaxClient:
             "model": model,
             "prompt": prompt,
             "aspect_ratio": aspect_ratio,
-            "response_format": "base64",  # base64 doesn't expire like URL
+            "response_format": "base64",
             "n": n,
             "prompt_optimizer": prompt_optimizer
         }
 
         try:
-            print(f"[DEBUG image_generate] Sending request to {url}")
-            print(f"[DEBUG image_generate] Data: {data}")
             response = await self.http_client.post(url, headers=headers, json=data)
-            print(f"[DEBUG image_generate] Response status: {response.status_code}")
             response.raise_for_status()
 
             result = response.json()
-            print(f"[DEBUG image_generate] Response JSON: {result}")
 
-            # Check for API errors
             if "base_resp" in result:
                 status_code = result["base_resp"].get("status_code", 0)
                 if status_code != 0:
-                    return False, f"API Error: {result['base_resp'].get('status_msg', 'Unknown error')}"
+                    error_msg = result["base_resp"].get("status_msg", "Unknown error")
+                    return False, format_api_error(status_code, error_msg)
 
             if "data" in result:
-                # Handle both base64 and url formats
                 if "image_base64" in result["data"]:
                     images = result["data"]["image_base64"]
                 elif "image_urls" in result["data"]:
-                    # If URL format, download the image
                     image_urls = result["data"]["image_urls"]
                     if image_urls:
                         img_response = await self.http_client.get(image_urls[0])
@@ -369,7 +726,6 @@ class MiniMaxClient:
                     return False, "No image data in response"
 
                 if images:
-                    # Save first image
                     image_bytes = base64.b64decode(images[0])
 
                     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
@@ -381,12 +737,10 @@ class MiniMaxClient:
             return False, "Invalid response format"
 
         except httpx.HTTPStatusError as e:
-            print(f"[DEBUG image_generate] HTTP Error: {e.response.status_code} - {e.response.text}")
             return False, f"HTTP Error {e.response.status_code}: {e.response.text}"
         except Exception as e:
-            print(f"[DEBUG image_generate] Exception: {type(e).__name__}: {e}")
             return False, str(e)
-    
+
     async def image_variations(
         self,
         image_path: str,
@@ -397,24 +751,7 @@ class MiniMaxClient:
         n: int = 1,
         prompt_optimizer: bool = False
     ) -> Tuple[bool, str]:
-        """
-        Generate image variations from reference image (Image-to-Image).
-
-        API: POST /v1/image_generation
-        https://platform.minimax.io/docs/api-reference/image-generation-i2i
-
-        Args:
-            image_path: Path to reference image
-            prompt: Optional modification prompt (max 1500 chars)
-            model: Image model (image-01)
-            size: Output size (mapped to aspect_ratio)
-            output_path: Path to save output
-            n: Number of images to generate (1-9)
-            prompt_optimizer: Enable automatic prompt optimization
-
-        Returns:
-            (success, path_or_error)
-        """
+        """Generate image variations from reference image (Image-to-Image)."""
         url = f"{self.api_base}/v1/image_generation"
 
         headers = {
@@ -422,11 +759,9 @@ class MiniMaxClient:
             "Content-Type": "application/json"
         }
 
-        # Read and encode reference image
         with open(image_path, "rb") as f:
             image_base64 = base64.b64encode(f.read()).decode()
 
-        # Map size to aspect_ratio
         size_to_ratio = {
             "1024x1024": "1:1",
             "1024x1792": "9:16",
@@ -456,14 +791,13 @@ class MiniMaxClient:
 
             result = response.json()
 
-            # Check for API errors
             if "base_resp" in result:
                 status_code = result["base_resp"].get("status_code", 0)
                 if status_code != 0:
-                    return False, f"API Error: {result['base_resp'].get('status_msg', 'Unknown error')}"
+                    error_msg = result["base_resp"].get("status_msg", "Unknown error")
+                    return False, format_api_error(status_code, error_msg)
 
             if "data" in result:
-                # Handle both base64 and url formats
                 if "image_base64" in result["data"]:
                     images = result["data"]["image_base64"]
                 elif "image_urls" in result["data"]:
@@ -489,6 +823,243 @@ class MiniMaxClient:
         except Exception as e:
             return False, str(e)
 
+    # ============ Music Generation (Async) ============
+
+    async def music_generate(
+        self,
+        prompt: str = "",
+        lyrics: str = "",
+        model: str = "music-2.6",
+        output_path: str = "workspace/music_output.mp3",
+        audio_setting: Optional[dict] = None,
+        lyrics_optimizer: bool = False,
+        is_instrumental: bool = False,
+        audio_url: str = "",
+        audio_base64: str = "",
+        cover_feature_id: str = "",
+        output_format: str = "hex"
+    ) -> Tuple[bool, str]:
+        """Generate music from prompt and lyrics (async)."""
+        url = f"{self.api_base}/v1/music_generation"
+
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
+
+        data: dict = {"model": model, "output_format": output_format}
+        if prompt:
+            data["prompt"] = prompt
+        if lyrics:
+            data["lyrics"] = lyrics
+        if audio_setting:
+            data["audio_setting"] = audio_setting
+        if lyrics_optimizer:
+            data["lyrics_optimizer"] = True
+        if is_instrumental:
+            data["is_instrumental"] = True
+        if audio_url:
+            data["audio_url"] = audio_url
+        if audio_base64:
+            data["audio_base64"] = audio_base64
+        if cover_feature_id:
+            data["cover_feature_id"] = cover_feature_id
+
+        try:
+            response = await self.http_client.post(url, headers=headers, json=data)
+            response.raise_for_status()
+
+            result = response.json()
+
+            if "base_resp" in result:
+                status_code = result["base_resp"].get("status_code", 0)
+                if status_code != 0:
+                    error_msg = result["base_resp"].get("status_msg", "Unknown error")
+                    return False, format_api_error(status_code, error_msg)
+
+            if "data" in result:
+                audio_data = result["data"].get("audio", "")
+                if audio_data:
+                    if output_format == "hex":
+                        audio_bytes = bytes.fromhex(audio_data)
+                    else:
+                        audio_resp = await self.http_client.get(audio_data)
+                        audio_resp.raise_for_status()
+                        audio_bytes = audio_resp.content
+
+                    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+                    with open(output_path, "wb") as f:
+                        f.write(audio_bytes)
+
+                    return True, output_path
+
+            return False, "No audio data in response"
+
+        except httpx.HTTPStatusError as e:
+            return False, f"HTTP Error {e.response.status_code}: {e.response.text}"
+        except Exception as e:
+            return False, str(e)
+
+    async def music_cover_preprocess(
+        self,
+        audio_url: str = "",
+        audio_base64: str = ""
+    ) -> Tuple[bool, dict]:
+        """Preprocess reference audio for cover generation (async)."""
+        url = f"{self.api_base}/v1/music_cover_preprocess"
+
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
+
+        data: dict = {"model": "music-cover"}
+        if audio_url:
+            data["audio_url"] = audio_url
+        if audio_base64:
+            data["audio_base64"] = audio_base64
+
+        try:
+            response = await self.http_client.post(url, headers=headers, json=data)
+            response.raise_for_status()
+
+            result = response.json()
+
+            if "base_resp" in result:
+                status_code = result["base_resp"].get("status_code", 0)
+                if status_code != 0:
+                    error_msg = result["base_resp"].get("status_msg", "Unknown error")
+                    return False, {"error": format_api_error(status_code, error_msg)}
+
+            return True, result
+
+        except httpx.HTTPStatusError as e:
+            return False, {"error": f"HTTP Error {e.response.status_code}: {e.response.text}"}
+        except Exception as e:
+            return False, {"error": str(e)}
+
+    # ============ Video Generation (Async) ============
+
+    async def video_generate(
+        self,
+        prompt: str,
+        model: str = "MiniMax-Hailuo-2.3",
+        first_frame_image: str = "",
+        last_frame_image: str = "",
+        subject_reference: Optional[list] = None,
+        duration: int = 6,
+        resolution: str = "768P",
+        prompt_optimizer: bool = True,
+        fast_pretreatment: bool = False
+    ) -> Tuple[bool, str]:
+        """Create a video generation task (async)."""
+        url = f"{self.api_base}/v1/video_generation"
+
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
+
+        data: dict = {
+            "model": model,
+            "prompt": prompt,
+            "duration": duration,
+            "resolution": resolution,
+            "prompt_optimizer": prompt_optimizer,
+            "fast_pretreatment": fast_pretreatment
+        }
+        if first_frame_image:
+            data["first_frame_image"] = first_frame_image
+        if last_frame_image:
+            data["last_frame_image"] = last_frame_image
+        if subject_reference:
+            data["subject_reference"] = subject_reference
+
+        try:
+            response = await self.http_client.post(url, headers=headers, json=data)
+            response.raise_for_status()
+
+            result = response.json()
+
+            if "base_resp" in result:
+                status_code = result["base_resp"].get("status_code", 0)
+                if status_code != 0:
+                    error_msg = result["base_resp"].get("status_msg", "Unknown error")
+                    return False, format_api_error(status_code, error_msg)
+
+            if "task_id" in result:
+                return True, str(result["task_id"])
+
+            return False, "No task_id in response"
+
+        except httpx.HTTPStatusError as e:
+            return False, f"HTTP Error {e.response.status_code}: {e.response.text}"
+        except Exception as e:
+            return False, str(e)
+
+    async def video_query(self, task_id: str) -> Tuple[bool, dict]:
+        """Query video generation task status (async)."""
+        url = f"{self.api_base}/v1/query/video_generation"
+
+        headers = {"Authorization": f"Bearer {self.api_key}"}
+        params = {"task_id": task_id}
+
+        try:
+            response = await self.http_client.get(url, headers=headers, params=params)
+            response.raise_for_status()
+
+            result = response.json()
+
+            if "base_resp" in result:
+                status_code = result["base_resp"].get("status_code", 0)
+                if status_code != 0:
+                    error_msg = result["base_resp"].get("status_msg", "Unknown error")
+                    return False, {"error": format_api_error(status_code, error_msg)}
+
+            return True, result
+
+        except httpx.HTTPStatusError as e:
+            return False, {"error": f"HTTP Error {e.response.status_code}: {e.response.text}"}
+        except Exception as e:
+            return False, {"error": str(e)}
+
+    async def video_download(self, file_id: str, output_path: str = "workspace/video_output.mp4") -> Tuple[bool, str]:
+        """Download generated video by file_id (async)."""
+        url = f"{self.api_base}/v1/files/retrieve"
+
+        headers = {"Authorization": f"Bearer {self.api_key}"}
+        params = {"file_id": file_id}
+
+        try:
+            response = await self.http_client.get(url, headers=headers, params=params)
+            response.raise_for_status()
+
+            result = response.json()
+
+            if "base_resp" in result:
+                status_code = result["base_resp"].get("status_code", 0)
+                if status_code != 0:
+                    error_msg = result["base_resp"].get("status_msg", "Unknown error")
+                    return False, format_api_error(status_code, error_msg)
+
+            download_url = result.get("file", {}).get("download_url", "")
+            if not download_url:
+                return False, "No download URL found"
+
+            video_resp = await self.http_client.get(download_url)
+            video_resp.raise_for_status()
+
+            Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+            with open(output_path, "wb") as f:
+                f.write(video_resp.content)
+
+            return True, output_path
+
+        except httpx.HTTPStatusError as e:
+            return False, f"HTTP Error {e.response.status_code}: {e.response.text}"
+        except Exception as e:
+            return False, str(e)
+
 
 # Synchronous wrappers for use in Qt threads
 
@@ -501,10 +1072,92 @@ def tts_sync(api_key: str, api_base: str, text: str, voice: str, speed: float, o
         client.close()
 
 
-def image_sync(api_key: str, api_base: str, prompt: str, size: str, output_path: str, n: int = 1, prompt_optimizer: bool = False) -> Tuple[bool, str]:
+def image_sync(api_key: str, api_base: str, prompt: str, output_path: str, aspect_ratio: str = "1:1", width: int = None, height: int = None, n: int = 1, prompt_optimizer: bool = False, watermark: bool = False, seed: int = None) -> Tuple[bool, str]:
     """Synchronous image generation wrapper."""
     client = MiniMaxSyncClient(api_key, api_base)
     try:
-        return client.image_generate(prompt, size=size, output_path=output_path, n=n, prompt_optimizer=prompt_optimizer)
+        return client.image_generate(prompt, aspect_ratio=aspect_ratio, width=width, height=height, output_path=output_path, n=n, prompt_optimizer=prompt_optimizer, watermark=watermark, seed=seed)
+    finally:
+        client.close()
+
+
+def image_variations_sync(api_key: str, api_base: str, image_path: str, prompt: str = "", output_path: str = "workspace/image_variation.png", aspect_ratio: str = "1:1", width: int = None, height: int = None, n: int = 1, prompt_optimizer: bool = False, watermark: bool = False, seed: int = None) -> Tuple[bool, str]:
+    """Synchronous image-to-image generation wrapper."""
+    client = MiniMaxSyncClient(api_key, api_base)
+    try:
+        return client.image_variations(image_path, prompt=prompt, aspect_ratio=aspect_ratio, width=width, height=height, output_path=output_path, n=n, prompt_optimizer=prompt_optimizer, watermark=watermark, seed=seed)
+    finally:
+        client.close()
+
+
+def music_sync(
+    api_key: str,
+    api_base: str,
+    prompt: str = "",
+    lyrics: str = "",
+    model: str = "music-2.6",
+    output_path: str = "workspace/music_output.mp3",
+    audio_setting: Optional[dict] = None,
+    lyrics_optimizer: bool = False,
+    is_instrumental: bool = False,
+    audio_url: str = "",
+    audio_base64: str = "",
+    cover_feature_id: str = "",
+    output_format: str = "hex"
+) -> Tuple[bool, str]:
+    """Synchronous music generation wrapper."""
+    client = MiniMaxSyncClient(api_key, api_base)
+    try:
+        return client.music_generate(
+            prompt=prompt, lyrics=lyrics, model=model, output_path=output_path,
+            audio_setting=audio_setting, lyrics_optimizer=lyrics_optimizer,
+            is_instrumental=is_instrumental, audio_url=audio_url,
+            audio_base64=audio_base64, cover_feature_id=cover_feature_id,
+            output_format=output_format
+        )
+    finally:
+        client.close()
+
+
+def video_sync(
+    api_key: str,
+    api_base: str,
+    prompt: str,
+    model: str = "MiniMax-Hailuo-2.3",
+    first_frame_image: str = "",
+    duration: int = 6,
+    resolution: str = "768P",
+    prompt_optimizer: bool = True,
+    fast_pretreatment: bool = False,
+    output_path: str = "workspace/video_output.mp4"
+) -> Tuple[bool, str]:
+    """Synchronous video generation wrapper with polling."""
+    client = MiniMaxSyncClient(api_key, api_base)
+    try:
+        success, task_id = client.video_generate(
+            prompt=prompt, model=model, first_frame_image=first_frame_image,
+            duration=duration, resolution=resolution,
+            prompt_optimizer=prompt_optimizer, fast_pretreatment=fast_pretreatment
+        )
+        if not success:
+            return False, task_id
+
+        # Poll for completion
+        import time
+        for _ in range(120):  # max 10 minutes (5s * 120)
+            time.sleep(5)
+            qsuccess, qresult = client.video_query(task_id)
+            if not qsuccess:
+                continue
+            status = qresult.get("status", "").lower()
+            if status == "success":
+                file_id = qresult.get("file_id", "")
+                if file_id:
+                    return client.video_download(file_id, output_path)
+                return False, "No file_id in success response"
+            elif status == "fail":
+                return False, qresult.get("error_message", "Video generation failed")
+
+        return False, "Video generation timeout"
     finally:
         client.close()

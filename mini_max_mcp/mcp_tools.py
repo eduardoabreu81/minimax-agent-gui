@@ -3,8 +3,11 @@
 import base64
 import httpx
 import json
+import logging
 from pathlib import Path
 from typing import Tuple, Any
+
+_logger = logging.getLogger(__name__)
 
 
 class MiniMaxMCPClient:
@@ -13,7 +16,9 @@ class MiniMaxMCPClient:
     def __init__(self, api_key: str, api_host: str = "https://api.minimax.io"):
         self.api_key = api_key
         self.api_host = api_host
-        self.http_client = httpx.Client(timeout=120.0)
+        self.http_client = httpx.Client(timeout=120.0, headers={
+            'MM-API-Source': 'Minimax-MCP'
+        })
 
     def close(self):
         """Close HTTP client."""
@@ -31,7 +36,7 @@ class MiniMaxMCPClient:
         Returns:
             (success, results_text)
         """
-        url = f"{self.api_host}/v1/web_search"
+        url = f"{self.api_host}/v1/coding_plan/search"
 
         headers = {
             "Authorization": f"Bearer {self.api_key}",
@@ -44,32 +49,43 @@ class MiniMaxMCPClient:
             "max_results": max_results
         }
 
-        print(f"[DEBUG web_search] Query: {query}")
+        _logger.debug(f"web_search] Query: {query}")
 
         try:
             response = self.http_client.post(url, headers=headers, json=data)
-            print(f"[DEBUG web_search] Status: {response.status_code}")
+            _logger.debug(f"web_search] Status: {response.status_code}")
             response.raise_for_status()
 
             result = response.json()
-            print(f"[DEBUG web_search] Response: {result}")
+            _logger.debug(f"web_search] Response: {result}")
 
-            # Parse results
-            if "data" in result:
-                results = result["data"].get("results", [])
-                if not results:
-                    return True, "No results found."
+            # Check API-specific error codes
+            base_resp = result.get("base_resp", {})
+            if base_resp.get("status_code", 0) != 0:
+                return False, f"API Error {base_resp.get('status_code')}: {base_resp.get('status_msg', 'Unknown error')}"
 
-                output = []
-                for i, r in enumerate(results, 1):
-                    title = r.get("title", "No title")
-                    url_link = r.get("url", "")
-                    snippet = r.get("snippet", "")
-                    output.append(f"{i}. {title}\n   URL: {url_link}\n   {snippet}")
+            # Parse results (official MCP format: organic array)
+            organic = result.get("organic", [])
+            if not organic:
+                return True, "No results found."
 
-                return True, "\n\n".join(output)
+            output = []
+            for i, r in enumerate(organic, 1):
+                title = r.get("title", "No title")
+                url_link = r.get("link", "")
+                snippet = r.get("snippet", "")
+                date = r.get("date", "")
+                date_str = f" ({date})" if date else ""
+                output.append(f"{i}. {title}{date_str}\n   URL: {url_link}\n   {snippet}")
 
-            return False, "Invalid response format"
+            # Add related searches if present
+            related = result.get("related_searches", [])
+            if related:
+                output.append("\nRelated searches:")
+                for r in related:
+                    output.append(f"- {r.get('query', '')}")
+
+            return True, "\n\n".join(output)
 
         except httpx.HTTPStatusError as e:
             return False, f"HTTP Error {e.response.status_code}: {e.response.text}"
@@ -78,7 +94,7 @@ class MiniMaxMCPClient:
 
     def understand_image(self, image_path: str = None, image_url: str = None, prompt: str = "Describe this image in detail.") -> Tuple[bool, str]:
         """
-        Understand image content using MiniMax API.
+        Understand image content using MiniMax VLM API.
 
         Args:
             image_path: Local path to image file
@@ -88,7 +104,7 @@ class MiniMaxMCPClient:
         Returns:
             (success, description_text)
         """
-        url = f"{self.api_host}/v1/understand_image"
+        url = f"{self.api_host}/v1/coding_plan/vlm"
 
         headers = {
             "Authorization": f"Bearer {self.api_key}",
@@ -96,37 +112,45 @@ class MiniMaxMCPClient:
         }
 
         data = {
-            "model": "image-01",
-            "prompt": prompt
+            "prompt": f"{prompt}\n\nIMPORTANT: Respond ONLY in English or Portuguese. Do not use Chinese or any other language."
         }
 
         if image_path:
-            # Read and encode local image
+            # Read and encode local image as data URL
             with open(image_path, "rb") as f:
                 image_base64_data = base64.b64encode(f.read()).decode()
-            data["image_base64"] = image_base64_data
-            print(f"[DEBUG understand_image] Using local image: {image_path}")
+            # Determine MIME type from extension
+            ext = Path(image_path).suffix.lower()
+            mime_types = {'.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif'}
+            mime_type = mime_types.get(ext, 'image/png')
+            data["image_url"] = f"data:{mime_type};base64,{image_base64_data}"
+            _logger.debug(f"understand_image] Using local image: {image_path}")
         elif image_url:
             data["image_url"] = image_url
-            print(f"[DEBUG understand_image] Using URL: {image_url}")
+            _logger.debug(f"understand_image] Using URL: {image_url}")
         else:
             return False, "Either image_path or image_url must be provided"
 
         try:
             response = self.http_client.post(url, headers=headers, json=data)
-            print(f"[DEBUG understand_image] Status: {response.status_code}")
+            _logger.debug(f"understand_image] Status: {response.status_code}")
             response.raise_for_status()
 
             result = response.json()
-            print(f"[DEBUG understand_image] Response: {result}")
+            _logger.info(f"understand_image] Response: {result}")
 
-            # Parse response
-            if "data" in result:
-                description = result["data"].get("description", result["data"].get("text", ""))
-                if description:
-                    return True, description
+            # Check API-specific error codes
+            base_resp = result.get("base_resp", {})
+            if base_resp.get("status_code", 0) != 0:
+                return False, f"API Error {base_resp.get('status_code')}: {base_resp.get('status_msg', 'Unknown error')}"
 
-            return False, "Invalid response format"
+            # Extract content from response (official MCP format)
+            content = result.get("content", "")
+            if content:
+                return True, content
+
+            _logger.warning(f"understand_image] No content in response: {result}")
+            return False, "No content returned from VLM API"
 
         except httpx.HTTPStatusError as e:
             return False, f"HTTP Error {e.response.status_code}: {e.response.text}"
