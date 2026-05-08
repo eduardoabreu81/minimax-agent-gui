@@ -611,7 +611,7 @@ export default function SettingsModal({ isOpen, onClose, isDark, onToggleTheme }
         {/* Footer */}
         <div className="flex items-center justify-between px-5 py-3 border-t border-border bg-surface/50">
           {savedMessage && (
-            <span className={`text-xs ${savedMessage.includes('success') ? 'text-green-500' : 'text-error'}`}>
+            <span className={`text-xs ${savedMessage.includes('success') ? 'text-success' : 'text-error'}`}>
               {savedMessage}
             </span>
           )}
