@@ -3,12 +3,13 @@ import { useTranslation } from 'react-i18next'
 import {
   X, Globe, Moon, Sun, Key, Cpu, Shield, Keyboard,
   Info, Check, AlertCircle, Save, RotateCcw, Eye, EyeOff,
-  MapPin, BarChart3, Lock, Unlock, Search, Monitor, Palette
+  MapPin, BarChart3, Lock, Unlock, Search, Monitor, Palette, User
 } from 'lucide-react'
 import { useTheme } from '../../context/ThemeContext'
 
 const TABS = [
   { id: 'general', label: 'General', icon: Globe },
+  { id: 'profile', label: 'Profile', icon: User },
   { id: 'theme', label: 'Theme', icon: Palette },
   { id: 'api', label: 'API Keys', icon: Key },
   { id: 'region', label: 'Region', icon: MapPin },
@@ -62,6 +63,8 @@ export default function SettingsModal({ isOpen, onClose, isDark, onToggleTheme }
     webSearch: true,
     understandImage: true,
   })
+  const [userProfile, setUserProfile] = useState({ bio: '' })
+  const [profileSaving, setProfileSaving] = useState(false)
   const [userPlan, setUserPlan] = useState('starter')
   const [quotaData, setQuotaData] = useState(null)
 
@@ -85,6 +88,12 @@ export default function SettingsModal({ isOpen, onClose, isDark, onToggleTheme }
         }))
       })
       .catch(() => setConfig({}))
+
+    // Load user profile
+    fetch('/api/profile')
+      .then(r => r.json())
+      .then(data => setUserProfile({ bio: data.bio || '' }))
+      .catch(() => {})
     
     // Fetch quota to detect plan
     fetch('/api/minimax/quota')
@@ -115,6 +124,23 @@ export default function SettingsModal({ isOpen, onClose, isDark, onToggleTheme }
       setTimeout(() => setSavedMessage(''), 3000)
     } catch (e) {
       setSavedMessage('Failed to save settings')
+    }
+  }
+
+  const handleSaveProfile = async () => {
+    setProfileSaving(true)
+    try {
+      await fetch('/api/profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(userProfile)
+      })
+      setSavedMessage('Profile saved!')
+      setTimeout(() => setSavedMessage(''), 3000)
+    } catch (e) {
+      setSavedMessage('Failed to save profile')
+    } finally {
+      setProfileSaving(false)
     }
   }
 
@@ -197,6 +223,36 @@ export default function SettingsModal({ isOpen, onClose, isDark, onToggleTheme }
                   </div>
                 </div>
 
+              </div>
+            )}
+
+            {/* Profile */}
+            {activeTab === 'profile' && (
+              <div className="space-y-5">
+                <div>
+                  <h3 className="text-xs font-semibold text-muted uppercase tracking-wider mb-3">About You</h3>
+                  <p className="text-[11px] text-muted mb-3 leading-relaxed">
+                    Tell the agent about yourself — your preferences, background, goals, or anything you want it to remember across all conversations.
+                  </p>
+                  <textarea
+                    value={userProfile.bio}
+                    onChange={(e) => setUserProfile({ bio: e.target.value })}
+                    placeholder="e.g. I'm a full-stack developer based in Brazil. I prefer clean, modern UI designs and work mainly with React and Python. I speak Portuguese and English."
+                    rows={8}
+                    className="w-full bg-card border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted resize-none focus:outline-none focus:border-primary transition-colors"
+                  />
+                  <div className="flex justify-between items-center mt-3">
+                    <p className="text-[10px] text-muted">This bio is injected into every conversation automatically.</p>
+                    <button
+                      onClick={handleSaveProfile}
+                      disabled={profileSaving}
+                      className="px-4 py-2 bg-primary hover:bg-primary-hover disabled:opacity-40 text-white rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5"
+                    >
+                      <Save size={12} />
+                      {profileSaving ? 'Saving...' : 'Save Profile'}
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
 

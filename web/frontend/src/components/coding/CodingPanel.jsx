@@ -5,7 +5,7 @@ import {
   GitCommit, GitPullRequest, X, Send, Bot, User, Loader2, Sparkles,
   Wand2, Bug, FileCheck, Lightbulb, ChevronRight, Play, Square,
   MessageSquarePlus, Trash2, Paperclip, Image as ImageIcon, FileText, ChevronDown,
-  Search, Zap, LayoutTemplate, Columns, Pencil
+  Search, Zap, LayoutTemplate, Columns, Pencil, ArrowUp, Home
 } from 'lucide-react'
 import XTermTerminal from './XTermTerminal'
 import MarkdownRenderer from '../MarkdownRenderer'
@@ -45,6 +45,7 @@ export default function CodingPanel() {
   const { t } = useTranslation()
   const activity = useAgentActivity()
   const [files, setFiles] = useState([])
+  const [currentPath, setCurrentPath] = useState('workspace')
   const [openFiles, setOpenFiles] = useState([])
   const [activeFile, setActiveFile] = useState(null)
   const [fileContents, setFileContents] = useState({})
@@ -97,15 +98,16 @@ export default function CodingPanel() {
   const codingFileInputRef = useRef(null)
   const codingConvListRef = useRef(null)
 
-  const loadFiles = useCallback(async (path = 'workspace') => {
+  const loadFiles = useCallback(async (path = currentPath) => {
     try {
       const res = await fetch(`/api/files?path=${encodeURIComponent(path)}`)
       const data = await res.json()
       setFiles(data.entries || [])
+      setCurrentPath(path)
     } catch (e) {
       console.error('Failed to load files:', e)
     }
-  }, [])
+  }, [currentPath])
 
   const openFile = async (path) => {
     if (openFiles.find((f) => f.path === path)) {
@@ -891,14 +893,31 @@ export default function CodingPanel() {
       <div className="flex flex-1 min-h-0">
         {/* Left: File Explorer */}
         <div className="w-52 flex flex-col border-r border-border bg-card shrink-0">
-          <div className="h-9 flex items-center px-3 border-b border-border">
-            <span className="text-xs font-semibold text-muted uppercase tracking-wider">{t('coding.explorer')}</span>
+          <div className="h-9 flex items-center px-2 border-b border-border gap-1">
+            <button
+              onClick={() => loadFiles('workspace')}
+              className="p-1 rounded hover:bg-surface text-muted hover:text-foreground transition-colors"
+              title="Go to workspace root"
+            >
+              <Home size={12} />
+            </button>
+            <button
+              onClick={() => {
+                const parent = currentPath.split('/').slice(0, -1).join('/') || 'workspace'
+                loadFiles(parent)
+              }}
+              className="p-1 rounded hover:bg-surface text-muted hover:text-foreground transition-colors"
+              title="Go up"
+            >
+              <ArrowUp size={12} />
+            </button>
+            <span className="text-[10px] font-mono text-muted truncate flex-1" title={currentPath}>{currentPath}</span>
           </div>
           <div className="flex-1 overflow-y-auto py-2">
             {files.map((file) => (
               <button
                 key={file.path}
-                onClick={() => file.is_dir ? null : openFile(file.path)}
+                onClick={() => file.is_dir ? loadFiles(file.path) : openFile(file.path)}
                 className={`w-full flex items-center gap-2 px-3 py-1.5 text-sm transition-colors text-left ${
                   activeFile === file.path
                     ? 'bg-primary/10 text-primary'

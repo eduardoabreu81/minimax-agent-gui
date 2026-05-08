@@ -206,44 +206,66 @@ class SessionManager:
         workspace_dir = self.config.get("agent", {}).get("workspace_dir", "./workspace")
         workspace_path = PROJECT_ROOT / workspace_dir
         workspace_path.mkdir(parents=True, exist_ok=True)
+        from mini_agent.tools.file_tools import EditTool
         tools = [
             ReadTool(workspace_dir=str(workspace_path)),
             WriteTool(workspace_dir=str(workspace_path)),
+            EditTool(workspace_dir=str(workspace_path)),
             BashTool(workspace_dir=str(workspace_path)),
         ]
 
         try:
             from mini_max_mcp.mcp_tool_wrapper import WebSearchTool, UnderstandImageTool
+            from mini_max_mcp.client import MiniMaxClient
+            from mini_agent.tools.media_tools import ImageGenerateTool, MusicGenerateTool, TTSTool, VideoGenerateTool
             tools_config = self.config.get("tools", {})
             if tools_config.get("web_search", True):
                 tools.append(WebSearchTool(api_key, api_base))
             if tools_config.get("understand_image", True):
                 tools.append(UnderstandImageTool(api_key, api_base))
+            # Media generation tools
+            media_client = MiniMaxClient(api_key=api_key, api_base=api_base)
+            tools.extend([
+                ImageGenerateTool(media_client, workspace_dir=str(workspace_path)),
+                MusicGenerateTool(media_client, workspace_dir=str(workspace_path)),
+                TTSTool(media_client, workspace_dir=str(workspace_path)),
+                VideoGenerateTool(media_client, workspace_dir=str(workspace_path)),
+            ])
         except ImportError:
             pass
 
         # Coding agent gets a specialized system prompt
         if session_id.startswith("coding"):
-            system_prompt = """You are MiniMax Coding Agent, an expert software engineer powered by MiniMax-M2.7.
+            system_prompt = f"""You are MiniMax Coding Agent, an expert software engineer powered by MiniMax-M2.7.
 You help users write, debug, refactor, and understand code.
-You have access to file system tools, bash commands, web search, and image understanding.
+You have access to file system tools (read_file, write_file, edit_file), bash commands, web search, and image understanding.
 
-When asked to write code:
-1. Provide clean, well-documented code
-2. Explain your reasoning
-3. Suggest tests when appropriate
+CRITICAL: When the user asks you to create, write, or generate code, files, or projects, you MUST use the `write_file` tool to actually write files to disk. Do NOT just return code in markdown blocks — the user needs actual files in the workspace.
+
+When asked to write code or create files:
+1. Use `write_file` to create the actual files in the workspace
+2. Then explain what you created
+3. Suggest how to run or test the code
 
 When asked to debug:
-1. Analyze the error carefully
-2. Explain the root cause
-3. Provide a fix with explanation
+1. Use `read_file` to inspect the relevant files
+2. Use `edit_file` or `write_file` to apply fixes
+3. Explain the root cause and the fix
 
-When refactoring:
-1. Improve readability, performance, and maintainability
-2. Keep the same functionality
+When asked to refactor:
+1. Use `read_file` to understand the current code
+2. Use `edit_file` for surgical changes or `write_file` for full rewrites
 3. Explain what changed and why
 
-Always be concise but thorough. Use markdown for code blocks."""
+When asked to create a landing page, website, or any project:
+1. Create ALL necessary files using `write_file` (HTML, CSS, JS, etc.)
+2. Create a proper directory structure if needed
+3. Do NOT just describe the files — CREATE them
+
+You are working in: `{workspace_path}`
+All relative paths are resolved from this directory.
+
+Always be concise but thorough."""
         else:
             system_prompt = """You are a helpful AI assistant powered by MiniMax M2.7.
 You help users with daily tasks, questions, brainstorming, writing, analysis, and general problem-solving.
@@ -252,6 +274,20 @@ You have access to file system tools, web search, and image understanding.
 CRITICAL LANGUAGE RULE: You MUST respond ONLY in the same language the user is using (Portuguese, English, Spanish, etc.). NEVER use Chinese, Japanese, Korean, or any other language not matching the user's message. NEVER mix Chinese characters in your responses.
 
 Be concise, friendly, and helpful."""
+
+        # Load user profile if exists
+        user_profile = ""
+        profile_path = PROJECT_ROOT / "workspace" / ".user_profile.json"
+        if profile_path.exists():
+            try:
+                profile_data = json.loads(profile_path.read_text(encoding="utf-8"))
+                user_profile = profile_data.get("bio", "")
+            except Exception:
+                pass
+
+        if user_profile:
+            profile_section = f"\n\n## About the User\n{user_profile}\nAlways keep this information in mind when responding."
+            system_prompt = system_prompt + profile_section
 
         agent = Agent(
             llm_client=llm_client,
@@ -317,6 +353,27 @@ async def get_config():
         "api_key_configured": bool(minimax.get("api_key", "")) if isinstance(minimax, dict) else False,
     }
     return safe_config
+
+
+@app.get("/api/profile")
+async def get_profile():
+    """Load user profile."""
+    profile_path = PROJECT_ROOT / "workspace" / ".user_profile.json"
+    if profile_path.exists():
+        try:
+            return json.loads(profile_path.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    return {"bio": ""}
+
+
+@app.post("/api/profile")
+async def save_profile(req: dict):
+    """Save user profile."""
+    profile_path = PROJECT_ROOT / "workspace" / ".user_profile.json"
+    profile_path.parent.mkdir(parents=True, exist_ok=True)
+    profile_path.write_text(json.dumps(req, ensure_ascii=False, indent=2), encoding="utf-8")
+    return {"success": True}
 
 
 @app.get("/api/skills")
