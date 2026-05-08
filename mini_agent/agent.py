@@ -319,13 +319,19 @@ Requirements:
             # Use simple text summary on failure
             return summary_content
 
-    async def run(self, cancel_event: Optional[asyncio.Event] = None) -> str:
+    async def run(
+        self,
+        cancel_event: Optional[asyncio.Event] = None,
+        tool_callback: Optional[callable] = None,
+    ) -> str:
         """Execute agent loop until task is complete or max steps reached.
 
         Args:
             cancel_event: Optional asyncio.Event that can be set to cancel execution.
                           When set, the agent will stop at the next safe checkpoint
                           (after completing the current step to keep messages consistent).
+            tool_callback: Optional callback function(tool_name, arguments, result) called
+                          after each tool execution. Used for real-time UI updates.
 
         Returns:
             The final response content, or error message (including cancellation message).
@@ -348,6 +354,13 @@ Requirements:
                 cancel_msg = "Task cancelled by user."
                 _logger.warning(f"[CANCEL] {cancel_msg}")
                 return cancel_msg
+
+            # Notify step start via callback
+            if tool_callback:
+                try:
+                    await tool_callback("__step_start__", {"step": step + 1, "max_steps": self.max_steps}, None)
+                except Exception:
+                    pass
 
             step_start_time = perf_counter()
             # Check and summarize message history to prevent context overflow
@@ -482,6 +495,13 @@ Requirements:
                     _logger.debug(f"Tool result: {result_text}")
                 else:
                     _logger.error(f"Tool error: {result.error}")
+
+                # Emit tool callback for UI
+                if tool_callback:
+                    try:
+                        await tool_callback(function_name, arguments, result)
+                    except Exception:
+                        pass
 
                 # Add tool result message
                 tool_msg = Message(

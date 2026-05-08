@@ -24,6 +24,8 @@ from typing import Optional
 from mini_agent.config import Config as AgentConfig
 from mini_agent import Agent, LLMClient
 from mini_agent.tools import ReadTool, WriteTool, BashTool
+from mini_agent.schema import Message
+from mini_agent.tools.skill_loader import SkillLoader
 
 from mini_max_mcp.client import MiniMaxSyncClient, MiniMaxClient
 
@@ -315,6 +317,26 @@ async def get_config():
     return safe_config
 
 
+@app.get("/api/skills")
+async def get_skills():
+    """List all available skills."""
+    try:
+        from mini_agent.tools.skill_loader import SkillLoader
+        skills_dir = PROJECT_ROOT / "mini_agent" / "skills"
+        loader = SkillLoader(str(skills_dir))
+        loader.discover_skills()
+        skills = []
+        for name, skill in loader.loaded_skills.items():
+            skills.append({
+                "name": skill.name,
+                "description": skill.description,
+                "license": skill.license,
+            })
+        return {"success": True, "skills": skills}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
 class ToolsConfigRequest(BaseModel):
     web_search: bool = True
     understand_image: bool = True
@@ -407,6 +429,23 @@ async def chat_websocket(websocket: WebSocket, session_id: str):
 
         while True:
             data = await websocket.receive_json()
+
+            # Handle skill activation
+            if data.get("type") == "activate_skill":
+                skill_name = data.get("skill")
+                # Load skill and inject into system prompt
+                from mini_agent.tools.skill_loader import SkillLoader
+                skills_dir = PROJECT_ROOT / "mini_agent" / "skills"
+                loader = SkillLoader(str(skills_dir))
+                loader.discover_skills()
+                skill = loader.get_skill(skill_name)
+                if skill:
+                    # Inject skill content into messages as a system context update
+                    skill_prompt = skill.to_prompt()
+                    agent.messages.append(Message(role="user", content=f"[Skill Activated: {skill_name}]\n\n{skill_prompt}"))
+                    await websocket.send_json({"type": "skill_activated", "skill": skill_name})
+                continue
+
             message = data.get("message", "").strip()
             attachment = data.get("attachment")
             
@@ -470,9 +509,34 @@ async def chat_websocket(websocket: WebSocket, session_id: str):
             await websocket.send_json({"type": "status", "content": "thinking..."})
 
             try:
-                # For simplicity, run synchronously in executor
-                loop = asyncio.get_event_loop()
-                result = await loop.run_in_executor(None, lambda: asyncio.run(agent.run()))
+                async def tool_callback(tool_name, arguments, result):
+                    if tool_name == "__thinking__":
+                        await websocket.send_json({
+                            "type": "thinking",
+                            "content": arguments.get("thinking", ""),
+                        })
+                    elif tool_name == "__tool_calls__":
+                        await websocket.send_json({
+                            "type": "tool_calls",
+                            "tools": arguments.get("tool_calls", []),
+                        })
+                    elif tool_name == "__step_start__":
+                        await websocket.send_json({
+                            "type": "step_start",
+                            "step": arguments.get("step"),
+                            "max_steps": arguments.get("max_steps"),
+                        })
+                    elif result:
+                        await websocket.send_json({
+                            "type": "tool_result",
+                            "tool": tool_name,
+                            "arguments": arguments,
+                            "success": result.success,
+                            "content": result.content if result.success else None,
+                            "error": result.error if not result.success else None,
+                        })
+
+                result = await agent.run(tool_callback=tool_callback)
 
                 await websocket.send_json({
                     "type": "assistant",
