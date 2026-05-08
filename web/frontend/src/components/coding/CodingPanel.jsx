@@ -4,7 +4,8 @@ import {
   Code2, FileCode, Folder, GitBranch, Terminal, Save, RefreshCw,
   GitCommit, GitPullRequest, X, Send, Bot, User, Loader2, Sparkles,
   Wand2, Bug, FileCheck, Lightbulb, ChevronRight, Play, Square,
-  MessageSquarePlus, Trash2, Paperclip, Image as ImageIcon, FileText, ChevronDown
+  MessageSquarePlus, Trash2, Paperclip, Image as ImageIcon, FileText, ChevronDown,
+  Search, Zap
 } from 'lucide-react'
 import XTermTerminal from './XTermTerminal'
 import MarkdownRenderer from '../MarkdownRenderer'
@@ -51,6 +52,22 @@ export default function CodingPanel() {
   const [workspaceSidebarVisible, setWorkspaceSidebarVisible] = useState(() => {
     try { return localStorage.getItem('workspace-sidebar-visible') !== 'false' } catch { return true }
   })
+  const [agentMode, setAgentMode] = useState(() => {
+    try { return localStorage.getItem('agent-mode') || 'agent' } catch { return 'agent' }
+  })
+
+  const MODES = [
+    { id: 'plan', label: 'Plan', icon: Search, color: 'text-amber-400', bg: 'bg-amber-400/10', border: 'border-amber-400/30' },
+    { id: 'agent', label: 'Agent', icon: Bot, color: 'text-primary', bg: 'bg-primary/10', border: 'border-primary/30' },
+    { id: 'yolo', label: 'YOLO', icon: Zap, color: 'text-green-400', bg: 'bg-green-400/10', border: 'border-green-400/30' },
+  ]
+
+  const cycleMode = () => {
+    const idx = MODES.findIndex(m => m.id === agentMode)
+    const next = MODES[(idx + 1) % MODES.length]
+    setAgentMode(next.id)
+    try { localStorage.setItem('agent-mode', next.id) } catch {}
+  }
 
   // Coding Agent Chat state
   const [codingMessages, setCodingMessages] = useState([])
@@ -368,6 +385,19 @@ export default function CodingPanel() {
           )}
         </div>
         <div className="flex items-center gap-2">
+          {(() => {
+            const mode = MODES.find(m => m.id === agentMode)
+            const Icon = mode.icon
+            return (
+              <button
+                onClick={cycleMode}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 ${mode.bg} ${mode.color} border ${mode.border}`}
+                title={`Mode: ${mode.label} — click to cycle`}
+              >
+                <Icon size={12} /> {mode.label}
+              </button>
+            )
+          })()}
           <button
             onClick={() => {
               const next = !workspaceSidebarVisible
