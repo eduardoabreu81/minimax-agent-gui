@@ -346,6 +346,12 @@ export default function CodingPanel() {
     const code = fileContents[activeFile].slice(0, 3000)
     const prompt = `${action.prompt}\n\nFile: \`${fileName}\`\n\n\`\`\`\n${code}\n\`\`\``
 
+    // Show the quick-action message in chat so user knows what was sent
+    setCodingMessages(prev => [...prev, {
+      type: 'user',
+      content: `${action.label}: ${fileName}`,
+      attachment: null
+    }])
     codingWs.send(JSON.stringify({ message: prompt }))
     setCodingThinking(true)
   }
@@ -516,15 +522,20 @@ export default function CodingPanel() {
             <div className={isAgent ? 'grid grid-cols-2 gap-2' : 'grid grid-cols-2 gap-1.5'}>
               {QUICK_ACTIONS.map((action) => {
                 const Icon = action.icon
+                const targetFile = activeFile ? activeFile.split('/').pop() : ''
                 return (
                   <button
                     key={action.id}
                     onClick={() => handleQuickAction(action)}
-                    disabled={codingThinking}
+                    disabled={codingThinking || !activeFile}
                     className={isAgent ? 'flex items-center gap-1.5 px-3 py-2 rounded-lg bg-surface border border-border hover:border-primary text-sm text-foreground transition-colors disabled:opacity-40' : 'flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-surface border border-border hover:border-primary text-xs text-foreground transition-colors disabled:opacity-40'}
+                    title={targetFile ? `${action.label} ${targetFile}` : 'Open a file first'}
                   >
                     <Icon size={isAgent ? 14 : 12} className="text-primary" />
-                    {action.label}
+                    <span className="truncate max-w-[100px]">{action.label}</span>
+                    {targetFile && (
+                      <span className="truncate max-w-[80px] text-muted-foreground opacity-70">{targetFile}</span>
+                    )}
                   </button>
                 )
               })}

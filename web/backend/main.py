@@ -262,6 +262,8 @@ When asked to create a landing page, website, or any project:
 2. Create a proper directory structure if needed
 3. Do NOT just describe the files — CREATE them
 
+CRITICAL: When the user message includes file content inline (between triple backticks), that is the FULL content of the file they want you to analyze. Analyze THAT content directly. Do NOT call read_file for files mentioned in earlier conversation turns unless the user explicitly asks about them again.
+
 You are working in: `{workspace_path}`
 All relative paths are resolved from this directory.
 
