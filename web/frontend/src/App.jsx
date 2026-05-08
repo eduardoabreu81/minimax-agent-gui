@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { useTheme } from './context/ThemeContext'
 import Sidebar from './components/Sidebar'
 import ChatPanel from './components/chat/ChatPanel'
+import MatrixRain from './components/effects/MatrixRain'
 import TTSPanel from './components/media/TTSPanel'
 import ImagePanel from './components/media/ImagePanel'
 import MusicPanel from './components/media/MusicPanel'
@@ -16,7 +17,7 @@ import CommandPalette from './components/command-palette/CommandPalette'
 
 function App() {
   const { t } = useTranslation()
-  const { isDark, toggleDark } = useTheme()
+  const { isDark, toggleDark, theme, matrixEffect } = useTheme()
   const [activeTab, setActiveTab] = useState('chat')
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -89,7 +90,8 @@ function App() {
 
 
   return (
-    <div className="flex h-screen w-screen bg-background text-foreground overflow-hidden">
+    <div className="flex h-screen w-screen bg-background text-foreground overflow-hidden relative">
+      {theme === 'matrix' && matrixEffect && <MatrixRain />}
       <Sidebar
         activeTab={activeTab}
         onTabChange={(tab) => {

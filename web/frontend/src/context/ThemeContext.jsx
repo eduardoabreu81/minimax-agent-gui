@@ -3,8 +3,10 @@ import { createContext, useContext, useState, useEffect } from 'react'
 const ThemeContext = createContext({
   theme: 'default',
   isDark: true,
+  matrixEffect: false,
   setTheme: () => {},
   toggleDark: () => {},
+  toggleMatrixEffect: () => {},
   themes: [],
 })
 
@@ -27,6 +29,9 @@ export function ThemeProvider({ children }) {
   const [isDark, setIsDark] = useState(() => {
     try { return localStorage.getItem('app-dark') !== 'false' } catch { return true }
   })
+  const [matrixEffect, setMatrixEffect] = useState(() => {
+    try { return localStorage.getItem('matrix-effect') === 'true' } catch { return false }
+  })
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
@@ -46,9 +51,16 @@ export function ThemeProvider({ children }) {
   }
 
   const toggleDark = () => setIsDark(prev => !prev)
+  const toggleMatrixEffect = () => {
+    setMatrixEffect(prev => {
+      const next = !prev
+      try { localStorage.setItem('matrix-effect', String(next)) } catch {}
+      return next
+    })
+  }
 
   return (
-    <ThemeContext.Provider value={{ theme, isDark, setTheme, toggleDark, themes: THEMES }}>
+    <ThemeContext.Provider value={{ theme, isDark, matrixEffect, setTheme, toggleDark, toggleMatrixEffect, themes: THEMES }}>
       {children}
     </ThemeContext.Provider>
   )

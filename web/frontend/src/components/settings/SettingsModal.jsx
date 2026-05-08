@@ -45,7 +45,7 @@ const SHORTCUTS = [
 
 export default function SettingsModal({ isOpen, onClose, isDark, onToggleTheme }) {
   const { t, i18n } = useTranslation()
-  const { theme, setTheme, toggleDark, themes: THEME_LIST } = useTheme()
+  const { theme, setTheme, toggleDark, toggleMatrixEffect, matrixEffect, themes: THEME_LIST } = useTheme()
   const [activeTab, setActiveTab] = useState('general')
   const [config, setConfig] = useState({})
   const [savedMessage, setSavedMessage] = useState('')
@@ -215,6 +215,30 @@ export default function SettingsModal({ isOpen, onClose, isDark, onToggleTheme }
                       </button>
                     ))}
                   </div>
+
+                  {theme === 'matrix' && (
+                    <div className="flex items-center justify-between p-3 bg-surface border border-border rounded-lg mb-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-green-500/10 flex items-center justify-center">
+                          <span className="text-green-400 text-xs font-mono">Mx</span>
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-foreground">Matrix Rain Effect</p>
+                          <p className="text-xs text-muted">Animated code rain background</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={toggleMatrixEffect}
+                        className={`w-11 h-6 rounded-full transition-colors relative ${
+                          matrixEffect ? 'bg-green-500' : 'bg-muted/30'
+                        }`}
+                      >
+                        <div className={`w-4 h-4 rounded-full bg-white absolute top-1 transition-transform ${
+                          matrixEffect ? 'translate-x-6' : 'translate-x-1'
+                        }`} />
+                      </button>
+                    </div>
+                  )}
 
                   <h3 className="text-xs font-semibold text-muted uppercase tracking-wider mb-3">Mode</h3>
                   <div className="flex gap-3">
