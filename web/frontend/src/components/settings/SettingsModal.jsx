@@ -3,12 +3,13 @@ import { useTranslation } from 'react-i18next'
 import {
   X, Globe, Moon, Sun, Key, Cpu, Shield, Keyboard,
   Info, Check, AlertCircle, Save, RotateCcw, Eye, EyeOff,
-  MapPin, BarChart3, Lock, Unlock, Search, Monitor
+  MapPin, BarChart3, Lock, Unlock, Search, Monitor, Palette
 } from 'lucide-react'
 import { useTheme } from '../../context/ThemeContext'
 
 const TABS = [
   { id: 'general', label: 'General', icon: Globe },
+  { id: 'theme', label: 'Theme', icon: Palette },
   { id: 'api', label: 'API Keys', icon: Key },
   { id: 'region', label: 'Region', icon: MapPin },
   { id: 'models', label: 'Models', icon: Cpu },
@@ -45,7 +46,7 @@ const SHORTCUTS = [
 
 export default function SettingsModal({ isOpen, onClose, isDark, onToggleTheme }) {
   const { t, i18n } = useTranslation()
-  const { theme, setTheme, toggleDark, toggleMatrixEffect, matrixEffect, themes: THEME_LIST } = useTheme()
+  const { theme, setTheme, mode, setMode, toggleMatrixEffect, matrixEffect, themes: THEME_LIST } = useTheme()
   const [activeTab, setActiveTab] = useState('general')
   const [config, setConfig] = useState({})
   const [savedMessage, setSavedMessage] = useState('')
@@ -196,72 +197,103 @@ export default function SettingsModal({ isOpen, onClose, isDark, onToggleTheme }
                   </div>
                 </div>
 
+              </div>
+            )}
+
+            {/* Theme */}
+            {activeTab === 'theme' && (
+              <div className="space-y-5">
+                {/* Mode Toggle */}
                 <div>
-                  <h3 className="text-xs font-semibold text-muted uppercase tracking-wider mb-3">Theme</h3>
-                  <div className="grid grid-cols-3 gap-2 mb-4">
+                  <h3 className="text-xs font-semibold text-muted uppercase tracking-wider mb-3">Appearance Mode</h3>
+                  <div className="flex gap-2">
+                    {[
+                      { id: 'light', label: 'Light', icon: Sun },
+                      { id: 'dark', label: 'Dark', icon: Moon },
+                      { id: 'system', label: 'System', icon: Monitor },
+                    ].map((m) => {
+                      const Icon = m.icon
+                      return (
+                        <button
+                          key={m.id}
+                          onClick={() => setMode(m.id)}
+                          className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg border text-xs font-medium transition-colors ${
+                            mode === m.id
+                              ? 'bg-primary/10 border-primary text-primary'
+                              : 'bg-surface border-border text-muted-foreground hover:border-primary'
+                          }`}
+                        >
+                          <Icon size={14} />
+                          {m.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  <p className="text-[10px] text-muted mt-2">
+                    {mode === 'system' ? 'Follows your system preference' : mode === 'dark' ? 'Dark mode is active' : 'Light mode is active'}
+                  </p>
+                </div>
+
+                {/* Theme Grid with Split Preview */}
+                <div>
+                  <h3 className="text-xs font-semibold text-muted uppercase tracking-wider mb-3">Color Theme</h3>
+                  <div className="grid grid-cols-3 gap-2">
                     {THEME_LIST.map((t) => (
                       <button
                         key={t.id}
                         onClick={() => setTheme(t.id)}
-                        className={`flex flex-col items-center gap-2 px-3 py-3 rounded-lg border transition-colors ${
+                        className={`flex flex-col items-center gap-2 px-2 py-3 rounded-lg border transition-colors ${
                           theme === t.id
                             ? 'bg-primary/10 border-primary text-primary'
                             : 'bg-surface border-border text-muted-foreground hover:border-primary'
                         }`}
                         title={t.name}
                       >
-                        <div className={`w-8 h-8 rounded-full ${t.color} ring-2 ring-offset-2 ring-offset-card ${theme === t.id ? 'ring-primary' : 'ring-transparent'}`} />
+                        {/* Split preview */}
+                        <div className="flex w-full h-10 rounded-md overflow-hidden border border-border/50">
+                          <div
+                            className="flex-1 flex items-center justify-center"
+                            style={{ backgroundColor: t.preview.lightBg }}
+                          >
+                            <span className="text-sm font-bold" style={{ color: t.preview.lightText }}>Aa</span>
+                          </div>
+                          <div
+                            className="flex-1 flex items-center justify-center"
+                            style={{ backgroundColor: t.preview.darkBg }}
+                          >
+                            <span className="text-sm font-bold" style={{ color: t.preview.darkText }}>Aa</span>
+                          </div>
+                        </div>
                         <span className="text-[10px] font-medium">{t.name}</span>
                       </button>
                     ))}
                   </div>
+                </div>
 
-                  {theme === 'matrix' && (
-                    <div className="flex items-center justify-between p-3 bg-surface border border-border rounded-lg mb-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-green-500/10 flex items-center justify-center">
-                          <span className="text-green-400 text-xs font-mono">Mx</span>
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium text-foreground">Matrix Rain Effect</p>
-                          <p className="text-xs text-muted">Animated code rain background</p>
-                        </div>
+                {/* Matrix Effect Toggle */}
+                {theme === 'matrix' && (
+                  <div className="flex items-center justify-between p-3 bg-surface border border-border rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-green-500/10 flex items-center justify-center">
+                        <span className="text-green-400 text-xs font-mono">Mx</span>
                       </div>
-                      <button
-                        onClick={toggleMatrixEffect}
-                        className={`w-11 h-6 rounded-full transition-colors relative ${
-                          matrixEffect ? 'bg-green-500' : 'bg-muted/30'
-                        }`}
-                      >
-                        <div className={`w-4 h-4 rounded-full bg-white absolute top-1 transition-transform ${
-                          matrixEffect ? 'translate-x-6' : 'translate-x-1'
-                        }`} />
-                      </button>
+                      <div>
+                        <p className="text-sm font-medium text-foreground">Matrix Rain Effect</p>
+                        <p className="text-xs text-muted">Animated code rain background</p>
+                      </div>
                     </div>
-                  )}
-
-                  <h3 className="text-xs font-semibold text-muted uppercase tracking-wider mb-3">Mode</h3>
-                  <div className="flex gap-3">
                     <button
-                      onClick={() => { if (isDark) toggleDark() }}
-                      className={`flex-1 flex flex-col items-center gap-2 px-4 py-3 rounded-lg border transition-colors ${
-                        !isDark ? 'bg-primary/10 border-primary text-primary' : 'bg-surface border-border text-muted-foreground hover:border-primary'
+                      onClick={toggleMatrixEffect}
+                      className={`w-11 h-6 rounded-full transition-colors relative ${
+                        matrixEffect ? 'bg-green-500' : 'bg-muted/30'
                       }`}
                     >
-                      <Sun size={20} />
-                      <span className="text-xs">Light</span>
-                    </button>
-                    <button
-                      onClick={() => { if (!isDark) toggleDark() }}
-                      className={`flex-1 flex flex-col items-center gap-2 px-4 py-3 rounded-lg border transition-colors ${
-                        isDark ? 'bg-primary/10 border-primary text-primary' : 'bg-surface border-border text-muted-foreground hover:border-primary'
-                      }`}
-                    >
-                      <Moon size={20} />
-                      <span className="text-xs">Dark</span>
+                      <div className={`w-4 h-4 rounded-full bg-white absolute top-1 transition-transform ${
+                        matrixEffect ? 'translate-x-6' : 'translate-x-1'
+                      }`} />
                     </button>
                   </div>
-                </div>
+                )}
               </div>
             )}
 
