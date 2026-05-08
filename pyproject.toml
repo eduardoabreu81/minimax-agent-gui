@@ -26,6 +26,7 @@ dependencies = [
 
 [project.scripts]
 mini-agent = "mini_agent.cli:main"
+mini-agent-acp = "mini_agent.acp.server:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -33,6 +34,7 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["mini_agent", "mini_max_mcp"]
+artifacts = ["mini_agent/skills/**/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
