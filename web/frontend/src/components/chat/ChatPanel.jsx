@@ -20,6 +20,7 @@ export default function ChatPanel({ onProcessingChange }) {
   const [skills, setSkills] = useState([])
   const [showSkills, setShowSkills] = useState(false)
   const [skillIndex, setSkillIndex] = useState(0)
+  const [thinkingDuration, setThinkingDuration] = useState(0)
   const wsRef = useRef(null)
   const scrollRef = useRef(null)
   const fileInputRef = useRef(null)
@@ -74,6 +75,19 @@ export default function ChatPanel({ onProcessingChange }) {
       }
     }
   }, [onProcessingChange])
+
+  // Thinking duration timer
+  useEffect(() => {
+    if (!isThinking) {
+      setThinkingDuration(0)
+      return
+    }
+    const start = Date.now()
+    const interval = setInterval(() => {
+      setThinkingDuration(Math.floor((Date.now() - start) / 1000))
+    }, 1000)
+    return () => clearInterval(interval)
+  }, [isThinking])
 
   useEffect(() => {
     fetchConversations()
@@ -285,9 +299,12 @@ export default function ChatPanel({ onProcessingChange }) {
             )
           }
           if (msg.type === 'thinking') {
+            const isCurrent = isThinking && idx === messages.length - 1
             return (
               <details key={idx} className="my-1">
-                <summary className="text-xs text-slate-500 cursor-pointer">💭 thinking...</summary>
+                <summary className="text-xs text-slate-500 cursor-pointer">
+                  💭 thinking{isCurrent && thinkingDuration > 0 ? ` · ${thinkingDuration}s` : '...'}
+                </summary>
                 <pre className="text-xs text-slate-400 p-2 bg-slate-900/50 rounded mt-1">{msg.content}</pre>
               </details>
             )
@@ -406,7 +423,7 @@ export default function ChatPanel({ onProcessingChange }) {
               </div>
               <div className="flex justify-between items-center mt-1">
                 <p className="text-[10px] text-muted">Enter to send · Shift+Enter for new line</p>
-                <p className="text-[10px] text-muted">{input.length.toLocaleString()} characters</p>
+                <p className="text-[10px] text-primary font-medium">MiniMax-M2.7</p>
               </div>
             </div>
             <div className="flex flex-col gap-2">

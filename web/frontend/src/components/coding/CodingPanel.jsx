@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import XTermTerminal from './XTermTerminal'
 import MarkdownRenderer from '../MarkdownRenderer'
+import WorkspaceSidebar from './WorkspaceSidebar'
 
 const CODING_SYSTEM_PROMPT = `You are MiniMax Coding Agent, an expert software engineer powered by MiniMax-M2.7.
 You help users write, debug, refactor, and understand code.
@@ -47,6 +48,9 @@ export default function CodingPanel() {
   const [selectedGitView, setSelectedGitView] = useState('status')
   const [commitMessage, setCommitMessage] = useState('')
   const [showGitPanel, setShowGitPanel] = useState(false)
+  const [workspaceSidebarVisible, setWorkspaceSidebarVisible] = useState(() => {
+    try { return localStorage.getItem('workspace-sidebar-visible') !== 'false' } catch { return true }
+  })
 
   // Coding Agent Chat state
   const [codingMessages, setCodingMessages] = useState([])
@@ -61,6 +65,7 @@ export default function CodingPanel() {
   const [skills, setSkills] = useState([])
   const [showSkills, setShowSkills] = useState(false)
   const [skillIndex, setSkillIndex] = useState(0)
+  const [thinkingDuration, setThinkingDuration] = useState(0)
   const codingChatRef = useRef(null)
   const codingFileInputRef = useRef(null)
   const codingConvListRef = useRef(null)
@@ -283,6 +288,19 @@ export default function CodingPanel() {
 
   const clearCodingChat = () => setCodingMessages([])
 
+  // Thinking duration timer
+  useEffect(() => {
+    if (!codingThinking) {
+      setThinkingDuration(0)
+      return
+    }
+    const start = Date.now()
+    const interval = setInterval(() => {
+      setThinkingDuration(Math.floor((Date.now() - start) / 1000))
+    }, 1000)
+    return () => clearInterval(interval)
+  }, [codingThinking])
+
   // Auto-scroll coding chat
   useEffect(() => {
     codingChatRef.current?.scrollTo({ top: codingChatRef.current.scrollHeight, behavior: 'smooth' })
@@ -350,6 +368,16 @@ export default function CodingPanel() {
           )}
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              const next = !workspaceSidebarVisible
+              setWorkspaceSidebarVisible(next)
+              try { localStorage.setItem('workspace-sidebar-visible', String(next)) } catch {}
+            }}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 ${workspaceSidebarVisible ? 'bg-primary/10 text-primary' : 'bg-surface border border-border hover:border-primary text-muted-foreground'}`}
+          >
+            <Bot size={12} /> Workspace
+          </button>
           <button
             onClick={() => setShowGitPanel(!showGitPanel)}
             className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 ${showGitPanel ? 'bg-primary/10 text-primary' : 'bg-surface border border-border hover:border-primary text-muted-foreground'}`}
@@ -498,6 +526,18 @@ export default function CodingPanel() {
           </div>
         </div>
 
+        {/* Right: Workspace Sidebar (Plan/Todos/Tasks/Agents) */}
+        {workspaceSidebarVisible && (
+          <WorkspaceSidebar
+            visible={workspaceSidebarVisible}
+            onToggle={() => {
+              const next = !workspaceSidebarVisible
+              setWorkspaceSidebarVisible(next)
+              try { localStorage.setItem('workspace-sidebar-visible', String(next)) } catch {}
+            }}
+          />
+        )}
+
         {/* Right: Coding Agent Chat (Copilot-style) */}
         <div className="w-80 flex flex-col border-l border-border bg-card shrink-0">
           {/* Chat Header */}
@@ -600,9 +640,12 @@ export default function CodingPanel() {
                 )
               }
               if (msg.type === 'thinking') {
+                const isCurrent = codingThinking && idx === codingMessages.length - 1
                 return (
                   <details key={idx} className="my-1">
-                    <summary className="text-xs text-slate-500 cursor-pointer">💭 thinking...</summary>
+                    <summary className="text-xs text-slate-500 cursor-pointer">
+                      💭 thinking{isCurrent && thinkingDuration > 0 ? ` · ${thinkingDuration}s` : '...'}
+                    </summary>
                     <pre className="text-xs text-slate-400 p-2 bg-slate-900/50 rounded mt-1">{msg.content}</pre>
                   </details>
                 )
@@ -746,7 +789,7 @@ export default function CodingPanel() {
                 </div>
                 <div className="flex justify-between items-center mt-0.5">
                   <p className="text-[9px] text-muted">Enter to send · Shift+Enter for new line</p>
-                  <p className="text-[9px] text-muted">{codingInput.length.toLocaleString()} characters</p>
+                  <p className="text-[9px] text-primary font-medium">MiniMax-M2.7</p>
                 </div>
               </div>
               <div className="flex flex-col gap-1.5">

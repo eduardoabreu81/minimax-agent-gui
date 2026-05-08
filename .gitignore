@@ -49,6 +49,8 @@ ANALISE_*.md
 PROJECT_*.md
 ROADMAP_*.md
 *.local.md
+docs/PROJECT_LOG.md
+docs/PROJECT_CONTEXT.md
 
 # Node.js
 node_modules/
