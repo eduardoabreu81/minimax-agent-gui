@@ -26,24 +26,31 @@
 
 ## Install
 
-Requires **Python 3.10+**, **Node.js 18+**, and a [MiniMax API key](https://platform.minimax.io).
+### Prerequisites
+
+- **Python 3.10+** — `python --version`
+- **Node.js 18+** — `node --version`
+- A [MiniMax API key](https://platform.minimax.io)
+
+> Don't have Python or Node? Get them at [python.org](https://python.org) and [nodejs.org](https://nodejs.org).
+
+### 1. Clone & Install
 
 ```bash
 git clone https://github.com/eduardoabreu81/minimax-agent-gui.git
 cd minimax-agent-gui
 
-# Core Python dependencies (CLI, MCP, agent framework)
+# Core Python (CLI, MCP, agent framework)
 pip install -e .
 
-# Web backend dependencies (FastAPI, WebSocket, file upload)
+# Web backend (FastAPI, WebSocket, file upload)
 pip install -r web/backend/requirements.txt
 
-# Frontend dependencies
-cd web
-npm install
+# Frontend
+cd web && npm install
 ```
 
-Configure your API key:
+### 2. Configure API Key
 
 ```bash
 cp mini_agent/config/config-example.yaml config/config.yaml
