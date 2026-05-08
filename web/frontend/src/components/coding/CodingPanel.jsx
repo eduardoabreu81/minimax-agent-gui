@@ -58,6 +58,9 @@ export default function CodingPanel() {
   const [codingSessionId, setCodingSessionId] = useState('coding-default')
   const [codingConversations, setCodingConversations] = useState([])
   const [showCodingConvList, setShowCodingConvList] = useState(false)
+  const [skills, setSkills] = useState([])
+  const [showSkills, setShowSkills] = useState(false)
+  const [skillIndex, setSkillIndex] = useState(0)
   const codingChatRef = useRef(null)
   const codingFileInputRef = useRef(null)
   const codingConvListRef = useRef(null)
@@ -146,6 +149,14 @@ export default function CodingPanel() {
     } catch (e) { /* ignore */ }
   }
 
+  const fetchSkills = async () => {
+    try {
+      const res = await fetch('/api/skills')
+      const data = await res.json()
+      setSkills(data.skills || [])
+    } catch (e) { /* ignore */ }
+  }
+
   const startNewCodingChat = () => {
     const newId = 'coding-' + Math.random().toString(36).substring(2, 10)
     setCodingMessages([])
@@ -191,6 +202,15 @@ export default function CodingPanel() {
       } else if (data.type === 'user') {
         // User message was already added locally, ignore WebSocket echo
         setCodingThinking(true)
+      } else if (data.type === 'tool_result') {
+        setCodingThinking(false)
+        setCodingMessages((prev) => [...prev, data])
+        if (data.tool === 'write_file' || data.tool === 'edit_file') {
+          loadFiles()
+        }
+      } else if (data.type === 'skill_activated') {
+        setCodingThinking(false)
+        setCodingMessages((prev) => [...prev, { type: 'system', content: `Skill '${data.skill}' activated` }])
       } else {
         setCodingThinking(false)
         setCodingMessages((prev) => [...prev, data])
@@ -198,7 +218,7 @@ export default function CodingPanel() {
     }
 
     return () => ws.close()
-  }, [codingSessionId])
+  }, [codingSessionId, loadFiles])
 
   const sendCodingMessage = useCallback(() => {
     if ((!codingInput.trim() && !codingAttachment) || !codingWs || codingWs.readyState !== WebSocket.OPEN) return
@@ -224,6 +244,15 @@ export default function CodingPanel() {
     setCodingAttachment(null)
     setCodingThinking(true)
   }, [codingInput, codingWs, activeFile, fileContents, codingAttachment])
+
+  const activateSkill = (skillName) => {
+    if (codingWs && codingWs.readyState === WebSocket.OPEN) {
+      codingWs.send(JSON.stringify({ type: 'activate_skill', skill: skillName }))
+    }
+    setCodingMessages(prev => [...prev, { type: 'system', content: `Skill '${skillName}' activated` }])
+    setCodingInput('')
+    setShowSkills(false)
+  }
 
   const handleCodingFileSelect = async (e) => {
     const file = e.target.files?.[0]
@@ -301,6 +330,13 @@ export default function CodingPanel() {
     }
     return map[ext] || 'text'
   }
+
+  const filteredSkills = codingInput.startsWith('/')
+    ? skills.filter(s =>
+        s.name.toLowerCase().includes(codingInput.slice(1).toLowerCase()) ||
+        s.description?.toLowerCase().includes(codingInput.slice(1).toLowerCase())
+      )
+    : []
 
   return (
     <div className="flex flex-col h-full bg-card">
@@ -549,42 +585,79 @@ export default function CodingPanel() {
               </div>
             )}
 
-            {codingMessages.map((msg, idx) => (
-              <div key={idx} className={`flex gap-2 ${msg.type === 'user' ? 'flex-row-reverse' : ''}`}>
-                <div className={`
-                  w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0
-                  ${msg.type === 'user' ? 'bg-primary' : 'bg-surface border border-border'}
-                `}>
-                  {msg.type === 'user' ? <User size={10} className="text-white" /> : <Bot size={10} className="text-primary" />}
-                </div>
-                <div className={`
-                  max-w-[85%] px-3 py-2 rounded-xl text-xs leading-relaxed
-                  ${msg.type === 'user'
-                    ? 'bg-primary text-white rounded-br-md'
-                    : 'bg-surface border border-border text-foreground rounded-bl-md'
-                  }
-                `}>
-                  <MarkdownRenderer content={msg.content} />
-                  {msg.attachment && (
-                    <div className="mt-2 pt-2 border-t border-white/20">
-                      {/\.(png|jpg|jpeg|webp|gif)$/i.test(msg.attachment) ? (
-                        <img
-                          src={`/api/files/download?path=${encodeURIComponent(msg.attachment)}`}
-                          alt="attachment"
-                          className="max-w-[180px] max-h-[120px] rounded-lg object-cover"
-                          onError={(e) => { e.target.style.display = 'none' }}
-                        />
-                      ) : (
-                        <div className="flex items-center gap-2 opacity-90">
-                          <FileText size={12} />
-                          <span className="truncate max-w-[180px]">{msg.attachment.split('/').pop()}</span>
-                        </div>
-                      )}
+            {codingMessages.map((msg, idx) => {
+              if (msg.type === 'tool_result') {
+                return (
+                  <div key={idx} className="my-2 p-2 bg-slate-800/50 rounded border border-slate-700/50">
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="text-cyan-400">🔧 {msg.tool}</span>
+                      <span className="text-slate-400">{msg.success ? '✅' : '❌'}</span>
                     </div>
-                  )}
+                    {msg.arguments?.path && (
+                      <div className="text-xs text-slate-500 mt-1">{msg.arguments.path}</div>
+                    )}
+                  </div>
+                )
+              }
+              if (msg.type === 'thinking') {
+                return (
+                  <details key={idx} className="my-1">
+                    <summary className="text-xs text-slate-500 cursor-pointer">💭 thinking...</summary>
+                    <pre className="text-xs text-slate-400 p-2 bg-slate-900/50 rounded mt-1">{msg.content}</pre>
+                  </details>
+                )
+              }
+              if (msg.type === 'step_start') {
+                return (
+                  <div key={idx} className="text-xs text-slate-500 my-1">
+                    Step {msg.step}/{msg.max_steps}
+                  </div>
+                )
+              }
+              if (msg.type === 'system') {
+                return (
+                  <div key={idx} className="flex justify-center my-2">
+                    <span className="text-xs text-muted bg-surface border border-border px-3 py-1 rounded-full">{msg.content}</span>
+                  </div>
+                )
+              }
+              return (
+                <div key={idx} className={`flex gap-2 ${msg.type === 'user' ? 'flex-row-reverse' : ''}`}>
+                  <div className={`
+                    w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0
+                    ${msg.type === 'user' ? 'bg-primary' : 'bg-surface border border-border'}
+                  `}>
+                    {msg.type === 'user' ? <User size={10} className="text-white" /> : <Bot size={10} className="text-primary" />}
+                  </div>
+                  <div className={`
+                    max-w-[85%] px-3 py-2 rounded-xl text-xs leading-relaxed
+                    ${msg.type === 'user'
+                      ? 'bg-primary text-white rounded-br-md'
+                      : 'bg-surface border border-border text-foreground rounded-bl-md'
+                    }
+                  `}>
+                    <MarkdownRenderer content={msg.content} />
+                    {msg.attachment && (
+                      <div className="mt-2 pt-2 border-t border-white/20">
+                        {/\.(png|jpg|jpeg|webp|gif)$/i.test(msg.attachment) ? (
+                          <img
+                            src={`/api/files/download?path=${encodeURIComponent(msg.attachment)}`}
+                            alt="attachment"
+                            className="max-w-[180px] max-h-[120px] rounded-lg object-cover"
+                            onError={(e) => { e.target.style.display = 'none' }}
+                          />
+                        ) : (
+                          <div className="flex items-center gap-2 opacity-90">
+                            <FileText size={12} />
+                            <span className="truncate max-w-[180px]">{msg.attachment.split('/').pop()}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
 
             {codingThinking && (
               <div className="flex gap-2">
@@ -611,19 +684,66 @@ export default function CodingPanel() {
             )}
             <div className="flex gap-2">
               <div className="flex-1">
-                <textarea
-                  value={codingInput}
-                  onChange={(e) => setCodingInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault()
-                      sendCodingMessage()
-                    }
-                  }}
-                  placeholder="Ask about your code..."
-                  rows={2}
-                  className="w-full bg-card border border-border rounded-lg px-3 py-2 text-xs text-foreground placeholder:text-muted resize-none focus:outline-none focus:border-primary"
-                />
+                <div className="relative">
+                  <textarea
+                    value={codingInput}
+                    onChange={(e) => {
+                      const value = e.target.value
+                      setCodingInput(value)
+                      if (value.startsWith('/')) {
+                        if (!showSkills) fetchSkills()
+                        setShowSkills(true)
+                        setSkillIndex(0)
+                      } else {
+                        setShowSkills(false)
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (showSkills && filteredSkills.length > 0) {
+                        if (e.key === 'ArrowDown') {
+                          e.preventDefault()
+                          setSkillIndex(i => (i + 1) % filteredSkills.length)
+                          return
+                        }
+                        if (e.key === 'ArrowUp') {
+                          e.preventDefault()
+                          setSkillIndex(i => (i - 1 + filteredSkills.length) % filteredSkills.length)
+                          return
+                        }
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          activateSkill(filteredSkills[skillIndex].name)
+                          return
+                        }
+                        if (e.key === 'Escape') {
+                          setShowSkills(false)
+                          return
+                        }
+                      }
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault()
+                        sendCodingMessage()
+                      }
+                    }}
+                    placeholder="Ask about your code..."
+                    rows={2}
+                    className="w-full bg-card border border-border rounded-lg px-3 py-2 text-xs text-foreground placeholder:text-muted resize-none focus:outline-none focus:border-primary"
+                  />
+                  {showSkills && filteredSkills.length > 0 && (
+                    <div className="absolute top-full left-0 w-full bg-card border border-border rounded-lg shadow-lg z-50 py-1 mt-1 max-h-48 overflow-y-auto">
+                      {filteredSkills.map((skill, i) => (
+                        <div
+                          key={skill.name}
+                          onClick={() => activateSkill(skill.name)}
+                          className={`px-3 py-2 cursor-pointer ${i === skillIndex ? 'bg-primary/10 text-primary' : 'text-foreground hover:bg-surface'}`}
+                        >
+                          <div className="text-sm font-medium">{skill.name}</div>
+                          <div className="text-xs text-muted">{skill.description}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 <div className="flex justify-between items-center mt-0.5">
                   <p className="text-[9px] text-muted">Enter to send · Shift+Enter for new line</p>
                   <p className="text-[9px] text-muted">{codingInput.length.toLocaleString()} characters</p>

@@ -17,6 +17,9 @@ export default function ChatPanel({ onProcessingChange }) {
   const [sessionId, setSessionId] = useState('default')
   const [conversations, setConversations] = useState([])
   const [showConvList, setShowConvList] = useState(false)
+  const [skills, setSkills] = useState([])
+  const [showSkills, setShowSkills] = useState(false)
+  const [skillIndex, setSkillIndex] = useState(0)
   const wsRef = useRef(null)
   const scrollRef = useRef(null)
   const fileInputRef = useRef(null)
@@ -27,6 +30,14 @@ export default function ChatPanel({ onProcessingChange }) {
       const res = await fetch('/api/conversations')
       const data = await res.json()
       if (data.success) setConversations(data.conversations || [])
+    } catch (e) { /* ignore */ }
+  }
+
+  const fetchSkills = async () => {
+    try {
+      const res = await fetch('/api/skills')
+      const data = await res.json()
+      setSkills(data.skills || [])
     } catch (e) { /* ignore */ }
   }
 
@@ -52,6 +63,10 @@ export default function ChatPanel({ onProcessingChange }) {
         // User message was already added locally, ignore WebSocket echo
         setIsThinking(true)
         onProcessingChange?.(true)
+      } else if (data.type === 'skill_activated') {
+        setIsThinking(false)
+        onProcessingChange?.(false)
+        setMessages((prev) => [...prev, { type: 'system', content: `Skill '${data.skill}' activated` }])
       } else {
         setIsThinking(false)
         onProcessingChange?.(false)
@@ -106,6 +121,15 @@ export default function ChatPanel({ onProcessingChange }) {
     } catch (err) { console.error('Delete failed:', err) }
   }
 
+  const activateSkill = (skillName) => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: 'activate_skill', skill: skillName }))
+    }
+    setMessages(prev => [...prev, { type: 'system', content: `Skill '${skillName}' activated` }])
+    setInput('')
+    setShowSkills(false)
+  }
+
   const sendMessage = useCallback(() => {
     if ((!input.trim() && !attachment) || !wsRef.current) return
     const payload = { message: input }
@@ -123,7 +147,35 @@ export default function ChatPanel({ onProcessingChange }) {
     onProcessingChange?.(true)
   }, [input, attachment, onProcessingChange])
 
+  const filteredSkills = input.startsWith('/')
+    ? skills.filter(s =>
+        s.name.toLowerCase().includes(input.slice(1).toLowerCase()) ||
+        s.description?.toLowerCase().includes(input.slice(1).toLowerCase())
+      )
+    : []
+
   const handleKeyDown = (e) => {
+    if (showSkills && filteredSkills.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setSkillIndex(i => (i + 1) % filteredSkills.length)
+        return
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setSkillIndex(i => (i - 1 + filteredSkills.length) % filteredSkills.length)
+        return
+      }
+      if (e.key === 'Enter') {
+        e.preventDefault()
+        activateSkill(filteredSkills[skillIndex].name)
+        return
+      }
+      if (e.key === 'Escape') {
+        setShowSkills(false)
+        return
+      }
+    }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       sendMessage()
@@ -218,42 +270,79 @@ export default function ChatPanel({ onProcessingChange }) {
           </div>
         )}
 
-        {messages.map((msg, idx) => (
-          <div key={idx} className={`flex gap-3 ${msg.type === 'user' ? 'flex-row-reverse' : ''}`}>
-            <div className={`
-              w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0
-              ${msg.type === 'user' ? 'bg-primary' : 'bg-surface border border-border'}
-            `}>
-              {msg.type === 'user' ? <User size={14} className="text-white" /> : <Bot size={14} className="text-primary" />}
-            </div>
-            <div className={`
-              max-w-[80%] px-4 py-3 rounded-2xl text-sm leading-relaxed
-              ${msg.type === 'user'
-                ? 'bg-primary text-white rounded-br-md'
-                : 'bg-surface border border-border text-foreground rounded-bl-md'
-              }
-            `}>
-              <MarkdownRenderer content={msg.content} />
-              {msg.attachment && (
-                <div className="mt-2 pt-2 border-t border-white/20">
-                  {/\.(png|jpg|jpeg|webp|gif)$/i.test(msg.attachment) ? (
-                    <img
-                      src={`/api/files/download?path=${encodeURIComponent(msg.attachment)}`}
-                      alt="attachment"
-                      className="max-w-[200px] max-h-[150px] rounded-lg object-cover"
-                      onError={(e) => { e.target.style.display = 'none' }}
-                    />
-                  ) : (
-                    <div className="flex items-center gap-2 text-xs opacity-90">
-                      <FileText size={14} />
-                      <span className="truncate max-w-[200px]">{msg.attachment.split('/').pop()}</span>
-                    </div>
-                  )}
+        {messages.map((msg, idx) => {
+          if (msg.type === 'tool_result') {
+            return (
+              <div key={idx} className="my-2 p-2 bg-slate-800/50 rounded border border-slate-700/50">
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="text-cyan-400">🔧 {msg.tool}</span>
+                  <span className="text-slate-400">{msg.success ? '✅' : '❌'}</span>
                 </div>
-              )}
+                {msg.arguments?.path && (
+                  <div className="text-xs text-slate-500 mt-1">{msg.arguments.path}</div>
+                )}
+              </div>
+            )
+          }
+          if (msg.type === 'thinking') {
+            return (
+              <details key={idx} className="my-1">
+                <summary className="text-xs text-slate-500 cursor-pointer">💭 thinking...</summary>
+                <pre className="text-xs text-slate-400 p-2 bg-slate-900/50 rounded mt-1">{msg.content}</pre>
+              </details>
+            )
+          }
+          if (msg.type === 'step_start') {
+            return (
+              <div key={idx} className="text-xs text-slate-500 my-1">
+                Step {msg.step}/{msg.max_steps}
+              </div>
+            )
+          }
+          if (msg.type === 'system') {
+            return (
+              <div key={idx} className="flex justify-center my-2">
+                <span className="text-xs text-muted bg-surface border border-border px-3 py-1 rounded-full">{msg.content}</span>
+              </div>
+            )
+          }
+          return (
+            <div key={idx} className={`flex gap-3 ${msg.type === 'user' ? 'flex-row-reverse' : ''}`}>
+              <div className={`
+                w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0
+                ${msg.type === 'user' ? 'bg-primary' : 'bg-surface border border-border'}
+              `}>
+                {msg.type === 'user' ? <User size={14} className="text-white" /> : <Bot size={14} className="text-primary" />}
+              </div>
+              <div className={`
+                max-w-[80%] px-4 py-3 rounded-2xl text-sm leading-relaxed
+                ${msg.type === 'user'
+                  ? 'bg-primary text-white rounded-br-md'
+                  : 'bg-surface border border-border text-foreground rounded-bl-md'
+                }
+              `}>
+                <MarkdownRenderer content={msg.content} />
+                {msg.attachment && (
+                  <div className="mt-2 pt-2 border-t border-white/20">
+                    {/\.(png|jpg|jpeg|webp|gif)$/i.test(msg.attachment) ? (
+                      <img
+                        src={`/api/files/download?path=${encodeURIComponent(msg.attachment)}`}
+                        alt="attachment"
+                        className="max-w-[200px] max-h-[150px] rounded-lg object-cover"
+                        onError={(e) => { e.target.style.display = 'none' }}
+                      />
+                    ) : (
+                      <div className="flex items-center gap-2 text-xs opacity-90">
+                        <FileText size={14} />
+                        <span className="truncate max-w-[200px]">{msg.attachment.split('/').pop()}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          )
+        })}
 
         {isThinking && (
           <div className="flex gap-3">
@@ -281,14 +370,40 @@ export default function ChatPanel({ onProcessingChange }) {
           )}
           <div className="flex gap-3">
             <div className="flex-1">
-              <textarea
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder={t('chat.placeholder')}
-                className="w-full bg-card border border-border rounded-xl px-4 py-3 text-sm text-foreground placeholder:text-muted resize-none focus:outline-none focus:border-primary transition-colors"
-                rows={2}
-              />
+              <div className="relative">
+                <textarea
+                  value={input}
+                  onChange={(e) => {
+                    const value = e.target.value
+                    setInput(value)
+                    if (value.startsWith('/')) {
+                      if (!showSkills) fetchSkills()
+                      setShowSkills(true)
+                      setSkillIndex(0)
+                    } else {
+                      setShowSkills(false)
+                    }
+                  }}
+                  onKeyDown={handleKeyDown}
+                  placeholder={t('chat.placeholder')}
+                  className="w-full bg-card border border-border rounded-xl px-4 py-3 text-sm text-foreground placeholder:text-muted resize-none focus:outline-none focus:border-primary transition-colors"
+                  rows={2}
+                />
+                {showSkills && filteredSkills.length > 0 && (
+                  <div className="absolute top-full left-0 w-full bg-card border border-border rounded-xl shadow-lg z-50 py-1 mt-1 max-h-48 overflow-y-auto">
+                    {filteredSkills.map((skill, i) => (
+                      <div
+                        key={skill.name}
+                        onClick={() => activateSkill(skill.name)}
+                        className={`px-3 py-2 cursor-pointer ${i === skillIndex ? 'bg-primary/10 text-primary' : 'text-foreground hover:bg-surface'}`}
+                      >
+                        <div className="text-sm font-medium">{skill.name}</div>
+                        <div className="text-xs text-muted">{skill.description}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
               <div className="flex justify-between items-center mt-1">
                 <p className="text-[10px] text-muted">Enter to send · Shift+Enter for new line</p>
                 <p className="text-[10px] text-muted">{input.length.toLocaleString()} characters</p>
