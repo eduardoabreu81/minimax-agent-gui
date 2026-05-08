@@ -2,13 +2,16 @@
   <img src="web/frontend/public/favicon.svg" alt="MiniMax Agent" width="64" height="64"/>
 </div>
 
-# MiniMax Agent
+# 🤖 MiniMax Agent
 
-> Personal AI agent powered by **MiniMax M2.7** — Chat, Code, Image, Video, Music, Speech, and MCP tools in a modern web interface.
+> **Personal AI agent powered by MiniMax M2.7** — Chat, Code, Image, Video, Music, Speech, and MCP tools in a modern web interface.
+>
+> Built with ❤️ for the MiniMax community.
 
 [![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white)](https://react.dev/)
 [![Vite](https://img.shields.io/badge/Vite-646CFF?logo=vite&logoColor=white)](https://vitejs.dev/)
+[![Tailwind](https://img.shields.io/badge/Tailwind-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ## Features
@@ -107,4 +110,14 @@ Environment variables:
 
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE)
+
+---
+
+<div align="center">
+
+Made with ❤️ powered by MiniMax
+
+**[Report Bug](https://github.com/eduardoabreu81/minimax-agent-gui/issues)** • **[Request Feature](https://github.com/eduardoabreu81/minimax-agent-gui/issues)**
+
+</div>
