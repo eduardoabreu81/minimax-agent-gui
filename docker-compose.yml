@@ -1,0 +1,18 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+      - MINIMAX_API_KEY=${MINIMAX_API_KEY}
+      - MINIMAX_API_BASE=${MINIMAX_API_BASE:-https://api.minimax.io}
+    volumes:
+      # Persist workspace data (conversations, uploads, generated media)
+      - workspace-data:/app/workspace
+    restart: unless-stopped
+
+volumes:
+  workspace-data:

@@ -1,0 +1,68 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Node.js
+node_modules/
+web/frontend/node_modules/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Workspace data (will be a volume in production)
+workspace/
+
+# Internal docs
+docs/PROJECT_LOG.md
+docs/PROJECT_CONTEXT.md
+ANALISE_*.md
+PROJECT_*.md
+ROADMAP_*.md
+*.local.md
+
+# Config with secrets
+config/config.yaml
+
+# Logs
+*.log
+
+# Test cache
+.pytest_cache/
+
+# Specstory
+.specstory/
