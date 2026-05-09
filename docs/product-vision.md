@@ -31,7 +31,7 @@ These users already have API access. They need a single place to:
 4. **Music Generation** — Prompt or lyrics to music, instrumental mode, cover generation, and recent music history.
 5. **Speech / TTS** — 30+ voices, speed control, streaming playback, and recent speech history.
 6. **MCP Tools** — Easy access to web search and image understanding. Future: configurable MCP servers.
-7. **Agent & Skills** — Slash commands, multi-step agent tasks, skill templates.
+7. **Agent & Skills** — Slash commands, multi-step agent tasks, skill templates, and Plan Mode with editable approve-and-run drafts.
 8. **Code Workspace** — File explorer, editor, terminal, and code-chat for agent-driven file operations.
 9. **Session Protection** — Guards against accidental context loss when switching tabs, refreshing, or leaving the page.
 

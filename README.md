@@ -28,7 +28,7 @@ The Code Workspace is part of the app, but it is not the whole product.
 - **Music** — Music generation from prompts or lyrics, instrumental mode, cover from reference audio, and recent music history
 - **Speech / TTS** — 30+ voices, speed control, streaming playback, and recent speech history
 - **MCP Tools** — Built-in web search and image understanding toggles; easy MCP access and configuration
-- **Skills & Agent Workflows** — Slash commands, skill templates, and agent-driven multi-step tasks
+- **Skills & Agent Workflows** — Slash commands, skill templates, Plan Mode with editable approve-and-run drafts, and agent-driven multi-step tasks
 - **Code Workspace** — File explorer, editor, terminal, and persistent code-chat sessions
 - **Multi-language** — English, Português (BR), 日本語, 한국어, Español, 中文
 
@@ -100,7 +100,7 @@ Type text, pick a voice, adjust speed, and generate speech.
 
 ### Code Workspace
 
-Switch to the Code tab for a file explorer, editor, terminal, and persistent code-chat sessions. The agent can read, write, and edit files in your workspace.
+Switch to the Code tab for a file explorer, editor, terminal, and persistent code-chat sessions. The agent can read, write, and edit files in your workspace. You can switch between **Agent**, **Plan**, and **YOLO** modes. Plan mode creates an editable draft plan before execution; once approved, the agent receives the full plan and runs it step by step.
 
 ### Agent Outputs
 
@@ -143,13 +143,13 @@ Environment variables:
 - [x] Session Protection — Guards against accidental context loss when navigating tabs, refreshing, or leaving the page
 - [x] Conversation Search — Find past chats and code sessions by title, content, or attachment
 - [x] Recent Generations in media panels — Image, Video, Music, and TTS panels show a browsable history of past outputs plus compatible files in the workspace
+- [x] Agent Plan Mode — Editable plan draft with approve-and-run workflow in the Code Workspace
 
 ### Phase 1 — Foundation
 _Complete. All Phase 1 items have shipped._
 
 ### Phase 2 — Productivity
 - [ ] **Task Board (Kanban)** — Project planning with todo/in-progress/done columns
-- [ ] **Agent Plan Mode** — Full plan-then-execute workflow with editable steps
 
 ### Phase 3 — Extensibility
 - [ ] **Configurable MCP Servers** — Add custom MCP servers (stdio, SSE, HTTP)
