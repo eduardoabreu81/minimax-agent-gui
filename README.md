@@ -28,7 +28,7 @@ The Code Workspace is part of the app, but it is not the whole product.
 - **Music** — Music generation from prompts or lyrics, instrumental mode, cover from reference audio, and recent music history
 - **Speech / TTS** — 30+ voices, speed control, streaming playback, and recent speech history
 - **MCP Tools** — Built-in Web Search and Image Understanding, configurable custom MCP servers, connection testing, tool discovery, and external MCP tools loaded into agent sessions
-- **Skills & Agent Workflows** — Slash commands, skill templates, Plan Mode with editable approve-and-run drafts, and agent-driven multi-step tasks
+- **Skills & Agent Workflows** — Slash commands, skill templates, Plan Mode with editable approve-and-run drafts, tool permission approvals, and agent-driven multi-step tasks
 - **Code Workspace** — File explorer, editor, terminal, and persistent code-chat sessions
 - **Multi-language** — English, Português (BR), 日本語, 한국어, Español, 中文
 
@@ -102,11 +102,13 @@ Type text, pick a voice, adjust speed, and generate speech.
 
 Open **Settings > Tools** to manage built-in MiniMax tools and custom MCP servers. Custom MCP servers support **stdio** and **SSE** transports. You can add, edit, enable/disable, delete, and test connections. Enabled servers are loaded into new agent sessions; tool names are prefixed as `mcp_{server_id}_{tool_name}` to avoid collisions.
 
-> **Note:** HTTP transport is not implemented yet. MCP tools are loaded when a new agent session is created, so changing MCP server config may require starting a new chat or session to reload tools. Per-tool permissions are not implemented yet.
+> **Note:** External MCP tools require approval in Agent mode; YOLO mode auto-approves them. HTTP transport is not implemented yet. MCP tools are loaded when a new agent session is created, so changing MCP server config may require starting a new chat or session to reload tools.
 
 ### Code Workspace
 
 Switch to the Code tab for a file explorer, editor, terminal, and persistent code-chat sessions. The agent can read, write, and edit files in your workspace. You can switch between **Agent**, **Plan**, and **YOLO** modes. Plan mode creates an editable draft plan before execution; once approved, the agent receives the full plan and runs it step by step.
+
+**Tool Permissions** — Agent mode asks for approval before risky tools (write/edit, shell, unknown, and external MCP tools) via an Approve / Reject modal. YOLO mode auto-approves all tools. Plan mode uses Agent permissions after Approve & Run.
 
 ### Agent Outputs
 
@@ -169,6 +171,7 @@ mcp_servers:
 - [x] Configurable MCP Servers — Manage custom stdio/SSE MCP servers from Settings
 - [x] MCP Connection Test & Tool Discovery — Test configured servers and preview discovered tools
 - [x] External MCP Tool Runtime — Enabled MCP server tools are loaded into new agent sessions with safe prefixed names
+- [x] Permission System — Agent tool execution policy with auto/ask/reject decisions and Code Workspace approve/reject modal
 
 ### Phase 1 — Foundation
 _Complete. All Phase 1 items have shipped._
@@ -182,7 +185,6 @@ _Complete. All Phase 1 items have shipped._
 
 ### Phase 4 — Polish
 - [ ] **Sandboxed Preview** — Secure iframe preview for generated code
-- [ ] **Permission System** — Granular auto/ask/reject per tool
 
 ## License
 
