@@ -13,6 +13,7 @@ import WorkspaceSidebar from './WorkspaceSidebar'
 import AgentChatPanel from './AgentChatPanel'
 import { useCodingChat } from './useCodingChat'
 import { useAgentActivity } from '../../context/AgentActivityContext'
+import { useSessionProtection } from '../../hooks/useSessionProtection'
 
 const CODING_SYSTEM_PROMPT = `You are MiniMax Coding Agent, an expert software engineer powered by MiniMax-M2.7.
 You help users write, debug, refactor, and understand code.
@@ -48,6 +49,22 @@ export default function CodingPanel() {
   const [activeBottomTab, setActiveBottomTab] = useState('terminal')
   const [selectedGitView, setSelectedGitView] = useState('status')
   const [commitMessage, setCommitMessage] = useState('')
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
+  const [originalContents, setOriginalContents] = useState({})
+
+  const { register } = useSessionProtection()
+
+  useEffect(() => {
+    register('code-thinking', codingThinking, 'Agent is thinking')
+  }, [codingThinking, register])
+
+  useEffect(() => {
+    register('code-input', codingInput.trim().length > 0, 'Unsent code message')
+  }, [codingInput, register])
+
+  useEffect(() => {
+    register('code-unsaved', hasUnsavedChanges, 'Unsaved file changes')
+  }, [hasUnsavedChanges, register])
   const [showGitPanel, setShowGitPanel] = useState(false)
   const [workspaceSidebarVisible, setWorkspaceSidebarVisible] = useState(() => {
     try { return localStorage.getItem('workspace-sidebar-visible') !== 'false' } catch { return true }
@@ -113,6 +130,7 @@ export default function CodingPanel() {
       const res = await fetch(`/api/files/content?path=${encodeURIComponent(path)}`)
       const data = await res.json()
       setFileContents((prev) => ({ ...prev, [path]: data.content }))
+      setOriginalContents((prev) => ({ ...prev, [path]: data.content }))
       setOpenFiles((prev) => [...prev, { path, name: path.split('/').pop() }])
       setActiveFile(path)
     } catch (e) {
@@ -713,7 +731,11 @@ export default function CodingPanel() {
               {activeFile ? (
                 <textarea
                   value={fileContents[activeFile] || ''}
-                  onChange={(e) => setFileContents((prev) => ({ ...prev, [activeFile]: e.target.value }))}
+                  onChange={(e) => {
+                    const newValue = e.target.value
+                    setFileContents((prev) => ({ ...prev, [activeFile]: newValue }))
+                    setHasUnsavedChanges(newValue !== (originalContents[activeFile] || ''))
+                  }}
                   className="w-full h-full bg-card text-foreground p-4 font-mono text-sm resize-none focus:outline-none"
                   spellCheck={false}
                   placeholder={`// ${getLanguage(activeFile.split('/').pop())}`}
@@ -930,7 +952,11 @@ export default function CodingPanel() {
               {activeFile ? (
                 <textarea
                   value={fileContents[activeFile] || ''}
-                  onChange={(e) => setFileContents((prev) => ({ ...prev, [activeFile]: e.target.value }))}
+                  onChange={(e) => {
+                    const newValue = e.target.value
+                    setFileContents((prev) => ({ ...prev, [activeFile]: newValue }))
+                    setHasUnsavedChanges(newValue !== (originalContents[activeFile] || ''))
+                  }}
                   className="w-full h-full bg-card text-foreground p-4 font-mono text-sm resize-none focus:outline-none"
                   spellCheck={false}
                   placeholder={`// ${getLanguage(activeFile.split('/').pop())}`}

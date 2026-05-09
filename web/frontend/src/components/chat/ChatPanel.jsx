@@ -1,13 +1,14 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Send, User, Bot, Loader2, Paperclip, X, Image as ImageIcon, FileText, MessageSquarePlus, Trash2, ChevronDown, Pencil } from 'lucide-react'
+import { useSessionProtection } from '../../hooks/useSessionProtection'
 import MarkdownRenderer from '../MarkdownRenderer'
 
 function generateId() {
   return Math.random().toString(36).substring(2, 10)
 }
 
-export default function ChatPanel({ onProcessingChange }) {
+export default function ChatPanel() {
   const { t } = useTranslation()
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
@@ -27,6 +28,20 @@ export default function ChatPanel({ onProcessingChange }) {
   const scrollRef = useRef(null)
   const fileInputRef = useRef(null)
   const convListRef = useRef(null)
+
+  const { register } = useSessionProtection()
+
+  useEffect(() => {
+    register('chat-thinking', isThinking, 'Agent is thinking')
+  }, [isThinking, register])
+
+  useEffect(() => {
+    register('chat-input', input.trim().length > 0, 'Unsent message')
+  }, [input, register])
+
+  useEffect(() => {
+    register('chat-attachment', !!attachment, 'Pending attachment')
+  }, [attachment, register])
 
   const fetchConversations = async () => {
     try {

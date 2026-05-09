@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { Image, Loader2, Download, Wand2, Copy, Grid3x3, Trash2, Eye, Upload, Link2, X } from 'lucide-react'
+import { useSessionProtection } from '../../hooks/useSessionProtection'
 
 const ASPECT_RATIOS = [
   { label: '1:1 Square', value: '1:1', width: 1024, height: 1024 },
@@ -32,6 +33,20 @@ export default function ImagePanel() {
   const [referenceImage, setReferenceImage] = useState(null) // { name, path, url }
   const [referenceUrl, setReferenceUrl] = useState('')
   const fileInputRef = useRef(null)
+
+  const { register } = useSessionProtection()
+
+  useEffect(() => {
+    register('image-loading', loading, 'Image generation in progress')
+  }, [loading, register])
+
+  useEffect(() => {
+    register('image-prompt', prompt.trim().length > 0, 'Unsaved image prompt')
+  }, [prompt, register])
+
+  useEffect(() => {
+    register('image-reference', !!referenceImage, 'Reference image selected')
+  }, [referenceImage, register])
 
   useEffect(() => { fetchGallery() }, [])
 

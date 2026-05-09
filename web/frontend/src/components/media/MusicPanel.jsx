@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Music, Loader2, Play, Save, Wand2, Guitar, Mic2, AudioLines, Check } from 'lucide-react'
+import { useSessionProtection } from '../../hooks/useSessionProtection'
 
 const MUSIC_MODELS = [
   { id: 'music-2.6', label: 'Music 2.6', desc: 'Best quality' },
@@ -27,6 +28,16 @@ export default function MusicPanel() {
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState(null)
   const [error, setError] = useState(null)
+
+  const { register } = useSessionProtection()
+
+  useEffect(() => {
+    register('music-loading', loading, 'Music generation in progress')
+  }, [loading, register])
+
+  useEffect(() => {
+    register('music-prompt', prompt.trim().length > 0 || lyrics.trim().length > 0, 'Unsaved music prompt or lyrics')
+  }, [prompt, lyrics, register])
 
   const insertTag = (tag) => {
     setLyrics(prev => prev + (prev ? '\n' : '') + `[${tag}] `)

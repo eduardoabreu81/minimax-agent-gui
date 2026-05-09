@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useTheme } from './context/ThemeContext'
 import { AgentActivityProvider } from './context/AgentActivityContext'
+import { hasAnyRisk } from './hooks/useSessionProtection'
 import Sidebar from './components/Sidebar'
 import ChatPanel from './components/chat/ChatPanel'
 import MatrixRain from './components/effects/MatrixRain'
@@ -24,12 +25,13 @@ function App() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsModalOpen, setSettingsModalOpen] = useState(false)
   const [chatKey, setChatKey] = useState(0)
-  const [isProcessing, setIsProcessing] = useState(false)
   const [pendingTab, setPendingTab] = useState(null)
   const [showSessionGuard, setShowSessionGuard] = useState(false)
+  const [guardAction, setGuardAction] = useState(null) // 'tab' | 'navigate' | 'action'
+  const [guardPayload, setGuardPayload] = useState(null)
 
   const panels = {
-    chat: <ChatPanel key={chatKey} onProcessingChange={setIsProcessing} />,
+    chat: <ChatPanel key={chatKey} />,
     tts: <TTSPanel />,
     image: <ImagePanel />,
     music: <MusicPanel />,
@@ -55,40 +57,69 @@ function App() {
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [])
 
-  const handleNavigate = useCallback((tabId) => {
-    setActiveTab(tabId)
+  // beforeunload guard — warn on page refresh/close when there's active work
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (hasAnyRisk()) {
+        e.preventDefault()
+        // Modern browsers show a generic message; the returnValue is legacy support
+        e.returnValue = ''
+        return ''
+      }
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
   }, [])
 
+  const handleNavigate = useCallback((tabId) => {
+    if (hasAnyRisk() && tabId !== activeTab) {
+      setGuardAction('navigate')
+      setGuardPayload(tabId)
+      setShowSessionGuard(true)
+    } else {
+      setActiveTab(tabId)
+    }
+  }, [activeTab])
+
   const handleAction = useCallback((action) => {
-    switch (action) {
-      case 'new-chat':
-        setChatKey(k => k + 1)
-        setActiveTab('chat')
-        break
-      case 'clear-chat':
-        setChatKey(k => k + 1)
-        break
-      case 'git-status':
-      case 'git-fetch':
-      case 'git-pull':
-      case 'git-log':
-        setActiveTab('code')
-        // Dispatch event for CodingPanel to handle git action
-        window.dispatchEvent(new CustomEvent('gitAction', { detail: action }))
-        break
-      case 'new-task':
-        setActiveTab('tasks')
-        break
-      case 'open-settings':
-        setSettingsModalOpen(true)
-        break
-      case 'settings-api':
-      case 'settings-model':
-      case 'settings-theme':
-        // TODO: open settings modal
-        break
-      default:
-        break
+    const execute = () => {
+      switch (action) {
+        case 'new-chat':
+          setChatKey(k => k + 1)
+          setActiveTab('chat')
+          break
+        case 'clear-chat':
+          setChatKey(k => k + 1)
+          break
+        case 'git-status':
+        case 'git-fetch':
+        case 'git-pull':
+        case 'git-log':
+          setActiveTab('code')
+          window.dispatchEvent(new CustomEvent('gitAction', { detail: action }))
+          break
+        case 'new-task':
+          setActiveTab('tasks')
+          break
+        case 'open-settings':
+          setSettingsModalOpen(true)
+          break
+        case 'settings-api':
+        case 'settings-model':
+        case 'settings-theme':
+          // TODO: open settings modal
+          break
+        default:
+          break
+      }
+    }
+
+    if (hasAnyRisk()) {
+      setGuardAction('action')
+      setGuardPayload(action)
+      setShowSessionGuard(true)
+    } else {
+      execute()
     }
   }, [])
 
@@ -100,7 +131,8 @@ function App() {
       <Sidebar
         activeTab={activeTab}
         onTabChange={(tab) => {
-          if (isProcessing && tab !== activeTab) {
+          if (hasAnyRisk() && tab !== activeTab) {
+            setGuardAction('tab')
             setPendingTab(tab)
             setShowSessionGuard(true)
           } else {
@@ -142,9 +174,17 @@ function App() {
               <button
                 onClick={() => {
                   setShowSessionGuard(false)
-                  setIsProcessing(false)
-                  if (pendingTab) setActiveTab(pendingTab)
+                  if (guardAction === 'tab' && pendingTab) {
+                    setActiveTab(pendingTab)
+                  } else if (guardAction === 'navigate' && guardPayload) {
+                    setActiveTab(guardPayload)
+                  } else if (guardAction === 'action' && guardPayload) {
+                    // Re-run the action after closing the guard
+                    handleAction(guardPayload)
+                  }
                   setPendingTab(null)
+                  setGuardAction(null)
+                  setGuardPayload(null)
                 }}
                 className="px-3 py-1.5 bg-primary hover:bg-primary-hover text-white rounded-lg text-xs font-medium transition-colors"
               >

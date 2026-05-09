@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Volume2, Play, Save, Loader2, RefreshCw, Mic, Gauge, Check } from 'lucide-react'
+import { useSessionProtection } from '../../hooks/useSessionProtection'
 
 export default function TTSPanel() {
   const [text, setText] = useState('')
@@ -14,6 +15,16 @@ export default function TTSPanel() {
   const [error, setError] = useState(null)
   const [voices, setVoices] = useState([])
   const [voiceFilter, setVoiceFilter] = useState('')
+
+  const { register } = useSessionProtection()
+
+  useEffect(() => {
+    register('tts-loading', loading, 'TTS synthesis in progress')
+  }, [loading, register])
+
+  useEffect(() => {
+    register('tts-text', text.trim().length > 0, 'Unsaved TTS text')
+  }, [text, register])
 
   const fetchVoices = async () => {
     setVoicesLoading(true)
