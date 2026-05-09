@@ -323,7 +323,7 @@ class SessionManager:
         self.sessions = {}
         self.config = config
 
-    def get_or_create_agent(self, session_id: str) -> Agent:
+    async def get_or_create_agent(self, session_id: str) -> Agent:
         if session_id in self.sessions:
             return self.sessions[session_id]
 
@@ -368,6 +368,18 @@ class SessionManager:
         except ImportError:
             pass
 
+        # Load external MCP tools from user-configured servers
+        mcp_tools: list = []
+        try:
+            cfg = _load_config_dict()
+            from mcp_agent_tools import load_mcp_tools_for_agent
+            mcp_tools = await load_mcp_tools_for_agent(cfg)
+            if mcp_tools:
+                tools.extend(mcp_tools)
+                _logger.info(f"Session '{session_id}': loaded {len(mcp_tools)} external MCP tool(s)")
+        except Exception as exc:
+            _logger.warning(f"Session '{session_id}': failed to load MCP tools: {exc}")
+
         # Coding agent gets a specialized system prompt
         if session_id.startswith("coding"):
             system_prompt = f"""You are MiniMax Coding Agent, an expert software engineer powered by MiniMax-M2.7.
@@ -410,6 +422,9 @@ You have access to file system tools, web search, and image understanding.
 CRITICAL LANGUAGE RULE: You MUST respond ONLY in the same language the user is using (Portuguese, English, Spanish, etc.). NEVER use Chinese, Japanese, Korean, or any other language not matching the user's message. NEVER mix Chinese characters in your responses.
 
 Be concise, friendly, and helpful."""
+
+        if mcp_tools:
+            system_prompt += "\n\n## Custom MCP Tools\nAdditional MCP tools are available from user-configured servers. Use them when relevant. Tool names are prefixed with mcp_{server_id}_."
 
         # Load user profile if exists
         user_profile = ""
@@ -780,7 +795,7 @@ async def chat_websocket(websocket: WebSocket, session_id: str):
     _logger.info(f"WebSocket connected: {session_id}")
 
     try:
-        agent = session_manager.get_or_create_agent(session_id)
+        agent = await session_manager.get_or_create_agent(session_id)
 
         # Load existing conversation and send history to client
         conv = load_conversation(session_id)
