@@ -719,6 +719,8 @@ async def test_mcp_server_endpoint(server_id: str):
     sdata = servers[server_id]
     server = {"id": server_id, **sdata}
     result = await test_mcp_server(server, timeout_seconds=10)
+    if not sdata.get("enabled", True):
+        result["warning"] = "Server is disabled, but connection test was run."
     return result
 
 

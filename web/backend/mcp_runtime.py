@@ -21,14 +21,16 @@ async def test_mcp_server(
 
     try:
         if transport == "stdio":
-            return await _test_stdio_server(server, server_id, timeout_seconds)
-        if transport == "sse":
-            return await _test_sse_server(server, server_id, timeout_seconds)
-        return {
-            "success": False,
-            "server_id": server_id,
-            "error": f"Transport '{transport}' is not supported. Use 'stdio' or 'sse'.",
-        }
+            coro = _test_stdio_server(server, server_id, timeout_seconds)
+        elif transport == "sse":
+            coro = _test_sse_server(server, server_id, timeout_seconds)
+        else:
+            return {
+                "success": False,
+                "server_id": server_id,
+                "error": f"Transport '{transport}' is not supported. Use 'stdio' or 'sse'.",
+            }
+        return await asyncio.wait_for(coro, timeout=timeout_seconds)
     except asyncio.TimeoutError:
         return {
             "success": False,
@@ -56,8 +58,8 @@ async def _test_stdio_server(
     params = StdioServerParameters(command=command, args=server.get("args", []), env=env)
     async with stdio_client(params) as (read, write):
         async with ClientSession(read, write) as session:
-            await asyncio.wait_for(session.initialize(), timeout=timeout)
-            tools_result = await asyncio.wait_for(session.list_tools(), timeout=timeout)
+            await session.initialize()
+            tools_result = await session.list_tools()
             tools = [{"name": t.name, "description": t.description or "", "input_schema": t.inputSchema or {}} for t in tools_result.tools]
             return {"success": True, "server_id": server_id, "transport": "stdio", "tools": tools, "tool_count": len(tools)}
 
@@ -74,7 +76,7 @@ async def _test_sse_server(
     headers = server.get("headers", {})
     async with sse_client(url, headers=headers, timeout=timeout) as (read, write):
         async with ClientSession(read, write) as session:
-            await asyncio.wait_for(session.initialize(), timeout=timeout)
-            tools_result = await asyncio.wait_for(session.list_tools(), timeout=timeout)
+            await session.initialize()
+            tools_result = await session.list_tools()
             tools = [{"name": t.name, "description": t.description or "", "input_schema": t.inputSchema or {}} for t in tools_result.tools]
             return {"success": True, "server_id": server_id, "transport": "sse", "tools": tools, "tool_count": len(tools)}

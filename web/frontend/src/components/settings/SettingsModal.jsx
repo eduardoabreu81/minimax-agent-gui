@@ -864,12 +864,17 @@ export default function SettingsModal({ isOpen, onClose, isDark, onToggleTheme }
                                     </div>
                                     {mcpTestResults[server.id].result.tools && mcpTestResults[server.id].result.tools.length > 0 && (
                                       <div className="pl-4 space-y-0.5">
-                                        {mcpTestResults[server.id].result.tools.map((tool, idx) => (
+                                        {mcpTestResults[server.id].result.tools.slice(0, 5).map((tool, idx) => (
                                           <div key={idx} className="text-muted">
                                             <span className="font-medium text-foreground">{tool.name}</span>
                                             {tool.description && <span className="ml-1">— {tool.description}</span>}
                                           </div>
                                         ))}
+                                        {mcpTestResults[server.id].result.tools.length > 5 && (
+                                          <div className="text-muted italic">
+                                            + {mcpTestResults[server.id].result.tools.length - 5} more tool(s)
+                                          </div>
+                                        )}
                                       </div>
                                     )}
                                   </div>
@@ -877,6 +882,12 @@ export default function SettingsModal({ isOpen, onClose, isDark, onToggleTheme }
                                   <div className="flex items-center gap-1 text-[10px] text-error">
                                     <AlertCircle size={10} />
                                     <span>{mcpTestResults[server.id].result.error || 'Connection failed'}</span>
+                                  </div>
+                                )}
+                                {mcpTestResults[server.id].result.warning && (
+                                  <div className="flex items-center gap-1 text-[10px] text-amber-400 mt-1">
+                                    <AlertCircle size={10} />
+                                    <span>{mcpTestResults[server.id].result.warning}</span>
                                   </div>
                                 )}
                               </div>
