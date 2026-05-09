@@ -997,6 +997,34 @@ async def download_file(path: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/generations")
+async def list_generations():
+    """List all generated media files grouped by type."""
+    from datetime import datetime
+    generations_dir = PROJECT_ROOT / "workspace" / "generations"
+    result = {"images": [], "videos": [], "music": [], "tts": []}
+
+    for subdir in ("images", "videos", "music", "tts"):
+        folder = generations_dir / subdir
+        if not folder.exists():
+            continue
+        for f in folder.iterdir():
+            if not f.is_file():
+                continue
+            stat = f.stat()
+            result[subdir].append({
+                "name": f.name,
+                "path": str(f.relative_to(PROJECT_ROOT)).replace("\\", "/"),
+                "type": subdir,
+                "size": stat.st_size,
+                "modified_at": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                "extension": f.suffix.lower(),
+            })
+        result[subdir].sort(key=lambda x: x["modified_at"], reverse=True)
+
+    return {"success": True, "data": result}
+
+
 @app.post("/api/files/save")
 async def save_file(data: dict):
     """Save file content."""

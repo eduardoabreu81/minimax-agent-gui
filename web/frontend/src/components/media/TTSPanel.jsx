@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Volume2, Play, Save, Loader2, RefreshCw, Mic, Gauge, Check } from 'lucide-react'
 import { useSessionProtection } from '../../hooks/useSessionProtection'
+import RecentGenerations from './RecentGenerations'
 
 export default function TTSPanel() {
   const [text, setText] = useState('')
@@ -15,6 +16,8 @@ export default function TTSPanel() {
   const [error, setError] = useState(null)
   const [voices, setVoices] = useState([])
   const [voiceFilter, setVoiceFilter] = useState('')
+  const [history, setHistory] = useState([])
+  const [historyLoading, setHistoryLoading] = useState(false)
 
   const { register } = useSessionProtection()
 
@@ -25,6 +28,20 @@ export default function TTSPanel() {
   useEffect(() => {
     register('tts-text', text.trim().length > 0, 'Unsaved TTS text')
   }, [text, register])
+
+  const fetchHistory = async () => {
+    setHistoryLoading(true)
+    try {
+      const res = await fetch('/api/generations')
+      const data = await res.json()
+      if (data.success) setHistory(data.data.tts || [])
+    } catch (e) { /* ignore */ }
+    setHistoryLoading(false)
+  }
+
+  useEffect(() => {
+    fetchHistory()
+  }, [])
 
   const fetchVoices = async () => {
     setVoicesLoading(true)
@@ -277,6 +294,15 @@ export default function TTSPanel() {
             </div>
           </div>
         )}
+
+        <RecentGenerations
+          title="Recent Generations"
+          type="tts"
+          items={history}
+          loading={historyLoading}
+          onRefresh={fetchHistory}
+          emptyMessage="No generated speech yet"
+        />
       </div>
     </div>
   )

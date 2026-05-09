@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Video, Loader2, Save, RefreshCw, Image, Film, User, Check } from 'lucide-react'
 import { useSessionProtection } from '../../hooks/useSessionProtection'
+import RecentGenerations from './RecentGenerations'
 
 const VIDEO_MODELS = [
   { id: 'MiniMax-Hailuo-2.3', label: 'Hailuo 2.3', desc: 'Quality (768P 6s)' },
@@ -20,6 +21,8 @@ export default function VideoPanel() {
   const [progress, setProgress] = useState(0)
   const [result, setResult] = useState(null)
   const [error, setError] = useState(null)
+  const [history, setHistory] = useState([])
+  const [historyLoading, setHistoryLoading] = useState(false)
 
   const { register } = useSessionProtection()
 
@@ -30,6 +33,20 @@ export default function VideoPanel() {
   useEffect(() => {
     register('video-prompt', prompt.trim().length > 0, 'Unsaved video prompt')
   }, [prompt, register])
+
+  const fetchHistory = async () => {
+    setHistoryLoading(true)
+    try {
+      const res = await fetch('/api/generations')
+      const data = await res.json()
+      if (data.success) setHistory(data.data.videos || [])
+    } catch (e) { /* ignore */ }
+    setHistoryLoading(false)
+  }
+
+  useEffect(() => {
+    fetchHistory()
+  }, [])
 
   const generate = async () => {
     if (!prompt.trim()) return
@@ -329,6 +346,15 @@ export default function VideoPanel() {
             </div>
           </div>
         )}
+
+        <RecentGenerations
+          title="Recent Generations"
+          type="video"
+          items={history}
+          loading={historyLoading}
+          onRefresh={fetchHistory}
+          emptyMessage="No generated videos yet"
+        />
       </div>
     </div>
   )

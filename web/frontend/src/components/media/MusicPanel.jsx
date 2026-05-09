@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Music, Loader2, Play, Save, Wand2, Guitar, Mic2, AudioLines, Check } from 'lucide-react'
 import { useSessionProtection } from '../../hooks/useSessionProtection'
+import RecentGenerations from './RecentGenerations'
 
 const MUSIC_MODELS = [
   { id: 'music-2.6', label: 'Music 2.6', desc: 'Best quality' },
@@ -28,6 +29,8 @@ export default function MusicPanel() {
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState(null)
   const [error, setError] = useState(null)
+  const [history, setHistory] = useState([])
+  const [historyLoading, setHistoryLoading] = useState(false)
 
   const { register } = useSessionProtection()
 
@@ -38,6 +41,20 @@ export default function MusicPanel() {
   useEffect(() => {
     register('music-prompt', prompt.trim().length > 0 || lyrics.trim().length > 0, 'Unsaved music prompt or lyrics')
   }, [prompt, lyrics, register])
+
+  const fetchHistory = async () => {
+    setHistoryLoading(true)
+    try {
+      const res = await fetch('/api/generations')
+      const data = await res.json()
+      if (data.success) setHistory(data.data.music || [])
+    } catch (e) { /* ignore */ }
+    setHistoryLoading(false)
+  }
+
+  useEffect(() => {
+    fetchHistory()
+  }, [])
 
   const insertTag = (tag) => {
     setLyrics(prev => prev + (prev ? '\n' : '') + `[${tag}] `)
@@ -326,6 +343,15 @@ export default function MusicPanel() {
             </div>
           </div>
         )}
+
+        <RecentGenerations
+          title="Recent Generations"
+          type="music"
+          items={history}
+          loading={historyLoading}
+          onRefresh={fetchHistory}
+          emptyMessage="No generated music yet"
+        />
       </div>
     </div>
   )

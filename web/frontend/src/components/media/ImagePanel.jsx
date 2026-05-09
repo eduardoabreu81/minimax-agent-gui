@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Image, Loader2, Download, Wand2, Copy, Grid3x3, Trash2, Eye, Upload, Link2, X } from 'lucide-react'
 import { useSessionProtection } from '../../hooks/useSessionProtection'
+import RecentGenerations from './RecentGenerations'
 
 const ASPECT_RATIOS = [
   { label: '1:1 Square', value: '1:1', width: 1024, height: 1024 },
@@ -28,6 +29,7 @@ export default function ImagePanel() {
   const [results, setResults] = useState([])
   const [error, setError] = useState(null)
   const [gallery, setGallery] = useState([])
+  const [galleryLoading, setGalleryLoading] = useState(false)
 
   // I2I state
   const [referenceImage, setReferenceImage] = useState(null) // { name, path, url }
@@ -51,16 +53,40 @@ export default function ImagePanel() {
   useEffect(() => { fetchGallery() }, [])
 
   const fetchGallery = async () => {
+    setGalleryLoading(true)
     try {
-      const res = await fetch('/api/files?path=workspace')
-      const data = await res.json()
-      if (data.entries) {
-        const images = data.entries
-          .filter(e => !e.is_dir && /\.(png|jpg|jpeg|webp|gif)$/i.test(e.name))
-          .sort((a, b) => b.name.localeCompare(a.name))
-        setGallery(images)
+      // Primary source: /api/generations (has size, modified_at)
+      const genRes = await fetch('/api/generations')
+      const genData = await genRes.json()
+      let images = []
+      if (genData.success && genData.data?.images) {
+        images = genData.data.images
       }
+
+      // Fallback: scan workspace root for image files with generation patterns
+      const wsRes = await fetch('/api/files?path=workspace')
+      const wsData = await wsRes.json()
+      if (wsData.entries) {
+        const wsImages = wsData.entries
+          .filter(e => !e.is_dir && /\.(png|jpg|jpeg|webp|gif)$/i.test(e.name))
+          .filter(e => /^(image_|generated_image)/i.test(e.name))
+          .map(e => ({ name: e.name, path: e.path, size: 0 }))
+        // Merge, avoiding duplicates by path
+        const seen = new Set(images.map(i => i.path))
+        wsImages.forEach(img => {
+          if (!seen.has(img.path)) images.push(img)
+        })
+      }
+
+      // Sort by modified_at desc, fallback to name desc
+      images.sort((a, b) => {
+        if (a.modified_at && b.modified_at) return b.modified_at.localeCompare(a.modified_at)
+        return b.name.localeCompare(a.name)
+      })
+
+      setGallery(images)
     } catch (e) { /* ignore */ }
+    setGalleryLoading(false)
   }
 
   const handleImageUpload = async (e) => {
@@ -397,32 +423,15 @@ export default function ImagePanel() {
           </div>
         )}
 
-        {/* Gallery */}
-        {gallery.length > 0 && (
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-muted">Gallery ({gallery.length})</p>
-              <button onClick={fetchGallery} className="text-xs text-primary hover:underline">Refresh</button>
-            </div>
-            <div className="grid grid-cols-3 md:grid-cols-4 gap-2">
-              {gallery.slice(0, 12).map((img, i) => (
-                <div key={i} className="relative group bg-surface border border-border rounded-lg overflow-hidden">
-                  <img
-                    src={downloadUrl(img.path)}
-                    alt={img.name}
-                    className="w-full h-24 object-cover"
-                    onError={(e) => { e.target.style.display = 'none' }}
-                  />
-                  <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                    <a href={downloadUrl(img.path)} download={img.name} className="p-1.5 bg-primary rounded text-white" title="Download">
-                      <Download size={14} />
-                    </a>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        {/* Recent Generations */}
+        <RecentGenerations
+          title="Recent Generations"
+          type="image"
+          items={gallery}
+          loading={galleryLoading}
+          onRefresh={fetchGallery}
+          emptyMessage="No generated images yet"
+        />
       </div>
     </div>
   )
