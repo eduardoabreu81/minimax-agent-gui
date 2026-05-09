@@ -7,7 +7,7 @@ export function AgentActivityProvider({ children }) {
   const [toolResults, setToolResults] = useState([])
   const [thinking, setThinking] = useState({ active: false, duration: 0, content: '' })
   const [lastTool, setLastTool] = useState(null)
-  const [plan, setPlan] = useState({ items: [] })
+  const [plan, setPlan] = useState({ items: [], sourcePrompt: '', approved: false })
   const [hasNewActivity, setHasNewActivity] = useState(false)
 
   const addStep = useCallback((step, maxSteps) => {
@@ -48,13 +48,60 @@ export function AgentActivityProvider({ children }) {
   }, [])
 
   const updatePlan = useCallback((items) => {
-    setPlan({ items: items.map((item, i) => ({ id: i, text: item, status: 'pending' })) })
+    setPlan(prev => ({ ...prev, items: items.map((item, i) => ({ id: i, text: item, status: 'pending' })) }))
   }, [])
 
   const markPlanItemDone = useCallback((id) => {
     setPlan(prev => ({
+      ...prev,
       items: prev.items.map(item => item.id === id ? { ...item, status: 'done' } : item)
     }))
+  }, [])
+
+  const createPlan = useCallback((items, sourcePrompt = '') => {
+    setPlan({
+      items: items.map((item, i) => ({ id: i, text: item, status: 'pending' })),
+      sourcePrompt,
+      approved: false,
+    })
+  }, [])
+
+  const updatePlanItem = useCallback((id, text) => {
+    setPlan(prev => ({
+      ...prev,
+      items: prev.items.map(item => item.id === id ? { ...item, text } : item)
+    }))
+  }, [])
+
+  const togglePlanItem = useCallback((id) => {
+    setPlan(prev => ({
+      ...prev,
+      items: prev.items.map(item =>
+        item.id === id ? { ...item, status: item.status === 'done' ? 'pending' : 'done' } : item
+      )
+    }))
+  }, [])
+
+  const removePlanItem = useCallback((id) => {
+    setPlan(prev => ({
+      ...prev,
+      items: prev.items.filter(item => item.id !== id).map((item, i) => ({ ...item, id: i }))
+    }))
+  }, [])
+
+  const addPlanItem = useCallback((text) => {
+    setPlan(prev => ({
+      ...prev,
+      items: [...prev.items, { id: prev.items.length, text, status: 'pending' }]
+    }))
+  }, [])
+
+  const clearPlan = useCallback(() => {
+    setPlan({ items: [], sourcePrompt: '', approved: false })
+  }, [])
+
+  const approvePlan = useCallback(() => {
+    setPlan(prev => ({ ...prev, approved: true }))
   }, [])
 
   const clearActivity = useCallback(() => {
@@ -62,7 +109,7 @@ export function AgentActivityProvider({ children }) {
     setToolResults([])
     setThinking({ active: false, duration: 0, content: '' })
     setLastTool(null)
-    setPlan({ items: [] })
+    setPlan({ items: [], sourcePrompt: '', approved: false })
     setHasNewActivity(false)
   }, [])
 
@@ -84,9 +131,16 @@ export function AgentActivityProvider({ children }) {
     setThinkingDuration,
     updatePlan,
     markPlanItemDone,
+    createPlan,
+    updatePlanItem,
+    togglePlanItem,
+    removePlanItem,
+    addPlanItem,
+    clearPlan,
+    approvePlan,
     clearActivity,
     acknowledgeActivity,
-  }), [steps, toolResults, thinking, lastTool, plan, hasNewActivity, addStep, completeStep, addToolResult, setThinkingState, setThinkingDuration, updatePlan, markPlanItemDone, clearActivity, acknowledgeActivity])
+  }), [steps, toolResults, thinking, lastTool, plan, hasNewActivity, addStep, completeStep, addToolResult, setThinkingState, setThinkingDuration, updatePlan, markPlanItemDone, createPlan, updatePlanItem, togglePlanItem, removePlanItem, addPlanItem, clearPlan, approvePlan, clearActivity, acknowledgeActivity])
 
   return (
     <AgentActivityContext.Provider value={value}>

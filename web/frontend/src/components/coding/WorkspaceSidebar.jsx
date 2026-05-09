@@ -81,6 +81,25 @@ export default function WorkspaceSidebar({ visible, onToggle }) {
 
 function PlanPanel() {
   const activity = useAgentActivity()
+  const [editingId, setEditingId] = useState(null)
+  const [editingText, setEditingText] = useState('')
+
+  const startEdit = (item) => {
+    setEditingId(item.id)
+    setEditingText(item.text)
+  }
+
+  const submitEdit = (id) => {
+    activity.updatePlanItem(id, editingText)
+    setEditingId(null)
+    setEditingText('')
+  }
+
+  const handleApprove = () => {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('approvePlan'))
+    }
+  }
 
   if (activity.plan.items.length === 0) {
     return (
@@ -120,24 +139,94 @@ function PlanPanel() {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-2 text-xs text-foreground font-medium">
-        <Sparkles size={12} className="text-primary" />
-        <span>Active Plan</span>
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 text-xs text-foreground font-medium">
+          <Sparkles size={12} className="text-primary" />
+          <span>Plan Draft</span>
+          <span className="text-[10px] text-muted bg-surface border border-border rounded-full px-2 py-0.5">
+            {activity.plan.items.length}
+          </span>
+        </div>
+        {activity.plan.approved && (
+          <span className="text-[10px] text-green-400 bg-green-400/10 border border-green-400/20 rounded-full px-2 py-0.5">
+            Approved
+          </span>
+        )}
       </div>
+
+      {/* Steps */}
       <div className="space-y-2">
         {activity.plan.items.map((item) => (
-          <div key={item.id} className="flex items-start gap-2 text-[11px]">
-            {item.status === 'done' ? (
-              <CheckCircle2 size={12} className="text-green-500 mt-0.5 shrink-0" />
+          <div key={item.id} className="group flex items-start gap-2 p-2 rounded-lg bg-surface border border-border hover:border-primary/30 transition-colors">
+            <button
+              onClick={() => activity.togglePlanItem(item.id)}
+              className="mt-0.5 shrink-0"
+              title={item.status === 'done' ? 'Mark pending' : 'Mark done'}
+            >
+              {item.status === 'done' ? (
+                <CheckCircle2 size={14} className="text-green-500" />
+              ) : (
+                <Circle size={14} className="text-muted hover:text-primary" />
+              )}
+            </button>
+
+            {editingId === item.id ? (
+              <input
+                autoFocus
+                value={editingText}
+                onChange={(e) => setEditingText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') submitEdit(item.id)
+                  if (e.key === 'Escape') { setEditingId(null); setEditingText('') }
+                }}
+                onBlur={() => submitEdit(item.id)}
+                className="flex-1 bg-card border border-border rounded px-2 py-1 text-[11px] text-foreground focus:outline-none focus:border-primary"
+              />
             ) : (
-              <Circle size={12} className="text-primary mt-0.5 shrink-0" />
+              <span
+                onClick={() => startEdit(item)}
+                className={`flex-1 text-[11px] cursor-text ${item.status === 'done' ? 'text-muted line-through' : 'text-foreground'}`}
+                title="Click to edit"
+              >
+                {item.text}
+              </span>
             )}
-            <span className={item.status === 'done' ? 'text-muted line-through' : 'text-foreground'}>
-              {item.text}
-            </span>
+
+            <button
+              onClick={() => activity.removePlanItem(item.id)}
+              className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-error/10 text-muted hover:text-error transition-opacity shrink-0"
+              title="Remove step"
+            >
+              <XCircle size={12} />
+            </button>
           </div>
         ))}
       </div>
+
+      {/* Actions */}
+      {!activity.plan.approved && (
+        <div className="space-y-2 pt-1">
+          <button
+            onClick={() => activity.addPlanItem('New step')}
+            className="w-full py-1.5 bg-surface hover:bg-surface/80 border border-border hover:border-primary text-foreground text-[11px] rounded-lg transition-colors flex items-center justify-center gap-1.5"
+          >
+            <CircleDot size={12} className="text-primary" /> Add step
+          </button>
+          <button
+            onClick={handleApprove}
+            className="w-full py-1.5 bg-primary hover:bg-primary-hover text-white text-[11px] rounded-lg transition-colors flex items-center justify-center gap-1.5"
+          >
+            <CheckSquare size={12} /> Approve & Run
+          </button>
+          <button
+            onClick={() => activity.clearPlan()}
+            className="w-full py-1.5 bg-surface hover:bg-error/10 border border-border hover:border-error/30 text-muted hover:text-error text-[11px] rounded-lg transition-colors flex items-center justify-center gap-1.5"
+          >
+            <XCircle size={12} /> Clear plan
+          </button>
+        </div>
+      )}
     </div>
   )
 }

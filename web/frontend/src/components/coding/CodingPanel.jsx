@@ -65,6 +65,11 @@ export default function CodingPanel() {
   useEffect(() => {
     register('code-unsaved', hasUnsavedChanges, 'Unsaved file changes')
   }, [hasUnsavedChanges, register])
+
+  useEffect(() => {
+    const hasDraft = activity.plan.items.length > 0 && !activity.plan.approved
+    register('plan-draft', hasDraft, 'Unapproved plan draft')
+  }, [activity.plan.items.length, activity.plan.approved, register])
   const [showGitPanel, setShowGitPanel] = useState(false)
   const [workspaceSidebarVisible, setWorkspaceSidebarVisible] = useState(() => {
     try { return localStorage.getItem('workspace-sidebar-visible') !== 'false' } catch { return true }
@@ -310,8 +315,74 @@ export default function CodingPanel() {
     return () => ws.close()
   }, [codingSessionId, loadFiles])
 
+  const buildPlanItems = (userMessage) => {
+    const items = [
+      'Understand the request',
+      'Inspect relevant files',
+      'Implement the change',
+      'Run validation',
+      'Summarize results',
+    ]
+    if (activeFile) {
+      const fileName = activeFile.split('/').pop()
+      items.splice(1, 0, `Review current file: ${fileName}`)
+    }
+    if (gitStatus?.status && gitStatus.status.trim().length > 0) {
+      items.splice(1, 0, 'Check current git changes before editing')
+    }
+    return items
+  }
+
+  const approveAndRunPlan = useCallback(() => {
+    if (!codingWs || codingWs.readyState !== WebSocket.OPEN) return
+    const plan = activity.plan
+    if (!plan.items.length || !plan.sourcePrompt) return
+
+    const planText = plan.items.map((item, i) => `${i + 1}. ${item.text}`).join('\n')
+    const approvedMessage = `[Approved Plan]\n\nUser request:\n${plan.sourcePrompt}\n\nPlan:\n${planText}\n\nPlease follow this approved plan. Execute step by step, use tools when needed, and summarize what was changed.`
+
+    const payload = { message: approvedMessage }
+    if (codingAttachment) payload.attachment = codingAttachment.path
+
+    setCodingMessages(prev => [...prev, {
+      type: 'system',
+      content: 'Approved plan was sent to the agent'
+    }])
+    codingWs.send(JSON.stringify(payload))
+    activity.approvePlan()
+    setAgentMode('agent')
+    try { localStorage.setItem('agent-mode', 'agent') } catch {}
+    setCodingAttachment(null)
+    setCodingThinking(true)
+  }, [codingWs, activity, codingAttachment])
+
+  useEffect(() => {
+    const handleApprove = () => approveAndRunPlan()
+    window.addEventListener('approvePlan', handleApprove)
+    return () => window.removeEventListener('approvePlan', handleApprove)
+  }, [approveAndRunPlan])
+
   const sendCodingMessage = useCallback(() => {
     if ((!codingInput.trim() && !codingAttachment) || !codingWs || codingWs.readyState !== WebSocket.OPEN) return
+
+    // Plan mode: create a draft plan instead of sending immediately
+    if (agentMode === 'plan') {
+      const userMessage = codingInput.trim() || '📎 Attachment sent'
+      const planItems = buildPlanItems(userMessage)
+      activity.createPlan(planItems, userMessage)
+      setCodingMessages(prev => [...prev, {
+        type: 'user',
+        content: userMessage,
+        attachment: codingAttachment?.path
+      }])
+      setCodingMessages(prev => [...prev, {
+        type: 'system',
+        content: 'Plan draft created. Review and approve it in the Workspace sidebar before the agent starts working.'
+      }])
+      setCodingInput('')
+      setCodingAttachment(null)
+      return
+    }
 
     // Build context from current file
     let contextMessage = codingInput.trim()
@@ -333,7 +404,7 @@ export default function CodingPanel() {
     setCodingInput('')
     setCodingAttachment(null)
     setCodingThinking(true)
-  }, [codingInput, codingWs, activeFile, fileContents, codingAttachment])
+  }, [codingInput, codingWs, activeFile, fileContents, codingAttachment, agentMode, activity, gitStatus])
 
   const activateSkill = (skillName) => {
     if (codingWs && codingWs.readyState === WebSocket.OPEN) {
