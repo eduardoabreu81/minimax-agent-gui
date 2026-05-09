@@ -23,10 +23,10 @@ The Code Workspace is part of the app, but it is not the whole product.
 ## Features
 
 - **Chat** — Persistent conversations with file attachments, image understanding, markdown rendering, and code copy
-- **Image Generation** — Text-to-image and image-to-image with aspect ratio, batch, gallery, and prompt optimizer
-- **Video** — Hailuo-2.3 text/image-to-video with multiple durations and resolutions
-- **Music** — Music generation from prompts or lyrics, instrumental mode, cover from reference audio
-- **Speech / TTS** — 30+ voices, speed control, streaming playback
+- **Image Generation** — Text-to-image and image-to-image with aspect ratio, batch, gallery, prompt optimizer, and recent generations history
+- **Video** — Hailuo-2.3 text/image-to-video with multiple durations, resolutions, and recent video history
+- **Music** — Music generation from prompts or lyrics, instrumental mode, cover from reference audio, and recent music history
+- **Speech / TTS** — 30+ voices, speed control, streaming playback, and recent speech history
 - **MCP Tools** — Built-in web search and image understanding toggles; easy MCP access and configuration
 - **Skills & Agent Workflows** — Slash commands, skill templates, and agent-driven multi-step tasks
 - **Code Workspace** — File explorer, editor, terminal, and persistent code-chat sessions
@@ -114,6 +114,8 @@ workspace/generations/
 └── tts/      # Generated speech
 ```
 
+Each media panel also displays a **Recent Generations** gallery that surfaces outputs from `workspace/generations/` as well as compatible files in the workspace root, so you can preview and download past results without leaving the panel.
+
 ## Configuration
 
 | File | Purpose |
@@ -138,10 +140,12 @@ Environment variables:
 - [x] Theme system (9 themes, light/dark)
 - [x] Dual-layout code workspace (IDE mode / Agent mode)
 - [x] Generations folder structure for media outputs
+- [x] Session Protection — Guards against accidental context loss when navigating tabs, refreshing, or leaving the page
+- [x] Conversation Search — Find past chats and code sessions by title, content, or attachment
+- [x] Recent Generations in media panels — Image, Video, Music, and TTS panels show a browsable history of past outputs plus compatible files in the workspace
 
 ### Phase 1 — Foundation
-- [ ] **Session Protection** — Prevent accidental context loss when navigating
-- [ ] **Conversation Search** — Find past chats and code sessions
+_Complete. All Phase 1 items have shipped._
 
 ### Phase 2 — Productivity
 - [ ] **Task Board (Kanban)** — Project planning with todo/in-progress/done columns
