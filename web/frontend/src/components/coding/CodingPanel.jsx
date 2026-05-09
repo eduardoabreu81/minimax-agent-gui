@@ -147,6 +147,10 @@ export default function CodingPanel() {
     }
     try {
       const res = await fetch(`/api/files/content?path=${encodeURIComponent(path)}`)
+      if (!res.ok) {
+        const text = await res.text().catch(() => 'Unknown error')
+        throw new Error(`HTTP ${res.status}: ${text}`)
+      }
       const data = await res.json()
       setFileContents((prev) => ({ ...prev, [path]: data.content }))
       setOriginalContents((prev) => ({ ...prev, [path]: data.content }))
@@ -154,6 +158,10 @@ export default function CodingPanel() {
       setActiveFile(path)
     } catch (e) {
       console.error('Failed to open file:', e)
+      setCodingMessages((prev) => [...prev, {
+        type: 'system',
+        content: `Failed to open file: ${path}. Make sure the backend is running.`,
+      }])
     }
   }
 

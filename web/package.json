@@ -4,7 +4,7 @@
   "version": "0.3.0",
   "description": "MiniMax Agent — All-in-One Web Platform",
   "scripts": {
-    "dev": "concurrently --kill-others \"npm run backend\" \"npm run frontend\" --names \"API,UI\" --prefix-colors \"blue,green\"",
+    "dev": "concurrently \"npm run backend\" \"npm run frontend\" --names \"API,UI\" --prefix-colors \"blue,green\"",
     "backend": "cd backend && python main.py",
     "frontend": "cd frontend && npm run dev",
     "build": "cd frontend && npm run build",
