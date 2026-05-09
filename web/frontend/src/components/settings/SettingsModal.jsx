@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import {
   X, Globe, Moon, Sun, Key, Cpu, Shield, Keyboard,
   Info, Check, AlertCircle, Save, RotateCcw, Eye, EyeOff,
-  MapPin, BarChart3, Lock, Unlock, Search, Monitor, Palette, User, Trash2, Pencil
+  MapPin, BarChart3, Lock, Unlock, Search, Monitor, Palette, User, Trash2, Pencil, Activity
 } from 'lucide-react'
 import { useTheme } from '../../context/ThemeContext'
 
@@ -81,6 +81,7 @@ export default function SettingsModal({ isOpen, onClose, isDark, onToggleTheme }
     url: '',
     enabled: true,
   })
+  const [mcpTestResults, setMcpTestResults] = useState({})
 
   const fetchMcpServers = async () => {
     setMcpLoading(true)
@@ -168,6 +169,17 @@ export default function SettingsModal({ isOpen, onClose, isDark, onToggleTheme }
         fetchMcpServers()
       }
     } catch { /* ignore */ }
+  }
+
+  const testMcpServer = async (id) => {
+    setMcpTestResults(prev => ({ ...prev, [id]: { loading: true } }))
+    try {
+      const res = await fetch(`/api/mcp/servers/${id}/test`, { method: 'POST' })
+      const data = await res.json()
+      setMcpTestResults(prev => ({ ...prev, [id]: { loading: false, result: data } }))
+    } catch (e) {
+      setMcpTestResults(prev => ({ ...prev, [id]: { loading: false, error: e.message || 'Test failed' } }))
+    }
   }
 
   useEffect(() => {
@@ -795,6 +807,13 @@ export default function SettingsModal({ isOpen, onClose, isDark, onToggleTheme }
                           </div>
                           <div className="flex items-center gap-1">
                             <button
+                              onClick={() => testMcpServer(server.id)}
+                              className="p-1.5 rounded hover:bg-surface text-muted hover:text-foreground transition-colors"
+                              title="Test connection"
+                            >
+                              <Activity size={12} />
+                            </button>
+                            <button
                               onClick={() => toggleMcpServer(server.id)}
                               className="p-1.5 rounded hover:bg-surface text-muted hover:text-foreground transition-colors"
                               title={server.enabled ? 'Disable' : 'Enable'}
@@ -806,14 +825,14 @@ export default function SettingsModal({ isOpen, onClose, isDark, onToggleTheme }
                               className="p-1.5 rounded hover:bg-surface text-muted hover:text-foreground transition-colors"
                               title="Edit"
                             >
-                              <User size={12} />
+                              <Pencil size={12} />
                             </button>
                             <button
                               onClick={() => deleteMcpServer(server.id)}
                               className="p-1.5 rounded hover:bg-error/10 text-muted hover:text-error transition-colors"
                               title="Delete"
                             >
-                              <X size={12} />
+                              <Trash2 size={12} />
                             </button>
                           </div>
                         </div>
@@ -826,6 +845,50 @@ export default function SettingsModal({ isOpen, onClose, isDark, onToggleTheme }
                             }
                           </span>
                         </div>
+                        {/* Test result */}
+                        {mcpTestResults[server.id] && (
+                          <div className="mt-1">
+                            {mcpTestResults[server.id].loading && (
+                              <div className="flex items-center gap-1.5 text-[10px] text-muted">
+                                <span className="w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                                Testing connection...
+                              </div>
+                            )}
+                            {mcpTestResults[server.id].result && (
+                              <div>
+                                {mcpTestResults[server.id].result.success ? (
+                                  <div className="text-[10px] space-y-1">
+                                    <div className="flex items-center gap-1 text-green-400">
+                                      <Check size={10} />
+                                      <span>Connected — {mcpTestResults[server.id].result.tool_count} tool(s) discovered</span>
+                                    </div>
+                                    {mcpTestResults[server.id].result.tools && mcpTestResults[server.id].result.tools.length > 0 && (
+                                      <div className="pl-4 space-y-0.5">
+                                        {mcpTestResults[server.id].result.tools.map((tool, idx) => (
+                                          <div key={idx} className="text-muted">
+                                            <span className="font-medium text-foreground">{tool.name}</span>
+                                            {tool.description && <span className="ml-1">— {tool.description}</span>}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-1 text-[10px] text-error">
+                                    <AlertCircle size={10} />
+                                    <span>{mcpTestResults[server.id].result.error || 'Connection failed'}</span>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                            {mcpTestResults[server.id].error && (
+                              <div className="flex items-center gap-1 text-[10px] text-error">
+                                <AlertCircle size={10} />
+                                <span>{mcpTestResults[server.id].error}</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>

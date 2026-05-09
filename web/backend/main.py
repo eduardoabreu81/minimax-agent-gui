@@ -28,6 +28,7 @@ from mini_agent.schema import Message
 from mini_agent.tools.skill_loader import SkillLoader
 
 from mini_max_mcp.client import MiniMaxSyncClient, MiniMaxClient
+from mcp_runtime import test_mcp_server
 
 logging.basicConfig(level=logging.INFO)
 _logger = logging.getLogger(__name__)
@@ -706,6 +707,19 @@ async def toggle_mcp_server(server_id: str):
     sdata["enabled"] = not sdata.get("enabled", True)
     _save_config_dict(cfg)
     return {"success": True, "enabled": sdata["enabled"]}
+
+
+@app.post("/api/mcp/servers/{server_id}/test")
+async def test_mcp_server_endpoint(server_id: str):
+    """Test connectivity to an MCP server and return discovered tools."""
+    cfg = _load_config_dict()
+    servers = cfg.get("mcp_servers", {})
+    if not isinstance(servers, dict) or server_id not in servers:
+        raise HTTPException(status_code=404, detail="Server not found")
+    sdata = servers[server_id]
+    server = {"id": server_id, **sdata}
+    result = await test_mcp_server(server, timeout_seconds=10)
+    return result
 
 
 # --- Conversation REST endpoints ---
