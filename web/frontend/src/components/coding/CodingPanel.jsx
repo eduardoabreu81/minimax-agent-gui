@@ -4,8 +4,8 @@ import {
   Code2, FileCode, Folder, GitBranch, Terminal, Save, RefreshCw,
   GitCommit, GitPullRequest, X, Send, Bot, User, Loader2, Sparkles,
   ChevronRight, Play, Square,
-  MessageSquarePlus, Trash2, Paperclip, Image as ImageIcon, FileText, ChevronDown,
-  Search, Zap, LayoutTemplate, Columns, Pencil, ArrowUp, Home
+  MessageSquarePlus, Trash2, Paperclip, Image as ImageIcon, FileText, ChevronDown, Search,
+  Zap, LayoutTemplate, Columns, Pencil, ArrowUp, Home
 } from 'lucide-react'
 import XTermTerminal from './XTermTerminal'
 import MarkdownRenderer from '../MarkdownRenderer'
@@ -102,10 +102,14 @@ export default function CodingPanel() {
   const [codingSessionId, setCodingSessionId] = useState('coding-default')
   const [codingConversations, setCodingConversations] = useState([])
   const [showCodingConvList, setShowCodingConvList] = useState(false)
+  const [codingSearchQuery, setCodingSearchQuery] = useState('')
+  const [codingSearchResults, setCodingSearchResults] = useState(null)
+  const [codingSearchLoading, setCodingSearchLoading] = useState(false)
   const [skills, setSkills] = useState([])
   const [showSkills, setShowSkills] = useState(false)
   const [skillIndex, setSkillIndex] = useState(0)
   const [thinkingDuration, setThinkingDuration] = useState(0)
+  const codingSearchTimeoutRef = useRef(null)
   const codingChatRef = useRef(null)
   const codingFileInputRef = useRef(null)
   const codingConvListRef = useRef(null)
@@ -209,6 +213,8 @@ export default function CodingPanel() {
     setCodingMessages([])
     setCodingSessionId(newId)
     setShowCodingConvList(false)
+    setCodingSearchQuery('')
+    setCodingSearchResults(null)
     fetchCodingConversations()
   }
 
@@ -216,6 +222,8 @@ export default function CodingPanel() {
     setCodingMessages([])
     setCodingSessionId(conv.id)
     setShowCodingConvList(false)
+    setCodingSearchQuery('')
+    setCodingSearchResults(null)
   }
 
   const deleteCodingConversation = async (e, convId) => {
@@ -440,7 +448,7 @@ export default function CodingPanel() {
               <ChevronDown size={12} className={`transition-transform ${showCodingConvList ? 'rotate-180' : ''}`} />
             </button>
             {showCodingConvList && (
-              <div className="absolute top-full left-0 mt-1 w-64 bg-card border border-border rounded-xl shadow-lg z-50 py-2 max-h-72 overflow-y-auto">
+              <div className="absolute top-full left-0 mt-1 w-80 bg-card border border-border rounded-xl shadow-lg z-50 py-2 max-h-96 overflow-y-auto">
                 <button
                   onClick={startNewCodingChat}
                   className="w-full flex items-center gap-2 px-3 py-2 text-sm text-primary hover:bg-primary/10 transition-colors"
@@ -448,54 +456,110 @@ export default function CodingPanel() {
                   <MessageSquarePlus size={12} /> New Code Chat
                 </button>
                 <div className="border-t border-border my-1" />
-                {codingConversations.length === 0 && (
-                  <p className="px-3 py-2 text-xs text-muted">No previous code chats</p>
-                )}
-                {codingConversations.map((conv) => (
-                  <div
-                    key={conv.id}
-                    onClick={() => loadCodingConversation(conv)}
-                    className={`flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-surface transition-colors ${conv.id === codingSessionId ? 'bg-primary/10' : ''}`}
-                  >
-                    <div className="flex-1 min-w-0">
-                      {editingId === conv.id ? (
-                        <input
-                          autoFocus
-                          value={editingTitle}
-                          onChange={(e) => setEditingTitle(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') submitRename(conv.id)
-                            if (e.key === 'Escape') { setEditingId(null); setEditingTitle('') }
-                          }}
-                          onBlur={() => submitRename(conv.id)}
-                          onClick={(e) => e.stopPropagation()}
-                          className="w-full bg-card border border-border rounded px-2 py-1 text-xs text-foreground focus:outline-none focus:border-primary"
-                        />
-                      ) : (
-                        <>
-                          <p className="text-xs font-medium text-foreground truncate">{conv.title}</p>
-                          <p className="text-[10px] text-muted">{conv.message_count} messages</p>
-                        </>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-0.5">
-                      <button
-                        onClick={(e) => startRename(e, conv)}
-                        className="p-1 rounded hover:bg-primary/10 text-muted hover:text-primary transition-colors"
-                        title="Rename"
-                      >
-                        <Pencil size={10} />
-                      </button>
-                      <button
-                        onClick={(e) => deleteCodingConversation(e, conv.id)}
-                        className="p-1 rounded hover:bg-error/10 text-muted hover:text-error transition-colors"
-                        title="Delete"
-                      >
-                        <Trash2 size={10} />
-                      </button>
-                    </div>
+                {/* Search input */}
+                <div className="px-3 py-1.5">
+                  <div className="relative">
+                    <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-muted" />
+                    <input
+                      type="text"
+                      placeholder="Search code sessions..."
+                      value={codingSearchQuery}
+                      onChange={(e) => {
+                        const val = e.target.value
+                        setCodingSearchQuery(val)
+                        if (codingSearchTimeoutRef.current) clearTimeout(codingSearchTimeoutRef.current)
+                        if (val.trim()) {
+                          codingSearchTimeoutRef.current = setTimeout(async () => {
+                            setCodingSearchLoading(true)
+                            try {
+                              const res = await fetch(`/api/conversations/search?q=${encodeURIComponent(val)}&type=coding`)
+                              const data = await res.json()
+                              if (data.success) setCodingSearchResults(data.results)
+                            } catch (err) { /* ignore */ }
+                            setCodingSearchLoading(false)
+                          }, 300)
+                        } else {
+                          setCodingSearchResults(null)
+                        }
+                      }}
+                      className="w-full bg-surface border border-border rounded-lg pl-7 pr-2 py-1.5 text-xs text-foreground focus:outline-none focus:border-primary"
+                    />
                   </div>
-                ))}
+                </div>
+                {/* Results or normal list */}
+                {codingSearchLoading && <p className="px-3 py-2 text-xs text-muted">Searching...</p>}
+                {codingSearchResults ? (
+                  codingSearchResults.length === 0 ? (
+                    <p className="px-3 py-2 text-xs text-muted">No results found</p>
+                  ) : (
+                    codingSearchResults.map((result) => (
+                      <div
+                        key={result.id}
+                        onClick={() => loadCodingConversation(result)}
+                        className={`flex flex-col px-3 py-2 cursor-pointer hover:bg-surface transition-colors ${result.id === codingSessionId ? 'bg-primary/10' : ''}`}
+                      >
+                        <p className="text-xs font-medium text-foreground truncate">{result.title}</p>
+                        <p className="text-[10px] text-muted">{result.message_count} messages</p>
+                        {result.matches && result.matches.slice(0, 2).map((m, i) => (
+                          <p key={i} className="text-[10px] text-muted mt-0.5 truncate">
+                            <span className="text-primary/70">{m.field}:</span> {m.snippet}
+                          </p>
+                        ))}
+                      </div>
+                    ))
+                  )
+                ) : (
+                  <>
+                    {codingConversations.length === 0 && (
+                      <p className="px-3 py-2 text-xs text-muted">No previous code chats</p>
+                    )}
+                    {codingConversations.map((conv) => (
+                      <div
+                        key={conv.id}
+                        onClick={() => loadCodingConversation(conv)}
+                        className={`flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-surface transition-colors ${conv.id === codingSessionId ? 'bg-primary/10' : ''}`}
+                      >
+                        <div className="flex-1 min-w-0">
+                          {editingId === conv.id ? (
+                            <input
+                              autoFocus
+                              value={editingTitle}
+                              onChange={(e) => setEditingTitle(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') submitRename(conv.id)
+                                if (e.key === 'Escape') { setEditingId(null); setEditingTitle('') }
+                              }}
+                              onBlur={() => submitRename(conv.id)}
+                              onClick={(e) => e.stopPropagation()}
+                              className="w-full bg-card border border-border rounded px-2 py-1 text-xs text-foreground focus:outline-none focus:border-primary"
+                            />
+                          ) : (
+                            <>
+                              <p className="text-xs font-medium text-foreground truncate">{conv.title}</p>
+                              <p className="text-[10px] text-muted">{conv.message_count} messages</p>
+                            </>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-0.5">
+                          <button
+                            onClick={(e) => startRename(e, conv)}
+                            className="p-1 rounded hover:bg-primary/10 text-muted hover:text-primary transition-colors"
+                            title="Rename"
+                          >
+                            <Pencil size={10} />
+                          </button>
+                          <button
+                            onClick={(e) => deleteCodingConversation(e, conv.id)}
+                            className="p-1 rounded hover:bg-error/10 text-muted hover:text-error transition-colors"
+                            title="Delete"
+                          >
+                            <Trash2 size={10} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                )}
               </div>
             )}
             {isAgent && (

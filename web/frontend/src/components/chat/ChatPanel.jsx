@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Send, User, Bot, Loader2, Paperclip, X, Image as ImageIcon, FileText, MessageSquarePlus, Trash2, ChevronDown, Pencil } from 'lucide-react'
+import { Send, User, Bot, Loader2, Paperclip, X, Image as ImageIcon, FileText, MessageSquarePlus, Trash2, ChevronDown, Pencil, Search } from 'lucide-react'
 import { useSessionProtection } from '../../hooks/useSessionProtection'
 import MarkdownRenderer from '../MarkdownRenderer'
 
@@ -24,10 +24,14 @@ export default function ChatPanel() {
   const [thinkingDuration, setThinkingDuration] = useState(0)
   const [editingId, setEditingId] = useState(null)
   const [editingTitle, setEditingTitle] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState(null)
+  const [searchLoading, setSearchLoading] = useState(false)
   const wsRef = useRef(null)
   const scrollRef = useRef(null)
   const fileInputRef = useRef(null)
   const convListRef = useRef(null)
+  const searchTimeoutRef = useRef(null)
 
   const { register } = useSessionProtection()
 
@@ -139,6 +143,8 @@ export default function ChatPanel() {
     setMessages([])
     setSessionId(conv.id)
     setShowConvList(false)
+    setSearchQuery('')
+    setSearchResults(null)
   }
 
   const deleteConversation = async (e, convId) => {

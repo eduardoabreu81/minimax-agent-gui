@@ -182,6 +182,94 @@ def get_conversation_title(messages: list) -> str:
     return "New Chat"
 
 
+def _make_snippet(text: str, query_lower: str, context: int = 60) -> str:
+    """Extract a short snippet around the first match of query in text."""
+    if not text:
+        return ""
+    idx = text.lower().find(query_lower)
+    if idx == -1:
+        return text[:100] + ("..." if len(text) > 100 else "")
+    start = max(0, idx - context)
+    end = min(len(text), idx + len(query_lower) + context)
+    snippet = text[start:end]
+    if start > 0:
+        snippet = "..." + snippet
+    if end < len(text):
+        snippet = snippet + "..."
+    return snippet
+
+
+def search_conversations(query: str, type_filter: str = "") -> list:
+    """Search conversations by title, message content, or attachment.
+
+    Returns a list of result dicts ordered by updated_at desc.
+    """
+    if not query or not query.strip():
+        return []
+
+    q = query.strip().lower()
+    results = []
+
+    for p in CONVERSATIONS_DIR.glob("*.json"):
+        try:
+            with open(p, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
+            continue
+
+        conv_id = data.get("id", p.stem)
+
+        # Type filter
+        is_coding = conv_id.startswith("coding-")
+        if type_filter == "coding" and not is_coding:
+            continue
+        if type_filter == "chat" and is_coding:
+            continue
+
+        matches = []
+
+        # Search title
+        title = data.get("title", "")
+        if q in title.lower():
+            matches.append({
+                "field": "title",
+                "snippet": _make_snippet(title, q, 40),
+            })
+
+        # Search messages
+        messages = data.get("messages", [])
+        for i, msg in enumerate(messages):
+            content = msg.get("content", msg.get("text", ""))
+            if q in content.lower():
+                matches.append({
+                    "field": "message",
+                    "snippet": _make_snippet(content, q, 60),
+                    "message_index": i,
+                })
+
+            # Search attachment
+            attachment = msg.get("attachment", "")
+            if attachment and q in attachment.lower():
+                matches.append({
+                    "field": "attachment",
+                    "snippet": _make_snippet(attachment, q, 40),
+                    "message_index": i,
+                })
+
+        if matches:
+            results.append({
+                "id": conv_id,
+                "title": title or "Untitled",
+                "type": "coding" if is_coding else "chat",
+                "updated_at": data.get("updated_at", ""),
+                "message_count": len(messages),
+                "matches": matches,
+            })
+
+    results.sort(key=lambda x: x.get("updated_at", ""), reverse=True)
+    return results
+
+
 class SessionManager:
     """Manages agent sessions in memory."""
 
@@ -443,6 +531,20 @@ async def get_conversations(type: str = ""):
     elif type == "chat":
         all_convos = [c for c in all_convos if not c["id"].startswith("coding-")]
     return {"success": True, "conversations": all_convos}
+
+
+@app.get("/api/conversations/search")
+async def search_conversations_endpoint(q: str = "", type: str = ""):
+    """Search conversations by title, message content, or attachment.
+
+    Query params:
+      - q: search term (required, min 1 char)
+      - type: optional filter — 'chat', 'coding', or empty for all
+    """
+    if not q or not q.strip():
+        raise HTTPException(status_code=400, detail="Query parameter 'q' is required")
+    results = search_conversations(q, type_filter=type)
+    return {"success": True, "query": q.strip(), "results": results}
 
 
 @app.get("/api/conversations/{conv_id}")
