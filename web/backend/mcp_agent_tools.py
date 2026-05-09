@@ -25,9 +25,15 @@ _logger = logging.getLogger(__name__)
 EXEC_TIMEOUT_SECONDS = 30
 
 
+_MAX_NAME_LEN = 64
+
+
 def _sanitize(text: str) -> str:
-    """Replace non-alphanumeric chars with underscores."""
-    return re.sub(r"[^a-zA-Z0-9]", "_", text)
+    """Replace non-alphanumeric chars with underscores, collapse runs, trim edges."""
+    text = re.sub(r"[^a-zA-Z0-9]", "_", text)
+    text = re.sub(r"_+", "_", text)
+    text = text.strip("_")
+    return text or "unnamed"
 
 
 def _make_safe_tool_name(server_id: str, tool_name: str) -> str:
@@ -35,10 +41,18 @@ def _make_safe_tool_name(server_id: str, tool_name: str) -> str:
     safe_server = _sanitize(server_id)
     safe_tool = _sanitize(tool_name)
     name = f"mcp_{safe_server}_{safe_tool}"
-    # Cap length to keep LLM tool names reasonable
-    if len(name) > 64:
-        name = name[:64]
+    if len(name) > _MAX_NAME_LEN:
+        name = name[:_MAX_NAME_LEN]
     return name
+
+
+def _apply_suffix(name: str, suffix: str, max_len: int = _MAX_NAME_LEN) -> str:
+    """Append suffix to name, trimming base if needed to stay within max_len."""
+    if len(name) + len(suffix) <= max_len:
+        return name + suffix
+    # Trim base so base + suffix fits exactly within max_len
+    trimmed = name[: max_len - len(suffix)]
+    return trimmed + suffix
 
 
 def _deduplicate_names(tools: list[Tool]) -> list[Tool]:
@@ -50,7 +64,8 @@ def _deduplicate_names(tools: list[Tool]) -> list[Tool]:
         if count > 0:
             # This shouldn't happen often because of server_id prefix,
             # but handle edge cases (same server, same tool name after sanitization)
-            new_name = f"{original}_{count}"
+            suffix = f"_{count}"
+            new_name = _apply_suffix(original, suffix)
             tool._name_override = new_name  # type: ignore[attr-defined]
             _logger.warning(f"MCP tool name collision resolved: {original} -> {new_name}")
         seen[original] = count + 1
@@ -93,6 +108,13 @@ class ExternalMCPTool(Tool):
     def parameters(self) -> dict[str, Any]:
         return self._input_schema
 
+    def _error(self, message: str) -> ToolResult:
+        """Return a ToolResult with consistent MCP context prefix."""
+        return ToolResult(
+            success=False,
+            error=f"MCP tool '{self._server_id}/{self._original_name}' failed: {message}",
+        )
+
     async def execute(self, **kwargs: Any) -> ToolResult:
         """Execute the MCP tool via a fresh connection."""
         transport = self._server_config.get("transport", "stdio")
@@ -101,18 +123,16 @@ class ExternalMCPTool(Tool):
                 return await self._execute_stdio(kwargs)
             if transport == "sse":
                 return await self._execute_sse(kwargs)
-            return ToolResult(
-                success=False,
-                error=f"Transport '{transport}' not supported for MCP tool execution.",
+            return self._error(
+                f"transport '{transport}' not supported for MCP tool execution."
             )
         except asyncio.TimeoutError:
-            return ToolResult(
-                success=False,
-                error=f"MCP tool '{self._original_name}' timed out after {EXEC_TIMEOUT_SECONDS}s.",
-            )
+            return self._error(f"timed out after {EXEC_TIMEOUT_SECONDS}s.")
         except Exception as exc:
-            _logger.warning(f"MCP tool '{self._original_name}' execution error: {exc}")
-            return ToolResult(success=False, error=str(exc))
+            _logger.warning(
+                f"MCP tool '{self._server_id}/{self._original_name}' execution error: {exc}"
+            )
+            return self._error(str(exc))
 
     async def _execute_stdio(self, arguments: dict[str, Any]) -> ToolResult:
         command = self._server_config.get("command")
@@ -159,18 +179,17 @@ class ExternalMCPTool(Tool):
 
     def _parse_result(self, result: Any) -> ToolResult:
         """Parse MCP CallToolResult into ToolResult."""
-        if getattr(result, "isError", False):
-            texts = []
-            for item in getattr(result, "content", []):
-                if hasattr(item, "text"):
-                    texts.append(item.text)
-            return ToolResult(success=False, error="\n".join(texts) or "MCP tool returned an error.")
-
         texts = []
         for item in getattr(result, "content", []):
             if hasattr(item, "text"):
                 texts.append(item.text)
-        return ToolResult(success=True, content="\n".join(texts))
+        content = "\n".join(texts)
+        prefix = f"[MCP: {self._server_id}/{self._original_name}]\n"
+
+        if getattr(result, "isError", False):
+            return self._error(content or "MCP tool returned an error.")
+
+        return ToolResult(success=True, content=prefix + content)
 
 
 async def discover_mcp_tools(
