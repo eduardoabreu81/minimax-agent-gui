@@ -26,10 +26,10 @@ These users already have API access. They need a single place to:
 ## Core Workflows
 
 1. **Chat** — Persistent conversations with attachments, image understanding, markdown, and conversation search.
-2. **Image Generation** — T2I and I2I with aspect ratio, batch, gallery, prompt optimizer, and recent generations history.
-3. **Video Generation** — Text or image to video with progress tracking and recent video history.
-4. **Music Generation** — Prompt or lyrics to music, instrumental mode, cover generation, and recent music history.
-5. **Speech / TTS** — 30+ voices, speed control, streaming playback, and recent speech history.
+2. **Image Generation** — T2I and I2I with aspect ratio, batch, gallery, prompt optimizer, recent generations history, and planned GUI-ready prompt examples.
+3. **Video Generation** — Text or image to video with progress tracking, recent video history, and planned GUI-ready prompt examples.
+4. **Music Generation** — Prompt or lyrics to music, instrumental mode, cover generation, recent music history, and planned GUI-ready prompt examples.
+5. **Speech / TTS** — 30+ voices, speed control, streaming playback, recent speech history, and planned GUI-ready prompt examples.
 6. **MCP Tools** — Built-in Web Search and Image Understanding, configurable custom MCP servers, connection testing, tool discovery, and external MCP tools available to the agent.
 7. **Agent & Skills** — Slash commands, multi-step agent tasks, skill templates, Plan Mode with editable approve-and-run drafts, and tool permission approvals.
 8. **Code Workspace** — File explorer, editor, terminal, and code-chat for agent-driven file operations. Agent mode asks before risky tools; YOLO mode auto-approves.
@@ -42,6 +42,7 @@ These users already have API access. They need a single place to:
 - **Agent-first:** The agent can use every feature — chat, media generation, file tools, MCP — from a single session.
 - **MCP-friendly:** Make MiniMax MCP tools and custom MCP servers easy to configure, test, and use from the agent.
 - **Visible & Controlled:** Agent workflows stay powerful but controlled. Risky tool execution is surfaced with explicit user approval unless YOLO mode is selected.
+- **API-to-GUI Translation:** Official MiniMax API examples should be converted into simple GUI-ready prompts and presets so users never need to read API payloads.
 
 ## Workspace Organization
 
@@ -75,5 +76,6 @@ This keeps outputs organized and prevents IDE clutter.
 - A MiniMax user can go from zero to first image/video/music generation in under 2 minutes.
 - MCP tools and custom MCP servers can be configured, tested, discovered, and used by the agent without editing config files.
 - Users can approve or reject risky tool execution without leaving the Code Workspace.
+- Users can generate their first image, video, music track, or speech output using built-in prompt examples without reading API docs.
 - Agent outputs are automatically organized and easy to find.
 - The Code Workspace is used when needed, but never feels like the whole app.

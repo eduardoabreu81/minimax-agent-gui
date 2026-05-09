@@ -98,6 +98,8 @@ Enter a prompt and optional lyrics to generate songs. Enable instrumental mode f
 
 Type text, pick a voice, adjust speed, and generate speech.
 
+> **Planned:** Future versions will include GUI-ready prompt examples based on official MiniMax documentation examples, adapted for Image, Video, Music, and TTS panels.
+
 ### MCP Tools
 
 Open **Settings > Tools** to manage built-in MiniMax tools and custom MCP servers. Custom MCP servers support **stdio** and **SSE** transports. You can add, edit, enable/disable, delete, and test connections. Enabled servers are loaded into new agent sessions; tool names are prefixed as `mcp_{server_id}_{tool_name}` to avoid collisions.
@@ -185,6 +187,7 @@ _Complete. All Phase 1 items have shipped._
 
 ### Phase 4 — Polish
 - [ ] **Sandboxed Preview** — Secure iframe preview for generated code
+- [ ] **Official Prompt Examples** — Add curated prompt examples for Image, Video, Music, and TTS based on MiniMax documentation, converted from API examples into GUI-ready prompt presets
 
 ## License
 
