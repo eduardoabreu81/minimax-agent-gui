@@ -34,7 +34,28 @@ export default function TTSPanel() {
     try {
       const res = await fetch('/api/generations')
       const data = await res.json()
-      if (data.success) setHistory(data.data.tts || [])
+      let tts = []
+      if (data.success) tts = data.data.tts || []
+
+      const wsRes = await fetch('/api/files?path=workspace')
+      const wsData = await wsRes.json()
+      if (wsData.entries) {
+        const wsTts = wsData.entries
+          .filter(e => !e.is_dir && /\.(mp3|wav|flac|pcm)$/i.test(e.name))
+          .filter(e => /^(tts_|tts_web|tts_output)/i.test(e.name))
+          .map(e => ({ name: e.name, path: e.path, size: 0 }))
+        const seen = new Set(tts.map(i => i.path))
+        wsTts.forEach(t => {
+          if (!seen.has(t.path)) tts.push(t)
+        })
+      }
+
+      tts.sort((a, b) => {
+        if (a.modified_at && b.modified_at) return b.modified_at.localeCompare(a.modified_at)
+        return b.name.localeCompare(a.name)
+      })
+
+      setHistory(tts)
     } catch (e) { /* ignore */ }
     setHistoryLoading(false)
   }
@@ -109,6 +130,7 @@ export default function TTSPanel() {
           if (match) outputPath = match[0]
         }
         setResult(outputPath || `workspace/tts_${Date.now()}.${format}`)
+        fetchHistory()
       } else {
         setError(data.stderr || data.stdout || 'TTS failed')
       }

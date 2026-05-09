@@ -47,7 +47,28 @@ export default function MusicPanel() {
     try {
       const res = await fetch('/api/generations')
       const data = await res.json()
-      if (data.success) setHistory(data.data.music || [])
+      let music = []
+      if (data.success) music = data.data.music || []
+
+      const wsRes = await fetch('/api/files?path=workspace')
+      const wsData = await wsRes.json()
+      if (wsData.entries) {
+        const wsMusic = wsData.entries
+          .filter(e => !e.is_dir && /\.(mp3|wav|flac|m4a)$/i.test(e.name))
+          .filter(e => /^(music_|music_web|generated_music)/i.test(e.name))
+          .map(e => ({ name: e.name, path: e.path, size: 0 }))
+        const seen = new Set(music.map(i => i.path))
+        wsMusic.forEach(m => {
+          if (!seen.has(m.path)) music.push(m)
+        })
+      }
+
+      music.sort((a, b) => {
+        if (a.modified_at && b.modified_at) return b.modified_at.localeCompare(a.modified_at)
+        return b.name.localeCompare(a.name)
+      })
+
+      setHistory(music)
     } catch (e) { /* ignore */ }
     setHistoryLoading(false)
   }
@@ -99,6 +120,7 @@ export default function MusicPanel() {
       const data = await res.json()
       if (data.success && data.returncode === 0) {
         setResult(outFile)
+        fetchHistory()
       } else {
         setError(data.stderr || data.stdout || 'Music generation failed')
       }

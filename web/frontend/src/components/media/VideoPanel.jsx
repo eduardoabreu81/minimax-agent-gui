@@ -39,7 +39,28 @@ export default function VideoPanel() {
     try {
       const res = await fetch('/api/generations')
       const data = await res.json()
-      if (data.success) setHistory(data.data.videos || [])
+      let videos = []
+      if (data.success) videos = data.data.videos || []
+
+      const wsRes = await fetch('/api/files?path=workspace')
+      const wsData = await wsRes.json()
+      if (wsData.entries) {
+        const wsVideos = wsData.entries
+          .filter(e => !e.is_dir && /\.(mp4|mov|webm)$/i.test(e.name))
+          .filter(e => /^(video_|generated_video)/i.test(e.name))
+          .map(e => ({ name: e.name, path: e.path, size: 0 }))
+        const seen = new Set(videos.map(i => i.path))
+        wsVideos.forEach(v => {
+          if (!seen.has(v.path)) videos.push(v)
+        })
+      }
+
+      videos.sort((a, b) => {
+        if (a.modified_at && b.modified_at) return b.modified_at.localeCompare(a.modified_at)
+        return b.name.localeCompare(a.name)
+      })
+
+      setHistory(videos)
     } catch (e) { /* ignore */ }
     setHistoryLoading(false)
   }
@@ -132,17 +153,19 @@ export default function VideoPanel() {
               setLoading(false)
               if (fileId) {
                 // Download the video
+                const videoPath = `workspace/video_${Date.now()}.mp4`
                 const dlRes = await fetch('/api/minimax/cli', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
                     command: 'video download',
-                    args: ['--file-id', fileId, '--out', `workspace/video_${Date.now()}.mp4`],
+                    args: ['--file-id', fileId, '--out', videoPath],
                   }),
                 })
                 const dlData = await dlRes.json()
                 if (dlData.success && dlData.returncode === 0) {
-                  setResult(`workspace/video_${Date.now()}.mp4`)
+                  setResult(videoPath)
+                  fetchHistory()
                 }
               }
               clearInterval(interval)
