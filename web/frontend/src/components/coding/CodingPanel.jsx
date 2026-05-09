@@ -52,24 +52,6 @@ export default function CodingPanel() {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const [originalContents, setOriginalContents] = useState({})
 
-  const { register } = useSessionProtection()
-
-  useEffect(() => {
-    register('code-thinking', codingThinking, 'Agent is thinking')
-  }, [codingThinking, register])
-
-  useEffect(() => {
-    register('code-input', codingInput.trim().length > 0, 'Unsent code message')
-  }, [codingInput, register])
-
-  useEffect(() => {
-    register('code-unsaved', hasUnsavedChanges, 'Unsaved file changes')
-  }, [hasUnsavedChanges, register])
-
-  useEffect(() => {
-    const hasDraft = activity.plan.items.length > 0 && !activity.plan.approved
-    register('plan-draft', hasDraft, 'Unapproved plan draft')
-  }, [activity.plan.items.length, activity.plan.approved, register])
   const [showGitPanel, setShowGitPanel] = useState(false)
   const [workspaceSidebarVisible, setWorkspaceSidebarVisible] = useState(() => {
     try { return localStorage.getItem('workspace-sidebar-visible') !== 'false' } catch { return true }
@@ -118,6 +100,25 @@ export default function CodingPanel() {
   const codingChatRef = useRef(null)
   const codingFileInputRef = useRef(null)
   const codingConvListRef = useRef(null)
+
+  const { register } = useSessionProtection()
+
+  useEffect(() => {
+    register('code-thinking', codingThinking, 'Agent is thinking')
+  }, [codingThinking, register])
+
+  useEffect(() => {
+    register('code-input', codingInput.trim().length > 0, 'Unsent code message')
+  }, [codingInput, register])
+
+  useEffect(() => {
+    register('code-unsaved', hasUnsavedChanges, 'Unsaved file changes')
+  }, [hasUnsavedChanges, register])
+
+  useEffect(() => {
+    const hasDraft = activity.plan.items.length > 0 && !activity.plan.approved
+    register('plan-draft', hasDraft, 'Unapproved plan draft')
+  }, [activity.plan.items.length, activity.plan.approved, register])
 
   const loadFiles = useCallback(async (path = currentPath) => {
     try {
@@ -342,7 +343,7 @@ export default function CodingPanel() {
     const approvedMessage = `[Approved Plan]\n\nUser request:\n${plan.sourcePrompt}\n\nPlan:\n${planText}\n\nPlease follow this approved plan. Execute step by step, use tools when needed, and summarize what was changed.`
 
     const payload = { message: approvedMessage }
-    if (codingAttachment) payload.attachment = codingAttachment.path
+    if (plan.sourceAttachment) payload.attachment = plan.sourceAttachment.path
 
     setCodingMessages(prev => [...prev, {
       type: 'system',
@@ -352,9 +353,8 @@ export default function CodingPanel() {
     activity.approvePlan()
     setAgentMode('agent')
     try { localStorage.setItem('agent-mode', 'agent') } catch {}
-    setCodingAttachment(null)
     setCodingThinking(true)
-  }, [codingWs, activity, codingAttachment])
+  }, [codingWs, activity])
 
   useEffect(() => {
     const handleApprove = () => approveAndRunPlan()
@@ -369,7 +369,7 @@ export default function CodingPanel() {
     if (agentMode === 'plan') {
       const userMessage = codingInput.trim() || '📎 Attachment sent'
       const planItems = buildPlanItems(userMessage)
-      activity.createPlan(planItems, userMessage)
+      activity.createPlan(planItems, userMessage, codingAttachment)
       setCodingMessages(prev => [...prev, {
         type: 'user',
         content: userMessage,

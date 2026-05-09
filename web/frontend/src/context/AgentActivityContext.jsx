@@ -7,7 +7,7 @@ export function AgentActivityProvider({ children }) {
   const [toolResults, setToolResults] = useState([])
   const [thinking, setThinking] = useState({ active: false, duration: 0, content: '' })
   const [lastTool, setLastTool] = useState(null)
-  const [plan, setPlan] = useState({ items: [], sourcePrompt: '', approved: false })
+  const [plan, setPlan] = useState({ items: [], sourcePrompt: '', sourceAttachment: null, approved: false })
   const [hasNewActivity, setHasNewActivity] = useState(false)
 
   const addStep = useCallback((step, maxSteps) => {
@@ -58,10 +58,11 @@ export function AgentActivityProvider({ children }) {
     }))
   }, [])
 
-  const createPlan = useCallback((items, sourcePrompt = '') => {
+  const createPlan = useCallback((items, sourcePrompt = '', sourceAttachment = null) => {
     setPlan({
       items: items.map((item, i) => ({ id: i, text: item, status: 'pending' })),
       sourcePrompt,
+      sourceAttachment,
       approved: false,
     })
   }, [])
@@ -97,7 +98,7 @@ export function AgentActivityProvider({ children }) {
   }, [])
 
   const clearPlan = useCallback(() => {
-    setPlan({ items: [], sourcePrompt: '', approved: false })
+    setPlan({ items: [], sourcePrompt: '', sourceAttachment: null, approved: false })
   }, [])
 
   const approvePlan = useCallback(() => {
@@ -109,7 +110,7 @@ export function AgentActivityProvider({ children }) {
     setToolResults([])
     setThinking({ active: false, duration: 0, content: '' })
     setLastTool(null)
-    setPlan({ items: [], sourcePrompt: '', approved: false })
+    setPlan({ items: [], sourcePrompt: '', sourceAttachment: null, approved: false })
     setHasNewActivity(false)
   }, [])
 
