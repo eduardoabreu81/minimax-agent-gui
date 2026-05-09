@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Search, CheckSquare, ListTodo, Bot, PanelRightClose, PanelRightOpen,
@@ -18,6 +18,15 @@ export default function WorkspaceSidebar({ visible, onToggle }) {
   const { t } = useTranslation()
   const [activeTab, setActiveTab] = useState('tasks')
   const activity = useAgentActivity()
+
+  useEffect(() => {
+    const handleOpenTab = (e) => {
+      if (e.detail) setActiveTab(e.detail)
+      if (!visible) onToggle()
+    }
+    window.addEventListener('openWorkspaceTab', handleOpenTab)
+    return () => window.removeEventListener('openWorkspaceTab', handleOpenTab)
+  }, [visible, onToggle])
 
   if (!visible) {
     return (
@@ -83,6 +92,7 @@ function PlanPanel() {
   const activity = useAgentActivity()
   const [editingId, setEditingId] = useState(null)
   const [editingText, setEditingText] = useState('')
+  const [copied, setCopied] = useState(false)
 
   const startEdit = (item) => {
     setEditingId(item.id)
@@ -90,16 +100,34 @@ function PlanPanel() {
   }
 
   const submitEdit = (id) => {
-    activity.updatePlanItem(id, editingText)
+    const trimmed = editingText.trim()
+    if (trimmed.length > 0) {
+      activity.updatePlanItem(id, trimmed)
+    }
     setEditingId(null)
     setEditingText('')
   }
 
   const handleApprove = () => {
+    if (!hasValidSteps) return
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('approvePlan'))
     }
   }
+
+  const handleCopy = async () => {
+    const planText = activity.plan.items.map((item, i) => `${i + 1}. ${item.text}`).join('\n')
+    const text = `User request:\n${activity.plan.sourcePrompt}\n\nPlan:\n${planText}`
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1000)
+    } catch { /* ignore */ }
+  }
+
+  const hasValidSteps = activity.plan.items.some(item => item.text.trim().length > 0)
+  const lastItemIsEmptyNew = activity.plan.items.length > 0 &&
+    activity.plan.items[activity.plan.items.length - 1].text === 'New step'
 
   if (activity.plan.items.length === 0) {
     return (
@@ -109,28 +137,21 @@ function PlanPanel() {
           <span>No active plan</span>
         </div>
         <p className="text-[11px] text-muted leading-relaxed">
-          The agent will create a plan here before making changes.
-          Switch to <strong>Plan mode</strong> to see the planning in action.
+          Create a plan before the agent makes changes.
         </p>
-        <div className="p-3 rounded-lg bg-surface border border-border border-dashed">
-          <p className="text-[10px] text-muted uppercase tracking-wider mb-2">Example plan steps</p>
-          <div className="space-y-2">
-            <div className="flex items-start gap-2 text-[11px]">
-              <CircleDot size={12} className="text-primary mt-0.5 shrink-0" />
-              <span className="text-foreground">Explore codebase structure</span>
-            </div>
-            <div className="flex items-start gap-2 text-[11px]">
-              <Circle size={12} className="text-muted mt-0.5 shrink-0" />
-              <span className="text-muted">Identify relevant files</span>
-            </div>
-            <div className="flex items-start gap-2 text-[11px]">
-              <Circle size={12} className="text-muted mt-0.5 shrink-0" />
-              <span className="text-muted">Implement changes</span>
-            </div>
-            <div className="flex items-start gap-2 text-[11px]">
-              <Circle size={12} className="text-muted mt-0.5 shrink-0" />
-              <span className="text-muted">Verify and test</span>
-            </div>
+        <div className="p-3 rounded-lg bg-surface border border-border border-dashed space-y-2">
+          <p className="text-[10px] text-muted uppercase tracking-wider mb-1">How it works</p>
+          <div className="flex items-start gap-2 text-[11px]">
+            <span className="text-primary font-medium shrink-0">1.</span>
+            <span className="text-foreground">Switch the mode button to <strong>Plan</strong></span>
+          </div>
+          <div className="flex items-start gap-2 text-[11px]">
+            <span className="text-primary font-medium shrink-0">2.</span>
+            <span className="text-foreground">Describe the change in the code chat</span>
+          </div>
+          <div className="flex items-start gap-2 text-[11px]">
+            <span className="text-primary font-medium shrink-0">3.</span>
+            <span className="text-foreground">Review, edit, and approve the draft plan</span>
           </div>
         </div>
       </div>
@@ -143,7 +164,7 @@ function PlanPanel() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 text-xs text-foreground font-medium">
           <Sparkles size={12} className="text-primary" />
-          <span>Plan Draft</span>
+          <span>{activity.plan.approved ? 'Approved Plan' : 'Plan Draft'}</span>
           <span className="text-[10px] text-muted bg-surface border border-border rounded-full px-2 py-0.5">
             {activity.plan.items.length}
           </span>
@@ -152,6 +173,20 @@ function PlanPanel() {
           <span className="text-[10px] text-green-400 bg-green-400/10 border border-green-400/20 rounded-full px-2 py-0.5">
             Approved
           </span>
+        )}
+      </div>
+
+      {/* Request block */}
+      <div className="p-2.5 rounded-lg bg-surface border border-border space-y-1.5">
+        <p className="text-[10px] text-muted uppercase tracking-wider">Request</p>
+        <p className="text-[11px] text-foreground line-clamp-4 break-words" title={activity.plan.sourcePrompt}>
+          {activity.plan.sourcePrompt}
+        </p>
+        {activity.plan.sourceAttachment && (
+          <p className="text-[10px] text-primary flex items-center gap-1">
+            <span>📎 Attached:</span>
+            <span className="truncate">{activity.plan.sourceAttachment.name || activity.plan.sourceAttachment.path?.split('/').pop()}</span>
+          </p>
         )}
       </div>
 
@@ -205,27 +240,45 @@ function PlanPanel() {
       </div>
 
       {/* Actions */}
-      {!activity.plan.approved && (
-        <div className="space-y-2 pt-1">
-          <button
-            onClick={() => activity.addPlanItem('New step')}
-            className="w-full py-1.5 bg-surface hover:bg-surface/80 border border-border hover:border-primary text-foreground text-[11px] rounded-lg transition-colors flex items-center justify-center gap-1.5"
-          >
-            <CircleDot size={12} className="text-primary" /> Add step
-          </button>
-          <button
-            onClick={handleApprove}
-            className="w-full py-1.5 bg-primary hover:bg-primary-hover text-white text-[11px] rounded-lg transition-colors flex items-center justify-center gap-1.5"
-          >
-            <CheckSquare size={12} /> Approve & Run
-          </button>
-          <button
-            onClick={() => activity.clearPlan()}
-            className="w-full py-1.5 bg-surface hover:bg-error/10 border border-border hover:border-error/30 text-muted hover:text-error text-[11px] rounded-lg transition-colors flex items-center justify-center gap-1.5"
-          >
-            <XCircle size={12} /> Clear plan
-          </button>
-        </div>
+      <div className="space-y-2 pt-1">
+        {!activity.plan.approved && (
+          <>
+            <button
+              onClick={() => {
+                if (!lastItemIsEmptyNew) activity.addPlanItem('New step')
+              }}
+              disabled={lastItemIsEmptyNew}
+              className="w-full py-1.5 bg-surface hover:bg-surface/80 border border-border hover:border-primary text-foreground text-[11px] rounded-lg transition-colors flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <CircleDot size={12} className="text-primary" /> Add step
+            </button>
+            <button
+              onClick={handleApprove}
+              disabled={!hasValidSteps}
+              className="w-full py-1.5 bg-primary hover:bg-primary-hover disabled:opacity-40 disabled:cursor-not-allowed text-white text-[11px] rounded-lg transition-colors flex items-center justify-center gap-1.5"
+            >
+              <CheckSquare size={12} /> Approve & Run
+            </button>
+          </>
+        )}
+        <button
+          onClick={() => activity.clearPlan()}
+          className="w-full py-1.5 bg-surface hover:bg-error/10 border border-border hover:border-error/30 text-muted hover:text-error text-[11px] rounded-lg transition-colors flex items-center justify-center gap-1.5"
+        >
+          <XCircle size={12} /> Clear plan
+        </button>
+        <button
+          onClick={handleCopy}
+          className="w-full py-1.5 bg-surface hover:bg-surface/80 border border-border hover:border-primary text-foreground text-[11px] rounded-lg transition-colors flex items-center justify-center gap-1.5"
+        >
+          {copied ? 'Copied' : 'Copy plan'}
+        </button>
+      </div>
+
+      {activity.plan.approved && (
+        <p className="text-[10px] text-muted text-center">
+          This plan has been sent to the agent.
+        </p>
       )}
     </div>
   )

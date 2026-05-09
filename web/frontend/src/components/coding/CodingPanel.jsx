@@ -381,6 +381,14 @@ export default function CodingPanel() {
       }])
       setCodingInput('')
       setCodingAttachment(null)
+      // Open workspace sidebar and switch to Plan tab
+      if (!workspaceSidebarVisible) {
+        setWorkspaceSidebarVisible(true)
+        try { localStorage.setItem('workspace-sidebar-visible', 'true') } catch {}
+      }
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('openWorkspaceTab', { detail: 'plan' }))
+      }
       return
     }
 
