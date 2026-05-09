@@ -27,7 +27,7 @@ The Code Workspace is part of the app, but it is not the whole product.
 - **Video** — Hailuo-2.3 text/image-to-video with multiple durations, resolutions, and recent video history
 - **Music** — Music generation from prompts or lyrics, instrumental mode, cover from reference audio, and recent music history
 - **Speech / TTS** — 30+ voices, speed control, streaming playback, and recent speech history
-- **MCP Tools** — Built-in web search and image understanding toggles; easy MCP access and configuration
+- **MCP Tools** — Built-in Web Search and Image Understanding, configurable custom MCP servers, connection testing, tool discovery, and external MCP tools loaded into agent sessions
 - **Skills & Agent Workflows** — Slash commands, skill templates, Plan Mode with editable approve-and-run drafts, and agent-driven multi-step tasks
 - **Code Workspace** — File explorer, editor, terminal, and persistent code-chat sessions
 - **Multi-language** — English, Português (BR), 日本語, 한국어, Español, 中文
@@ -98,6 +98,12 @@ Enter a prompt and optional lyrics to generate songs. Enable instrumental mode f
 
 Type text, pick a voice, adjust speed, and generate speech.
 
+### MCP Tools
+
+Open **Settings > Tools** to manage built-in MiniMax tools and custom MCP servers. Custom MCP servers support **stdio** and **SSE** transports. You can add, edit, enable/disable, delete, and test connections. Enabled servers are loaded into new agent sessions; tool names are prefixed as `mcp_{server_id}_{tool_name}` to avoid collisions.
+
+> **Note:** HTTP transport is not implemented yet. MCP tools are loaded when a new agent session is created, so changing MCP server config may require starting a new chat or session to reload tools. Per-tool permissions are not implemented yet.
+
 ### Code Workspace
 
 Switch to the Code tab for a file explorer, editor, terminal, and persistent code-chat sessions. The agent can read, write, and edit files in your workspace. You can switch between **Agent**, **Plan**, and **YOLO** modes. Plan mode creates an editable draft plan before execution; once approved, the agent receives the full plan and runs it step by step.
@@ -120,7 +126,7 @@ Each media panel also displays a **Recent Generations** gallery that surfaces ou
 
 | File | Purpose |
 |------|---------|
-| `config/config.yaml` | API key, region (`global` or `cn`), default model, tool toggles |
+| `config/config.yaml` | API key, region (`global` or `cn`), default model, built-in tool toggles, custom MCP servers |
 
 Environment variables:
 
@@ -128,6 +134,22 @@ Environment variables:
 |----------|---------|
 | `MINIMAX_API_KEY` | Override API key |
 | `MINIMAX_API_BASE` | Override base URL |
+
+Example MCP server configuration in `config/config.yaml`:
+
+```yaml
+mcp_servers:
+  local-filesystem:
+    name: Local Filesystem
+    transport: stdio
+    command: npx
+    args:
+      - "-y"
+      - "@modelcontextprotocol/server-filesystem"
+      - "./workspace"
+    env: {}
+    enabled: true
+```
 
 ## Roadmap
 
@@ -144,6 +166,9 @@ Environment variables:
 - [x] Conversation Search — Find past chats and code sessions by title, content, or attachment
 - [x] Recent Generations in media panels — Image, Video, Music, and TTS panels show a browsable history of past outputs plus compatible files in the workspace
 - [x] Agent Plan Mode — Editable plan draft with approve-and-run workflow in the Code Workspace
+- [x] Configurable MCP Servers — Manage custom stdio/SSE MCP servers from Settings
+- [x] MCP Connection Test & Tool Discovery — Test configured servers and preview discovered tools
+- [x] External MCP Tool Runtime — Enabled MCP server tools are loaded into new agent sessions with safe prefixed names
 
 ### Phase 1 — Foundation
 _Complete. All Phase 1 items have shipped._
@@ -152,7 +177,6 @@ _Complete. All Phase 1 items have shipped._
 - [ ] **Task Board (Kanban)** — Project planning with todo/in-progress/done columns
 
 ### Phase 3 — Extensibility
-- [ ] **Configurable MCP Servers** — Add custom MCP servers (stdio, SSE, HTTP)
 - [ ] **Plugin System** — Community extensibility with custom tabs and backends
 - [ ] **Custom Skills** — User-defined skill templates per project type
 
