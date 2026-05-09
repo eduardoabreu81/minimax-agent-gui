@@ -81,47 +81,47 @@ function App() {
     }
   }, [activeTab])
 
-  const handleAction = useCallback((action) => {
-    const execute = () => {
-      switch (action) {
-        case 'new-chat':
-          setChatKey(k => k + 1)
-          setActiveTab('chat')
-          break
-        case 'clear-chat':
-          setChatKey(k => k + 1)
-          break
-        case 'git-status':
-        case 'git-fetch':
-        case 'git-pull':
-        case 'git-log':
-          setActiveTab('code')
-          window.dispatchEvent(new CustomEvent('gitAction', { detail: action }))
-          break
-        case 'new-task':
-          setActiveTab('tasks')
-          break
-        case 'open-settings':
-          setSettingsModalOpen(true)
-          break
-        case 'settings-api':
-        case 'settings-model':
-        case 'settings-theme':
-          // TODO: open settings modal
-          break
-        default:
-          break
-      }
+  const executeAction = useCallback((action) => {
+    switch (action) {
+      case 'new-chat':
+        setChatKey(k => k + 1)
+        setActiveTab('chat')
+        break
+      case 'clear-chat':
+        setChatKey(k => k + 1)
+        break
+      case 'git-status':
+      case 'git-fetch':
+      case 'git-pull':
+      case 'git-log':
+        setActiveTab('code')
+        window.dispatchEvent(new CustomEvent('gitAction', { detail: action }))
+        break
+      case 'new-task':
+        setActiveTab('tasks')
+        break
+      case 'open-settings':
+        setSettingsModalOpen(true)
+        break
+      case 'settings-api':
+      case 'settings-model':
+      case 'settings-theme':
+        // TODO: open settings modal
+        break
+      default:
+        break
     }
+  }, [])
 
+  const handleAction = useCallback((action) => {
     if (hasAnyRisk()) {
       setGuardAction('action')
       setGuardPayload(action)
       setShowSessionGuard(true)
     } else {
-      execute()
+      executeAction(action)
     }
-  }, [])
+  }, [executeAction])
 
 
 
@@ -166,7 +166,12 @@ function App() {
             </p>
             <div className="flex items-center justify-end gap-2">
               <button
-                onClick={() => { setShowSessionGuard(false); setPendingTab(null) }}
+                onClick={() => {
+                  setShowSessionGuard(false)
+                  setPendingTab(null)
+                  setGuardAction(null)
+                  setGuardPayload(null)
+                }}
                 className="px-3 py-1.5 text-xs text-muted hover:text-foreground transition-colors"
               >
                 {t('session.stay')}
@@ -179,8 +184,7 @@ function App() {
                   } else if (guardAction === 'navigate' && guardPayload) {
                     setActiveTab(guardPayload)
                   } else if (guardAction === 'action' && guardPayload) {
-                    // Re-run the action after closing the guard
-                    handleAction(guardPayload)
+                    executeAction(guardPayload)
                   }
                   setPendingTab(null)
                   setGuardAction(null)
