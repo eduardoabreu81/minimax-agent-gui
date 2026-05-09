@@ -73,6 +73,51 @@ class CLIRequest(BaseModel):
     env: dict = {}
 
 
+class MCPServerCreate(BaseModel):
+    name: str
+    transport: str
+    command: Optional[str] = None
+    args: list[str] = []
+    env: dict[str, str] = {}
+    url: Optional[str] = None
+    enabled: bool = True
+
+
+class MCPServerUpdate(BaseModel):
+    name: Optional[str] = None
+    transport: Optional[str] = None
+    command: Optional[str] = None
+    args: Optional[list[str]] = None
+    env: Optional[dict[str, str]] = None
+    url: Optional[str] = None
+    enabled: Optional[bool] = None
+
+
+def _generate_server_id(name: str) -> str:
+    import re
+    safe = re.sub(r'[^a-zA-Z0-9_-]', '-', name.strip().lower())
+    safe = re.sub(r'-+', '-', safe).strip('-')
+    return safe or 'mcp-server'
+
+
+def _load_config_dict() -> dict:
+    global config
+    cfg = config
+    if hasattr(cfg, 'to_dict'):
+        cfg = cfg.to_dict()
+    elif not isinstance(cfg, dict):
+        cfg = {}
+    return cfg
+
+
+def _save_config_dict(cfg: dict):
+    global config
+    import yaml
+    with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
+        yaml.dump(cfg, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+    config = cfg
+
+
 def get_minimax_config():
     """Get MiniMax config with region-based api_base."""
     global config
@@ -434,6 +479,23 @@ async def get_config():
     elif hasattr(config, 'minimax'):
         minimax = config.minimax if isinstance(config.minimax, dict) else {}
     
+    mcp_servers = config.get("mcp_servers", {}) if isinstance(config, dict) else {}
+    if not isinstance(mcp_servers, dict):
+        mcp_servers = {}
+    mcp_list = []
+    for sid, sdata in mcp_servers.items():
+        if isinstance(sdata, dict):
+            mcp_list.append({
+                "id": sid,
+                "name": sdata.get("name", sid),
+                "transport": sdata.get("transport", "stdio"),
+                "command": sdata.get("command"),
+                "args": sdata.get("args", []),
+                "env": sdata.get("env", {}),
+                "url": sdata.get("url"),
+                "enabled": sdata.get("enabled", True),
+            })
+
     safe_config = {
         "agent": config.get("agent", {}) if isinstance(config, dict) else {},
         "tts": config.get("tts", {}) if isinstance(config, dict) else {},
@@ -441,6 +503,7 @@ async def get_config():
         "music": config.get("music", {}) if isinstance(config, dict) else {},
         "video": config.get("video", {}) if isinstance(config, dict) else {},
         "tools": config.get("tools", {}) if isinstance(config, dict) else {},
+        "mcp_servers": mcp_list,
         "region": minimax.get("region", "global") if isinstance(minimax, dict) else "global",
         "api_base": minimax.get("api_base", "https://api.minimax.io") if isinstance(minimax, dict) else "https://api.minimax.io",
         "api_key_configured": bool(minimax.get("api_key", "")) if isinstance(minimax, dict) else False,
@@ -518,6 +581,131 @@ async def update_tools_config(req: ToolsConfigRequest):
         return {"success": True}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# --- MCP Servers endpoints ---
+
+@app.get("/api/mcp/servers")
+async def get_mcp_servers():
+    """Return list of configured MCP servers."""
+    cfg = _load_config_dict()
+    servers = cfg.get("mcp_servers", {})
+    if not isinstance(servers, dict):
+        servers = {}
+    result = []
+    for sid, sdata in servers.items():
+        if isinstance(sdata, dict):
+            result.append({
+                "id": sid,
+                "name": sdata.get("name", sid),
+                "transport": sdata.get("transport", "stdio"),
+                "command": sdata.get("command"),
+                "args": sdata.get("args", []),
+                "env": sdata.get("env", {}),
+                "url": sdata.get("url"),
+                "enabled": sdata.get("enabled", True),
+            })
+    return {"success": True, "servers": result}
+
+
+@app.post("/api/mcp/servers")
+async def create_mcp_server(req: MCPServerCreate):
+    """Create a new MCP server configuration."""
+    cfg = _load_config_dict()
+    if "mcp_servers" not in cfg or not isinstance(cfg.get("mcp_servers"), dict):
+        cfg["mcp_servers"] = {}
+
+    server_id = _generate_server_id(req.name)
+    # Ensure unique id
+    base_id = server_id
+    counter = 1
+    while server_id in cfg["mcp_servers"]:
+        server_id = f"{base_id}-{counter}"
+        counter += 1
+
+    if req.transport not in ("stdio", "sse", "http"):
+        raise HTTPException(status_code=400, detail="Invalid transport. Must be stdio, sse, or http.")
+
+    if req.transport == "stdio" and not req.command:
+        raise HTTPException(status_code=400, detail="stdio transport requires a command.")
+    if req.transport in ("sse", "http") and not req.url:
+        raise HTTPException(status_code=400, detail="sse/http transport requires a url.")
+
+    cfg["mcp_servers"][server_id] = {
+        "name": req.name,
+        "transport": req.transport,
+        "command": req.command,
+        "args": req.args,
+        "env": req.env,
+        "url": req.url,
+        "enabled": req.enabled,
+    }
+    _save_config_dict(cfg)
+    return {"success": True, "server": {**cfg["mcp_servers"][server_id], "id": server_id}}
+
+
+@app.put("/api/mcp/servers/{server_id}")
+async def update_mcp_server(server_id: str, req: MCPServerUpdate):
+    """Update an existing MCP server configuration."""
+    cfg = _load_config_dict()
+    servers = cfg.get("mcp_servers", {})
+    if not isinstance(servers, dict) or server_id not in servers:
+        raise HTTPException(status_code=404, detail="Server not found")
+
+    sdata = servers[server_id]
+    transport = req.transport or sdata.get("transport", "stdio")
+
+    if transport not in ("stdio", "sse", "http"):
+        raise HTTPException(status_code=400, detail="Invalid transport. Must be stdio, sse, or http.")
+
+    new_command = req.command if req.command is not None else sdata.get("command")
+    new_url = req.url if req.url is not None else sdata.get("url")
+
+    if transport == "stdio" and not new_command:
+        raise HTTPException(status_code=400, detail="stdio transport requires a command.")
+    if transport in ("sse", "http") and not new_url:
+        raise HTTPException(status_code=400, detail="sse/http transport requires a url.")
+
+    sdata["name"] = req.name if req.name is not None else sdata.get("name", server_id)
+    sdata["transport"] = transport
+    if req.command is not None:
+        sdata["command"] = req.command
+    if req.args is not None:
+        sdata["args"] = req.args
+    if req.env is not None:
+        sdata["env"] = req.env
+    if req.url is not None:
+        sdata["url"] = req.url
+    if req.enabled is not None:
+        sdata["enabled"] = req.enabled
+
+    _save_config_dict(cfg)
+    return {"success": True, "server": {**sdata, "id": server_id}}
+
+
+@app.delete("/api/mcp/servers/{server_id}")
+async def delete_mcp_server(server_id: str):
+    """Delete an MCP server configuration."""
+    cfg = _load_config_dict()
+    servers = cfg.get("mcp_servers", {})
+    if not isinstance(servers, dict) or server_id not in servers:
+        raise HTTPException(status_code=404, detail="Server not found")
+    del servers[server_id]
+    _save_config_dict(cfg)
+    return {"success": True}
+
+
+@app.post("/api/mcp/servers/{server_id}/toggle")
+async def toggle_mcp_server(server_id: str):
+    """Toggle enabled state of an MCP server."""
+    cfg = _load_config_dict()
+    servers = cfg.get("mcp_servers", {})
+    if not isinstance(servers, dict) or server_id not in servers:
+        raise HTTPException(status_code=404, detail="Server not found")
+    sdata = servers[server_id]
+    sdata["enabled"] = not sdata.get("enabled", True)
+    _save_config_dict(cfg)
+    return {"success": True, "enabled": sdata["enabled"]}
 
 
 # --- Conversation REST endpoints ---

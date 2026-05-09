@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import {
   X, Globe, Moon, Sun, Key, Cpu, Shield, Keyboard,
   Info, Check, AlertCircle, Save, RotateCcw, Eye, EyeOff,
-  MapPin, BarChart3, Lock, Unlock, Search, Monitor, Palette, User
+  MapPin, BarChart3, Lock, Unlock, Search, Monitor, Palette, User, Trash2, Pencil
 } from 'lucide-react'
 import { useTheme } from '../../context/ThemeContext'
 
@@ -67,6 +67,108 @@ export default function SettingsModal({ isOpen, onClose, isDark, onToggleTheme }
   const [profileSaving, setProfileSaving] = useState(false)
   const [userPlan, setUserPlan] = useState('starter')
   const [quotaData, setQuotaData] = useState(null)
+  const [mcpServers, setMcpServers] = useState([])
+  const [mcpLoading, setMcpLoading] = useState(false)
+  const [mcpError, setMcpError] = useState(null)
+  const [mcpFormVisible, setMcpFormVisible] = useState(false)
+  const [mcpEditingId, setMcpEditingId] = useState(null)
+  const [mcpForm, setMcpForm] = useState({
+    name: '',
+    transport: 'stdio',
+    command: '',
+    args: '',
+    env: '',
+    url: '',
+    enabled: true,
+  })
+
+  const fetchMcpServers = async () => {
+    setMcpLoading(true)
+    setMcpError(null)
+    try {
+      const res = await fetch('/api/mcp/servers')
+      const data = await res.json()
+      if (data.success) setMcpServers(data.servers || [])
+    } catch (e) {
+      setMcpError('Failed to load MCP servers')
+    }
+    setMcpLoading(false)
+  }
+
+  const resetMcpForm = () => {
+    setMcpForm({ name: '', transport: 'stdio', command: '', args: '', env: '', url: '', enabled: true })
+    setMcpEditingId(null)
+    setMcpFormVisible(false)
+  }
+
+  const openMcpEdit = (server) => {
+    setMcpForm({
+      name: server.name || '',
+      transport: server.transport || 'stdio',
+      command: server.command || '',
+      args: (server.args || []).join('\n'),
+      env: Object.entries(server.env || {}).map(([k, v]) => `${k}=${v}`).join('\n'),
+      url: server.url || '',
+      enabled: server.enabled ?? true,
+    })
+    setMcpEditingId(server.id)
+    setMcpFormVisible(true)
+  }
+
+  const submitMcpForm = async () => {
+    const payload = {
+      name: mcpForm.name.trim(),
+      transport: mcpForm.transport,
+      command: mcpForm.command.trim() || null,
+      args: mcpForm.args.split('\n').map(s => s.trim()).filter(Boolean),
+      env: Object.fromEntries(
+        mcpForm.env.split('\n').map(s => s.trim()).filter(Boolean).map(line => {
+          const [k, ...v] = line.split('=')
+          return [k.trim(), v.join('=').trim()]
+        })
+      ),
+      url: mcpForm.url.trim() || null,
+      enabled: mcpForm.enabled,
+    }
+    try {
+      const url = mcpEditingId ? `/api/mcp/servers/${mcpEditingId}` : '/api/mcp/servers'
+      const method = mcpEditingId ? 'PUT' : 'POST'
+      const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+      const data = await res.json()
+      if (data.success) {
+        setSavedMessage(mcpEditingId ? 'Server updated' : 'Server added')
+        setTimeout(() => setSavedMessage(''), 2000)
+        resetMcpForm()
+        fetchMcpServers()
+      } else {
+        setMcpError(data.detail || 'Failed to save')
+      }
+    } catch (e) {
+      setMcpError('Failed to save server')
+    }
+  }
+
+  const toggleMcpServer = async (id) => {
+    try {
+      const res = await fetch(`/api/mcp/servers/${id}/toggle`, { method: 'POST' })
+      const data = await res.json()
+      if (data.success) {
+        setMcpServers(prev => prev.map(s => s.id === id ? { ...s, enabled: data.enabled } : s))
+      }
+    } catch { /* ignore */ }
+  }
+
+  const deleteMcpServer = async (id) => {
+    try {
+      const res = await fetch(`/api/mcp/servers/${id}`, { method: 'DELETE' })
+      const data = await res.json()
+      if (data.success) {
+        setSavedMessage('Server removed')
+        setTimeout(() => setSavedMessage(''), 2000)
+        fetchMcpServers()
+      }
+    } catch { /* ignore */ }
+  }
 
   useEffect(() => {
     if (!isOpen) return
@@ -86,8 +188,11 @@ export default function SettingsModal({ isOpen, onClose, isDark, onToggleTheme }
           webSearch: data.tools?.web_search ?? true,
           understandImage: data.tools?.understand_image ?? true,
         }))
+        if (data.mcp_servers) setMcpServers(data.mcp_servers)
       })
       .catch(() => setConfig({}))
+
+    fetchMcpServers()
 
     // Load user profile
     fetch('/api/profile')
@@ -480,81 +585,249 @@ export default function SettingsModal({ isOpen, onClose, isDark, onToggleTheme }
 
             {/* Tools */}
             {activeTab === 'tools' && (
-              <div className="space-y-5">
+              <div className="space-y-6">
+                {/* Built-in MiniMax Tools */}
                 <div>
-                  <h3 className="text-sm font-semibold text-foreground mb-1">MiniMax MCP Tools</h3>
+                  <h3 className="text-sm font-semibold text-foreground mb-1">Built-in MiniMax Tools</h3>
                   <p className="text-xs text-muted mb-4">Enable or disable tools available to the agent. These require a MiniMax Token Plan API key.</p>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between p-3 bg-surface border border-border rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                          <Search size={14} className="text-primary" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-foreground">Web Search</p>
+                          <p className="text-xs text-muted">Search the web for real-time information</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => {
+                          const newVal = !localSettings.webSearch
+                          setLocalSettings({ ...localSettings, webSearch: newVal })
+                          fetch('/api/config/tools', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              web_search: newVal,
+                              understand_image: localSettings.understandImage,
+                            }),
+                          }).then(() => setSavedMessage('Tools updated')).catch(() => {})
+                          setTimeout(() => setSavedMessage(''), 2000)
+                        }}
+                        className={`w-11 h-6 rounded-full transition-colors relative ${
+                          localSettings.webSearch ? 'bg-primary' : 'bg-muted/30'
+                        }`}
+                      >
+                        <div className={`w-4 h-4 rounded-full bg-white absolute top-1 transition-transform ${
+                          localSettings.webSearch ? 'translate-x-6' : 'translate-x-1'
+                        }`} />
+                      </button>
+                    </div>
+                    <div className="flex items-center justify-between p-3 bg-surface border border-border rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                          <Eye size={14} className="text-primary" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-foreground">Image Understanding</p>
+                          <p className="text-xs text-muted">Analyze and describe image content</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => {
+                          const newVal = !localSettings.understandImage
+                          setLocalSettings({ ...localSettings, understandImage: newVal })
+                          fetch('/api/config/tools', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              web_search: localSettings.webSearch,
+                              understand_image: newVal,
+                            }),
+                          }).then(() => setSavedMessage('Tools updated')).catch(() => {})
+                          setTimeout(() => setSavedMessage(''), 2000)
+                        }}
+                        className={`w-11 h-6 rounded-full transition-colors relative ${
+                          localSettings.understandImage ? 'bg-primary' : 'bg-muted/30'
+                        }`}
+                      >
+                        <div className={`w-4 h-4 rounded-full bg-white absolute top-1 transition-transform ${
+                          localSettings.understandImage ? 'translate-x-6' : 'translate-x-1'
+                        }`} />
+                      </button>
+                    </div>
+                  </div>
                 </div>
 
-                <div className="space-y-3">
-                  {/* Web Search */}
-                  <div className="flex items-center justify-between p-3 bg-surface border border-border rounded-lg">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                        <Search size={14} className="text-primary" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-foreground">Web Search</p>
-                        <p className="text-xs text-muted">Search the web for real-time information</p>
-                      </div>
+                {/* Custom MCP Servers */}
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <h3 className="text-sm font-semibold text-foreground">Custom MCP Servers</h3>
+                      <p className="text-xs text-muted">Add and manage external MCP servers.</p>
                     </div>
                     <button
-                      onClick={() => {
-                        const newVal = !localSettings.webSearch
-                        setLocalSettings({ ...localSettings, webSearch: newVal })
-                        fetch('/api/config/tools', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({
-                            web_search: newVal,
-                            understand_image: localSettings.understandImage,
-                          }),
-                        }).then(() => setSavedMessage('Tools updated')).catch(() => {})
-                        setTimeout(() => setSavedMessage(''), 2000)
-                      }}
-                      className={`w-11 h-6 rounded-full transition-colors relative ${
-                        localSettings.webSearch ? 'bg-primary' : 'bg-muted/30'
-                      }`}
+                      onClick={() => { resetMcpForm(); setMcpFormVisible(true) }}
+                      className="px-3 py-1.5 bg-primary hover:bg-primary-hover text-white text-xs rounded-lg transition-colors flex items-center gap-1.5"
                     >
-                      <div className={`w-4 h-4 rounded-full bg-white absolute top-1 transition-transform ${
-                        localSettings.webSearch ? 'translate-x-6' : 'translate-x-1'
-                      }`} />
+                      <span>+</span> Add MCP Server
                     </button>
                   </div>
 
-                  {/* Understand Image */}
-                  <div className="flex items-center justify-between p-3 bg-surface border border-border rounded-lg">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                        <Eye size={14} className="text-primary" />
+                  {mcpLoading && <p className="text-xs text-muted">Loading...</p>}
+                  {mcpError && <p className="text-xs text-error">{mcpError}</p>}
+
+                  {mcpFormVisible && (
+                    <div className="p-3 bg-surface border border-border rounded-lg space-y-3 mb-3">
+                      <div>
+                        <label className="text-[10px] text-muted uppercase tracking-wider mb-1 block">Name</label>
+                        <input
+                          type="text"
+                          value={mcpForm.name}
+                          onChange={(e) => setMcpForm(f => ({ ...f, name: e.target.value }))}
+                          placeholder="e.g. Local Filesystem"
+                          className="w-full bg-card border border-border rounded-lg px-3 py-2 text-xs text-foreground focus:outline-none focus:border-primary"
+                        />
                       </div>
                       <div>
-                        <p className="text-sm font-medium text-foreground">Image Understanding</p>
-                        <p className="text-xs text-muted">Analyze and describe image content</p>
+                        <label className="text-[10px] text-muted uppercase tracking-wider mb-1 block">Transport</label>
+                        <select
+                          value={mcpForm.transport}
+                          onChange={(e) => setMcpForm(f => ({ ...f, transport: e.target.value }))}
+                          className="w-full bg-card border border-border rounded-lg px-3 py-2 text-xs text-foreground focus:outline-none focus:border-primary"
+                        >
+                          <option value="stdio">stdio</option>
+                          <option value="sse">sse</option>
+                          <option value="http">http</option>
+                        </select>
+                      </div>
+                      {mcpForm.transport === 'stdio' && (
+                        <div>
+                          <label className="text-[10px] text-muted uppercase tracking-wider mb-1 block">Command</label>
+                          <input
+                            type="text"
+                            value={mcpForm.command}
+                            onChange={(e) => setMcpForm(f => ({ ...f, command: e.target.value }))}
+                            placeholder="e.g. npx"
+                            className="w-full bg-card border border-border rounded-lg px-3 py-2 text-xs text-foreground focus:outline-none focus:border-primary"
+                          />
+                        </div>
+                      )}
+                      {mcpForm.transport === 'stdio' && (
+                        <div>
+                          <label className="text-[10px] text-muted uppercase tracking-wider mb-1 block">Args (one per line)</label>
+                          <textarea
+                            value={mcpForm.args}
+                            onChange={(e) => setMcpForm(f => ({ ...f, args: e.target.value }))}
+                            placeholder="-y&#10;@modelcontextprotocol/server-filesystem&#10;./workspace"
+                            rows={3}
+                            className="w-full bg-card border border-border rounded-lg px-3 py-2 text-xs text-foreground focus:outline-none focus:border-primary resize-none"
+                          />
+                        </div>
+                      )}
+                      {mcpForm.transport !== 'stdio' && (
+                        <div>
+                          <label className="text-[10px] text-muted uppercase tracking-wider mb-1 block">URL</label>
+                          <input
+                            type="text"
+                            value={mcpForm.url}
+                            onChange={(e) => setMcpForm(f => ({ ...f, url: e.target.value }))}
+                            placeholder="https://example.com/mcp"
+                            className="w-full bg-card border border-border rounded-lg px-3 py-2 text-xs text-foreground focus:outline-none focus:border-primary"
+                          />
+                        </div>
+                      )}
+                      <div>
+                        <label className="text-[10px] text-muted uppercase tracking-wider mb-1 block">Env (KEY=VALUE per line)</label>
+                        <textarea
+                          value={mcpForm.env}
+                          onChange={(e) => setMcpForm(f => ({ ...f, env: e.target.value }))}
+                          placeholder="API_KEY=xxx&#10;DEBUG=true"
+                          rows={2}
+                          className="w-full bg-card border border-border rounded-lg px-3 py-2 text-xs text-foreground focus:outline-none focus:border-primary resize-none"
+                        />
+                      </div>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={mcpForm.enabled}
+                          onChange={(e) => setMcpForm(f => ({ ...f, enabled: e.target.checked }))}
+                          className="rounded border-border text-primary"
+                        />
+                        <span className="text-xs text-foreground">Enabled</span>
+                      </label>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={submitMcpForm}
+                          disabled={!mcpForm.name.trim()}
+                          className="flex-1 py-1.5 bg-primary hover:bg-primary-hover disabled:opacity-40 text-white text-xs rounded-lg transition-colors"
+                        >
+                          {mcpEditingId ? 'Update' : 'Save'}
+                        </button>
+                        <button
+                          onClick={resetMcpForm}
+                          className="flex-1 py-1.5 bg-surface hover:bg-surface/80 border border-border text-foreground text-xs rounded-lg transition-colors"
+                        >
+                          Cancel
+                        </button>
                       </div>
                     </div>
-                    <button
-                      onClick={() => {
-                        const newVal = !localSettings.understandImage
-                        setLocalSettings({ ...localSettings, understandImage: newVal })
-                        fetch('/api/config/tools', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({
-                            web_search: localSettings.webSearch,
-                            understand_image: newVal,
-                          }),
-                        }).then(() => setSavedMessage('Tools updated')).catch(() => {})
-                        setTimeout(() => setSavedMessage(''), 2000)
-                      }}
-                      className={`w-11 h-6 rounded-full transition-colors relative ${
-                        localSettings.understandImage ? 'bg-primary' : 'bg-muted/30'
-                      }`}
-                    >
-                      <div className={`w-4 h-4 rounded-full bg-white absolute top-1 transition-transform ${
-                        localSettings.understandImage ? 'translate-x-6' : 'translate-x-1'
-                      }`} />
-                    </button>
+                  )}
+
+                  {mcpServers.length === 0 && !mcpLoading && (
+                    <p className="text-xs text-muted py-2">No custom MCP servers configured yet.</p>
+                  )}
+
+                  <div className="space-y-2">
+                    {mcpServers.map(server => (
+                      <div key={server.id} className="p-3 bg-surface border border-border rounded-lg space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-medium text-foreground">{server.name}</p>
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${
+                              server.enabled
+                                ? 'bg-green-400/10 text-green-400 border-green-400/20'
+                                : 'bg-muted/20 text-muted border-border'
+                            }`}>
+                              {server.enabled ? 'Enabled' : 'Disabled'}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => toggleMcpServer(server.id)}
+                              className="p-1.5 rounded hover:bg-surface text-muted hover:text-foreground transition-colors"
+                              title={server.enabled ? 'Disable' : 'Enable'}
+                            >
+                              {server.enabled ? <Unlock size={12} /> : <Lock size={12} />}
+                            </button>
+                            <button
+                              onClick={() => openMcpEdit(server)}
+                              className="p-1.5 rounded hover:bg-surface text-muted hover:text-foreground transition-colors"
+                              title="Edit"
+                            >
+                              <User size={12} />
+                            </button>
+                            <button
+                              onClick={() => deleteMcpServer(server.id)}
+                              className="p-1.5 rounded hover:bg-error/10 text-muted hover:text-error transition-colors"
+                              title="Delete"
+                            >
+                              <X size={12} />
+                            </button>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 text-[10px] text-muted">
+                          <span className="px-1.5 py-0.5 bg-card border border-border rounded">{server.transport}</span>
+                          <span className="truncate">
+                            {server.transport === 'stdio'
+                              ? (server.command || '-') + ' ' + (server.args || []).join(' ')
+                              : (server.url || '-')
+                            }
+                          </span>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
 
