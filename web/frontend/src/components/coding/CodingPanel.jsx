@@ -109,6 +109,14 @@ export default function CodingPanel() {
   }, [codingThinking, register])
 
   useEffect(() => {
+    if (permissionRequest) {
+      register('tool-permission', true, 'Pending tool permission request')
+    } else {
+      register('tool-permission', false, '')
+    }
+  }, [permissionRequest, register])
+
+  useEffect(() => {
     register('code-input', codingInput.trim().length > 0, 'Unsent code message')
   }, [codingInput, register])
 
@@ -368,6 +376,14 @@ export default function CodingPanel() {
 
   const sendCodingMessage = useCallback(() => {
     if ((!codingInput.trim() && !codingAttachment) || !codingWs || codingWs.readyState !== WebSocket.OPEN) return
+
+    if (permissionRequest) {
+      setCodingMessages(prev => [...prev, {
+        type: 'system',
+        content: 'Respond to the pending tool permission request before sending another message.'
+      }])
+      return
+    }
 
     // Plan mode: create a draft plan instead of sending immediately
     if (agentMode === 'plan') {
@@ -754,6 +770,7 @@ export default function CodingPanel() {
               <div className="relative">
                 <textarea
                   value={codingInput}
+                  disabled={!!permissionRequest}
                   onChange={(e) => {
                     const value = e.target.value
                     setCodingInput(value)
@@ -835,7 +852,7 @@ export default function CodingPanel() {
               </button>
               <button
                 onClick={sendCodingMessage}
-                disabled={(!codingInput.trim() && !codingAttachment) || !codingConnected || codingThinking}
+                disabled={(!codingInput.trim() && !codingAttachment) || !codingConnected || codingThinking || permissionRequest}
                 className={isAgent ? 'px-4 py-3 bg-primary hover:bg-primary-hover disabled:opacity-40 text-white rounded-lg transition-colors flex items-center gap-1' : 'px-3 py-2 bg-primary hover:bg-primary-hover disabled:opacity-40 text-white rounded-lg transition-colors flex items-center gap-1'}
               >
                 <Send size={isAgent ? 16 : 14} />

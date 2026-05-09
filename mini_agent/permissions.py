@@ -92,8 +92,13 @@ def classify_tool(tool_name: str, arguments: dict[str, Any] | None = None) -> di
             "reason": "Built-in MiniMax tool",
         }
 
-    # Fallback substring checks for tools not in exact-name lists
-    if "read" in name_lower:
+    # Safer fallback heuristics — avoid overly permissive substring matches.
+    # Only classify when the tool name clearly indicates the intent via
+    # prefix patterns. Suffix patterns are intentionally omitted because
+    # names like "spreadsheet_write" or "credential_reader" should NOT
+    # be auto-classified. When in doubt, classify as unknown/ask.
+
+    if name_lower.startswith("read_"):
         return {
             "tool_name": tool_name,
             "category": "read",
@@ -102,16 +107,37 @@ def classify_tool(tool_name: str, arguments: dict[str, Any] | None = None) -> di
             "reason": "Read-only file access",
         }
 
-    if "write" in name_lower or "edit" in name_lower:
+    if name_lower.startswith("write_"):
         return {
             "tool_name": tool_name,
             "category": "write",
             "risk": "medium",
             "default_policy": ASK,
-            "reason": "File write or edit operation",
+            "reason": "File write operation",
         }
 
-    if any(m in name_lower for m in ("image", "music", "video", "tts", "speech")):
+    if name_lower.startswith("edit_"):
+        return {
+            "tool_name": tool_name,
+            "category": "write",
+            "risk": "medium",
+            "default_policy": ASK,
+            "reason": "File edit operation",
+        }
+
+    if name_lower.startswith("run_"):
+        return {
+            "tool_name": tool_name,
+            "category": "shell",
+            "risk": "high",
+            "default_policy": ASK,
+            "reason": "Command execution",
+        }
+
+    # Media: only when the name clearly indicates generation intent
+    media_patterns = ("generate_image", "image_generate", "generate_music", "music_generate",
+                      "generate_video", "video_generate", "text_to_speech")
+    if any(p in name_lower for p in media_patterns):
         return {
             "tool_name": tool_name,
             "category": "media",
