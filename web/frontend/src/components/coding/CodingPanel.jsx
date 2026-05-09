@@ -5,7 +5,7 @@ import {
   GitCommit, GitPullRequest, X, Send, Bot, User, Loader2, Sparkles,
   ChevronRight, Play, Square,
   MessageSquarePlus, Trash2, Paperclip, Image as ImageIcon, FileText, ChevronDown, Search,
-  Zap, LayoutTemplate, Columns, Pencil, ArrowUp, Home
+  Zap, LayoutTemplate, Columns, Pencil, ArrowUp, Home, AlertTriangle
 } from 'lucide-react'
 import XTermTerminal from './XTermTerminal'
 import MarkdownRenderer from '../MarkdownRenderer'
@@ -59,6 +59,7 @@ export default function CodingPanel() {
   const [agentMode, setAgentMode] = useState(() => {
     try { return localStorage.getItem('agent-mode') || 'agent' } catch { return 'agent' }
   })
+  const [permissionRequest, setPermissionRequest] = useState(null)
   const [layoutMode, setLayoutMode] = useState(() => {
     try { return localStorage.getItem('coding-layout') || 'ide' } catch { return 'ide' }
   })
@@ -306,6 +307,9 @@ export default function CodingPanel() {
         setCodingThinking(false)
         setCodingMessages((prev) => [...prev, { type: 'system', content: `Skill '${data.skill}' activated` }])
         activity.setThinkingState(false)
+      } else if (data.type === 'permission_request') {
+        setPermissionRequest(data)
+        activity.setThinkingState(false)
       } else {
         setCodingThinking(false)
         setCodingMessages((prev) => [...prev, data])
@@ -342,7 +346,7 @@ export default function CodingPanel() {
     const planText = plan.items.map((item, i) => `${i + 1}. ${item.text}`).join('\n')
     const approvedMessage = `[Approved Plan]\n\nUser request:\n${plan.sourcePrompt}\n\nPlan:\n${planText}\n\nPlease follow this approved plan. Execute step by step, use tools when needed, and summarize what was changed.`
 
-    const payload = { message: approvedMessage }
+    const payload = { message: approvedMessage, permission_mode: 'agent' }
     if (plan.sourceAttachment) payload.attachment = plan.sourceAttachment.path
 
     setCodingMessages(prev => [...prev, {
@@ -400,7 +404,7 @@ export default function CodingPanel() {
       contextMessage = `[Context: File \`${fileName}\` is currently open]\n\n${contextMessage}\n\n[Current file content (first 3000 chars):\n\`\`\`\n${codeSnippet}\n\`\`\`]`
     }
 
-    const payload = { message: contextMessage }
+    const payload = { message: contextMessage, permission_mode: agentMode === 'yolo' ? 'yolo' : 'agent' }
     if (codingAttachment) payload.attachment = codingAttachment.path
     // Show user message immediately before sending
     setCodingMessages(prev => [...prev, {
@@ -953,6 +957,30 @@ export default function CodingPanel() {
     )
   }
 
+  const handlePermissionApprove = () => {
+    if (!permissionRequest || !codingWs) return
+    codingWs.send(JSON.stringify({
+      type: 'permission_response',
+      request_id: permissionRequest.request_id,
+      approved: true,
+    }))
+    setCodingMessages(prev => [...prev, { type: 'system', content: `Tool approved: ${permissionRequest.tool_name}` }])
+    setPermissionRequest(null)
+    setCodingThinking(true)
+  }
+
+  const handlePermissionReject = () => {
+    if (!permissionRequest || !codingWs) return
+    codingWs.send(JSON.stringify({
+      type: 'permission_response',
+      request_id: permissionRequest.request_id,
+      approved: false,
+    }))
+    setCodingMessages(prev => [...prev, { type: 'system', content: `Tool rejected: ${permissionRequest.tool_name}` }])
+    setPermissionRequest(null)
+    setCodingThinking(true)
+  }
+
   return (
     <div className="flex flex-col h-full bg-card">
       {/* Header */}
@@ -1187,6 +1215,55 @@ export default function CodingPanel() {
 
         {/* Right: Coding Agent Chat (Copilot-style) */}
         {layoutMode === 'ide' && renderChat(false)}
+
+        {/* Permission Request Modal */}
+        {permissionRequest && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+            <div className="w-full max-w-md bg-card border border-border rounded-xl shadow-2xl p-5 space-y-4">
+              <div className="flex items-center gap-2">
+                <AlertTriangle size={18} className="text-amber-400" />
+                <h3 className="text-sm font-semibold">Tool Permission Required</h3>
+              </div>
+              <div className="space-y-2 text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="text-muted">Tool:</span>
+                  <span className="font-mono font-medium text-foreground">{permissionRequest.tool_name}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-muted">Category:</span>
+                  <span className="px-1.5 py-0.5 rounded bg-surface border border-border">{permissionRequest.classification?.category}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-muted">Risk:</span>
+                  <span className={`px-1.5 py-0.5 rounded ${permissionRequest.classification?.risk === 'high' ? 'bg-red-400/10 text-red-400' : permissionRequest.classification?.risk === 'medium' ? 'bg-amber-400/10 text-amber-400' : 'bg-green-400/10 text-green-400'}`}>
+                    {permissionRequest.classification?.risk}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-muted">Reason:</span>
+                  <span className="text-foreground">{permissionRequest.classification?.reason}</span>
+                </div>
+                <div className="bg-surface border border-border rounded-lg p-2 max-h-32 overflow-y-auto">
+                  <pre className="text-[10px] font-mono text-muted whitespace-pre-wrap">{JSON.stringify(permissionRequest.arguments, null, 2)}</pre>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 pt-2">
+                <button
+                  onClick={handlePermissionApprove}
+                  className="flex-1 py-2 bg-primary hover:bg-primary-hover text-white text-xs font-medium rounded-lg transition-colors"
+                >
+                  Approve
+                </button>
+                <button
+                  onClick={handlePermissionReject}
+                  className="flex-1 py-2 bg-surface hover:bg-error/10 border border-border text-foreground hover:text-error text-xs font-medium rounded-lg transition-colors"
+                >
+                  Reject
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

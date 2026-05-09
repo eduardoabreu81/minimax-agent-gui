@@ -11,6 +11,7 @@ import tiktoken
 
 from .llm import LLMClient
 from .logger import AgentLogger
+from .permissions import decide_permission
 from .schema import Message
 from .tools.base import Tool, ToolResult
 from .utils import calculate_display_width
@@ -323,6 +324,9 @@ Requirements:
         self,
         cancel_event: Optional[asyncio.Event] = None,
         tool_callback: Optional[callable] = None,
+        permission_mode: str = "agent",
+        permission_callback: Optional[callable] = None,
+        permission_policy: Optional[dict] = None,
     ) -> str:
         """Execute agent loop until task is complete or max steps reached.
 
@@ -332,6 +336,11 @@ Requirements:
                           (after completing the current step to keep messages consistent).
             tool_callback: Optional callback function(tool_name, arguments, result) called
                           after each tool execution. Used for real-time UI updates.
+            permission_mode: One of "agent", "plan", "yolo". Controls tool approval behavior.
+            permission_callback: Optional async callback for "ask" decisions.
+                                 Receives {"tool_name", "arguments", "classification"}
+                                 and must return "approved" or "rejected".
+            permission_policy: Optional dict with per-category or per-tool overrides.
 
         Returns:
             The final response content, or error message (including cancellation message).
@@ -455,28 +464,73 @@ Requirements:
                 args_json = json.dumps(truncated_args, indent=2, ensure_ascii=False)
                 _logger.debug(f"Tool arguments: {args_json}")
 
-                # Execute tool
-                if function_name not in self.tools:
+                # Permission check before executing tool
+                perm = decide_permission(
+                    tool_name=function_name,
+                    arguments=arguments,
+                    mode=permission_mode,
+                    config_policy=permission_policy,
+                )
+                decision = perm["decision"]
+                classification = perm["classification"]
+
+                if decision == "reject":
                     result = ToolResult(
                         success=False,
                         content="",
-                        error=f"Unknown tool: {function_name}",
+                        error=f"Tool execution rejected by permission policy: {classification['reason']}",
                     )
-                else:
-                    try:
-                        tool = self.tools[function_name]
-                        result = await tool.execute(**arguments)
-                    except Exception as e:
-                        # Catch all exceptions during tool execution, convert to failed ToolResult
-                        import traceback
-
-                        error_detail = f"{type(e).__name__}: {str(e)}"
-                        error_trace = traceback.format_exc()
+                elif decision == "ask":
+                    if permission_callback:
+                        try:
+                            approval = await permission_callback(
+                                {
+                                    "tool_name": function_name,
+                                    "arguments": arguments,
+                                    "classification": classification,
+                                }
+                            )
+                        except Exception as e:
+                            _logger.warning(f"Permission callback error: {e}")
+                            approval = "rejected"
+                        if approval == "approved":
+                            decision = "auto"
+                        else:
+                            result = ToolResult(
+                                success=False,
+                                content="",
+                                error=f"Tool '{function_name}' was rejected by user.",
+                            )
+                    else:
                         result = ToolResult(
                             success=False,
                             content="",
-                            error=f"Tool execution failed: {error_detail}\n\nTraceback:\n{error_trace}",
+                            error=f"Tool '{function_name}' requires approval but no permission callback is available.",
                         )
+
+                if decision == "auto":
+                    # Execute tool
+                    if function_name not in self.tools:
+                        result = ToolResult(
+                            success=False,
+                            content="",
+                            error=f"Unknown tool: {function_name}",
+                        )
+                    else:
+                        try:
+                            tool = self.tools[function_name]
+                            result = await tool.execute(**arguments)
+                        except Exception as e:
+                            # Catch all exceptions during tool execution, convert to failed ToolResult
+                            import traceback
+
+                            error_detail = f"{type(e).__name__}: {str(e)}"
+                            error_trace = traceback.format_exc()
+                            result = ToolResult(
+                                success=False,
+                                content="",
+                                error=f"Tool execution failed: {error_detail}\n\nTraceback:\n{error_trace}",
+                            )
 
                 # Log tool execution result
                 self.logger.log_tool_result(

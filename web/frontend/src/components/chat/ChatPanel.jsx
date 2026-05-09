@@ -89,6 +89,17 @@ export default function ChatPanel() {
         setIsThinking(false)
         onProcessingChange?.(false)
         setMessages((prev) => [...prev, { type: 'system', content: `Skill '${data.skill}' activated` }])
+      } else if (data.type === 'permission_request') {
+        // Chat does not have a permission modal yet; auto-reject for safety
+        wsRef.current?.send(JSON.stringify({
+          type: 'permission_response',
+          request_id: data.request_id,
+          approved: false,
+        }))
+        setMessages((prev) => [...prev, {
+          type: 'system',
+          content: `Permission required for tool: ${data.tool_name}. Rejected in chat mode.`,
+        }])
       } else {
         setIsThinking(false)
         onProcessingChange?.(false)
@@ -188,7 +199,7 @@ export default function ChatPanel() {
 
   const sendMessage = useCallback(() => {
     if ((!input.trim() && !attachment) || !wsRef.current) return
-    const payload = { message: input }
+    const payload = { message: input, permission_mode: 'agent' }
     if (attachment) payload.attachment = attachment.path
     // Show user message immediately before sending
     setMessages(prev => [...prev, {

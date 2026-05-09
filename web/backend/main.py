@@ -3,6 +3,7 @@
 import os
 import sys
 import json
+import uuid
 import asyncio
 import logging
 from pathlib import Path
@@ -833,7 +834,8 @@ async def chat_websocket(websocket: WebSocket, session_id: str):
 
             message = data.get("message", "").strip()
             attachment = data.get("attachment")
-            
+            permission_mode = data.get("permission_mode", "agent")
+
             if not message and not attachment:
                 continue
 
@@ -921,7 +923,36 @@ async def chat_websocket(websocket: WebSocket, session_id: str):
                             "error": result.error if not result.success else None,
                         })
 
-                result = await agent.run(tool_callback=tool_callback)
+                async def permission_callback(request):
+                    req_id = str(uuid.uuid4())
+                    await websocket.send_json({
+                        "type": "permission_request",
+                        "request_id": req_id,
+                        "tool_name": request["tool_name"],
+                        "arguments": request["arguments"],
+                        "classification": request["classification"],
+                    })
+                    # Wait for response with timeout
+                    try:
+                        while True:
+                            resp = await asyncio.wait_for(
+                                websocket.receive_json(), timeout=120
+                            )
+                            if resp.get("type") == "permission_response" and resp.get("request_id") == req_id:
+                                return "approved" if resp.get("approved") else "rejected"
+                            # Ignore unrelated messages
+                    except asyncio.TimeoutError:
+                        _logger.warning(f"Permission request {req_id} timed out")
+                        return "rejected"
+                    except Exception as e:
+                        _logger.warning(f"Permission request {req_id} error: {e}")
+                        return "rejected"
+
+                result = await agent.run(
+                    tool_callback=tool_callback,
+                    permission_mode=permission_mode,
+                    permission_callback=permission_callback,
+                )
 
                 await websocket.send_json({
                     "type": "assistant",
