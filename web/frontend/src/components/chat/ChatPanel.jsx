@@ -8,7 +8,7 @@ function generateId() {
   return Math.random().toString(36).substring(2, 10)
 }
 
-export default function ChatPanel() {
+export default function ChatPanel({ onProcessingChange } = {}) {
   const { t } = useTranslation()
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
