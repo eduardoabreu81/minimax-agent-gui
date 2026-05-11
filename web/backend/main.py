@@ -1251,8 +1251,11 @@ async def download_file(path: str):
 async def get_file_raw(path: str):
     """Serve raw file content with proper MIME type for inline display."""
     try:
-        target = PROJECT_ROOT / path
-        if not str(target).startswith(str(PROJECT_ROOT)):
+        root = PROJECT_ROOT.resolve()
+        target = (PROJECT_ROOT / path).resolve()
+        try:
+            target.relative_to(root)
+        except ValueError:
             raise HTTPException(status_code=403, detail="Access denied")
         if not target.is_file():
             raise HTTPException(status_code=404, detail="File not found")
@@ -1260,6 +1263,8 @@ async def get_file_raw(path: str):
         import mimetypes
         media_type = mimetypes.guess_type(str(target))[0] or "application/octet-stream"
         return FileResponse(str(target), media_type=media_type)
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
