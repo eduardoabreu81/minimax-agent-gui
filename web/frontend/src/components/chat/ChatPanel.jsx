@@ -51,7 +51,14 @@ export default function ChatPanel({ onProcessingChange } = {}) {
     try {
       const res = await fetch('/api/conversations')
       const data = await res.json()
-      if (data.success) setConversations(data.conversations || [])
+      if (data.success) {
+        const list = data.conversations || []
+        setConversations(list)
+        // Load most recently active conversation on first mount
+        if (sessionId === 'default' && list.length > 0) {
+          setSessionId(list[0].id)
+        }
+      }
     } catch (e) { /* ignore */ }
   }
 

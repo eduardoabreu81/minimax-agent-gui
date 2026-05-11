@@ -2,10 +2,10 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Code2, FileCode, Folder, GitBranch, Terminal, Save, RefreshCw,
-  GitCommit, GitPullRequest, X, Send, Bot, User, Loader2, Sparkles,
+  X, Send, Bot, User, Loader2, Sparkles,
   ChevronRight, Play, Square,
   MessageSquarePlus, Trash2, Paperclip, Image as ImageIcon, FileText, ChevronDown, Search,
-  Zap, LayoutTemplate, Columns, Pencil, ArrowUp, Home, AlertTriangle
+  Zap, Pencil, ArrowUp, Home, AlertTriangle
 } from 'lucide-react'
 import XTermTerminal from './XTermTerminal'
 import MarkdownRenderer from '../MarkdownRenderer'
@@ -47,12 +47,8 @@ export default function CodingPanel() {
   const [fileContents, setFileContents] = useState({})
   const [gitStatus, setGitStatus] = useState(null)
   const [activeBottomTab, setActiveBottomTab] = useState('terminal')
-  const [selectedGitView, setSelectedGitView] = useState('status')
-  const [commitMessage, setCommitMessage] = useState('')
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const [originalContents, setOriginalContents] = useState({})
-
-  const [showGitPanel, setShowGitPanel] = useState(false)
   const [workspaceSidebarVisible, setWorkspaceSidebarVisible] = useState(() => {
     try { return localStorage.getItem('workspace-sidebar-visible') !== 'false' } catch { return true }
   })
@@ -60,9 +56,7 @@ export default function CodingPanel() {
     try { return localStorage.getItem('agent-mode') || 'agent' } catch { return 'agent' }
   })
   const [permissionRequest, setPermissionRequest] = useState(null)
-  const [layoutMode, setLayoutMode] = useState(() => {
-    try { return localStorage.getItem('coding-layout') || 'ide' } catch { return 'ide' }
-  })
+  const [selectedPreview, setSelectedPreview] = useState(null)
   const [showEditorDrawer, setShowEditorDrawer] = useState(false)
   const [editingId, setEditingId] = useState(null)
   const [editingTitle, setEditingTitle] = useState('')
@@ -141,7 +135,15 @@ export default function CodingPanel() {
   }, [currentPath])
 
   const openFile = async (path) => {
+    const type = getFileType(path)
+    if (type === 'image' || type === 'audio' || type === 'video' || type === 'unsupported') {
+      setSelectedPreview({ path, name: path.split('/').pop(), type })
+      setActiveFile(null)
+      setShowEditorDrawer(true)
+      return
+    }
     if (openFiles.find((f) => f.path === path)) {
+      setSelectedPreview(null)
       setActiveFile(path)
       return
     }
@@ -155,6 +157,7 @@ export default function CodingPanel() {
       setFileContents((prev) => ({ ...prev, [path]: data.content }))
       setOriginalContents((prev) => ({ ...prev, [path]: data.content }))
       setOpenFiles((prev) => [...prev, { path, name: path.split('/').pop() }])
+      setSelectedPreview(null)
       setActiveFile(path)
     } catch (e) {
       console.error('Failed to open file:', e)
@@ -219,7 +222,13 @@ export default function CodingPanel() {
     try {
       const res = await fetch('/api/conversations?type=coding')
       const data = await res.json()
-      if (data.success) setCodingConversations(data.conversations || [])
+      if (data.success) {
+        const list = data.conversations || []
+        setCodingConversations(list)
+        if (codingSessionId === 'coding-default' && list.length > 0) {
+          setCodingSessionId(list[0].id)
+        }
+      }
     } catch (e) { /* ignore */ }
   }
 
@@ -531,6 +540,16 @@ export default function CodingPanel() {
       php: 'php', rb: 'ruby', sql: 'sql', xml: 'xml',
     }
     return map[ext] || 'text'
+  }
+
+  const getFileType = (path) => {
+    const ext = path.split('.').pop()?.toLowerCase()
+    if (['html','htm'].includes(ext)) return 'html'
+    if (['js','jsx','ts','tsx','py','css','json','md','txt','yaml','yml','sh','sql','xml'].includes(ext)) return 'text'
+    if (['png','jpg','jpeg','webp','gif'].includes(ext)) return 'image'
+    if (['mp3','wav','flac','m4a'].includes(ext)) return 'audio'
+    if (['mp4','webm','mov'].includes(ext)) return 'video'
+    return 'unsupported'
   }
 
   const filteredSkills = codingInput.startsWith('/')
@@ -874,7 +893,7 @@ export default function CodingPanel() {
           <div className="absolute bottom-0 left-0 right-0 h-[60%] bg-card border-t border-border flex flex-col z-20 shadow-2xl">
             {/* Editor Tabs */}
             {openFiles.length > 0 && (
-              <div className="flex border-b border-border bg-surface/30 overflow-x-auto shrink-0">
+              <div className="flex border-b border-border bg-surface/30 overflow-x-auto shrink-0 items-center">
                 {openFiles.map((file) => (
                   <div
                     key={file.path}
@@ -895,12 +914,49 @@ export default function CodingPanel() {
                     </button>
                   </div>
                 ))}
+                {activeFile && getFileType(activeFile) === 'html' && (
+                  <button
+                    onClick={() => window.open(`/api/files/raw?path=${encodeURIComponent(activeFile)}`, '_blank')}
+                    className="ml-auto mr-2 px-2 py-1 rounded text-[10px] bg-surface border border-border hover:border-primary text-muted-foreground hover:text-foreground transition-colors"
+                    title="Open this HTML file in a new browser tab"
+                  >
+                    Open in Browser
+                  </button>
+                )}
               </div>
             )}
 
-            {/* Editor */}
+            {/* Editor / Preview */}
             <div className="flex-1 min-h-0 relative">
-              {activeFile ? (
+              {selectedPreview ? (
+                <div className="w-full h-full flex flex-col items-center justify-center p-4">
+                  {selectedPreview.type === 'image' && (
+                    <img
+                      src={`/api/files/raw?path=${encodeURIComponent(selectedPreview.path)}`}
+                      alt={selectedPreview.name}
+                      className="max-w-full max-h-full object-contain rounded-lg"
+                      title="Image preview"
+                    />
+                  )}
+                  {selectedPreview.type === 'audio' && (
+                    <audio controls className="w-full" title="Audio preview">
+                      <source src={`/api/files/raw?path=${encodeURIComponent(selectedPreview.path)}`} />
+                    </audio>
+                  )}
+                  {selectedPreview.type === 'video' && (
+                    <video controls className="max-w-full max-h-full rounded-lg" title="Video preview">
+                      <source src={`/api/files/raw?path=${encodeURIComponent(selectedPreview.path)}`} />
+                    </video>
+                  )}
+                  {selectedPreview.type === 'unsupported' && (
+                    <div className="text-center text-muted">
+                      <FileCode size={48} className="mb-4 opacity-20 mx-auto" />
+                      <p className="text-sm">This file type cannot be previewed yet.</p>
+                      <p className="text-xs mt-1 opacity-60">You can download it or open it from the workspace folder.</p>
+                    </div>
+                  )}
+                </div>
+              ) : activeFile ? (
                 <textarea
                   value={fileContents[activeFile] || ''}
                   onChange={(e) => {
@@ -934,7 +990,7 @@ export default function CodingPanel() {
                   onClick={() => { setActiveBottomTab('git'); loadGitStatus() }}
                   className={`px-4 py-2 text-xs font-medium transition-colors flex items-center gap-1.5 ${activeBottomTab === 'git' ? 'text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground'}`}
                 >
-                  <GitBranch size={12} /> {t('coding.git')}
+                  <GitBranch size={12} /> Changes
                 </button>
               </div>
               <div className="flex-1 overflow-hidden">
@@ -953,21 +1009,6 @@ export default function CodingPanel() {
                             <span className="text-foreground">{f.path}</span>
                           </div>
                         ))}
-                        <div className="flex gap-2 pt-2">
-                          <input
-                            value={commitMessage}
-                            onChange={(e) => setCommitMessage(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && runGitCommand(`git add -A && git commit -m "${commitMessage}"`)}
-                            placeholder={t('coding.commitMessage')}
-                            className="flex-1 bg-surface border border-border rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-primary"
-                          />
-                          <button
-                            onClick={() => { runGitCommand(`git add -A && git commit -m "${commitMessage}"`); setCommitMessage(''); loadGitStatus() }}
-                            className="px-3 py-1.5 bg-primary hover:bg-primary-hover text-white rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5"
-                          >
-                            <GitCommit size={12} /> {t('coding.commit')}
-                          </button>
-                        </div>
                       </>
                     ) : (
                       <p className="text-muted text-center py-4">{t('coding.workingTreeClean')}</p>
@@ -1031,18 +1072,7 @@ export default function CodingPanel() {
               </button>
             )
           })()}
-          <button
-            onClick={() => {
-              const next = layoutMode === 'ide' ? 'agent' : 'ide'
-              setLayoutMode(next)
-              try { localStorage.setItem('coding-layout', next) } catch {}
-            }}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 ${layoutMode === 'agent' ? 'bg-primary/10 text-primary' : 'bg-surface border border-border hover:border-primary text-muted-foreground'}`}
-            title={layoutMode === 'ide' ? 'IDE Mode — click for Agent Mode' : 'Agent Mode — click for IDE Mode'}
-          >
-            {layoutMode === 'ide' ? <LayoutTemplate size={12} /> : <Columns size={12} />}
-            {layoutMode === 'ide' ? 'IDE' : 'Agent'}
-          </button>
+
           <button
             onClick={() => {
               const next = !workspaceSidebarVisible
@@ -1054,10 +1084,11 @@ export default function CodingPanel() {
             <Bot size={12} /> Workspace
           </button>
           <button
-            onClick={() => setShowGitPanel(!showGitPanel)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 ${showGitPanel ? 'bg-primary/10 text-primary' : 'bg-surface border border-border hover:border-primary text-muted-foreground'}`}
+            onClick={() => { setActiveBottomTab('git'); loadGitStatus() }}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 ${activeBottomTab === 'git' ? 'bg-primary/10 text-primary' : 'bg-surface border border-border hover:border-primary text-muted-foreground'}`}
+            title="View workspace Git changes"
           >
-            <GitBranch size={12} /> Git
+            <GitBranch size={12} /> Changes
             {changedFiles.length > 0 && (
               <span className="bg-primary text-white text-[9px] px-1.5 py-0.5 rounded-full">{changedFiles.length}</span>
             )}
@@ -1114,117 +1145,8 @@ export default function CodingPanel() {
           </div>
         </div>
 
-        {/* Center */}
-        {layoutMode === 'ide' ? (
-          <div className="flex-1 flex flex-col min-w-0">
-            {/* Editor Tabs */}
-            {openFiles.length > 0 && (
-              <div className="flex border-b border-border bg-surface/30 overflow-x-auto shrink-0">
-                {openFiles.map((file) => (
-                  <div
-                    key={file.path}
-                    onClick={() => setActiveFile(file.path)}
-                    className={`flex items-center gap-2 px-3 py-2 text-xs font-medium border-r border-border transition-colors whitespace-nowrap group cursor-pointer ${
-                      activeFile === file.path
-                        ? 'bg-surface text-foreground border-t-2 border-t-primary'
-                        : 'text-muted-foreground hover:text-foreground hover:bg-surface/50'
-                    }`}
-                  >
-                    <FileCode size={12} />
-                    <span>{file.name}</span>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); closeFile(file.path) }}
-                      className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-error/20 transition-opacity"
-                    >
-                      <X size={10} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Editor */}
-            <div className="flex-1 min-h-0 relative">
-              {activeFile ? (
-                <textarea
-                  value={fileContents[activeFile] || ''}
-                  onChange={(e) => {
-                    const newValue = e.target.value
-                    setFileContents((prev) => ({ ...prev, [activeFile]: newValue }))
-                    setHasUnsavedChanges(newValue !== (originalContents[activeFile] || ''))
-                  }}
-                  className="w-full h-full bg-card text-foreground p-4 font-mono text-sm resize-none focus:outline-none"
-                  spellCheck={false}
-                  placeholder={`// ${getLanguage(activeFile.split('/').pop())}`}
-                />
-              ) : (
-                <div className="flex flex-col items-center justify-center h-full text-muted">
-                  <Code2 size={48} className="mb-4 opacity-20" />
-                  <p className="text-sm">{t('coding.selectFile')}</p>
-                  <p className="text-xs mt-1 opacity-60">{t('coding.selectFileHint')}</p>
-                </div>
-              )}
-            </div>
-
-            {/* Bottom Panel: Terminal / Git */}
-            <div className="h-48 border-t border-border flex flex-col shrink-0">
-              <div className="flex border-b border-border bg-surface/30 shrink-0">
-                <button
-                  onClick={() => setActiveBottomTab('terminal')}
-                  className={`px-4 py-2 text-xs font-medium transition-colors flex items-center gap-1.5 ${activeBottomTab === 'terminal' ? 'text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground'}`}
-                >
-                  <Terminal size={12} /> {t('coding.terminal')}
-                </button>
-                <button
-                  onClick={() => { setActiveBottomTab('git'); loadGitStatus() }}
-                  className={`px-4 py-2 text-xs font-medium transition-colors flex items-center gap-1.5 ${activeBottomTab === 'git' ? 'text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground'}`}
-                >
-                  <GitBranch size={12} /> {t('coding.git')}
-                </button>
-              </div>
-              <div className="flex-1 overflow-hidden">
-                {activeBottomTab === 'terminal' && <XTermTerminal />}
-                {activeBottomTab === 'git' && (
-                  <div className="h-full overflow-y-auto p-3 text-xs space-y-2">
-                    <div className="flex items-center gap-2">
-                      <GitBranch size={14} className="text-primary" />
-                      <span className="font-mono text-foreground">{gitStatus?.branch || 'N/A'}</span>
-                    </div>
-                    {changedFiles.length > 0 ? (
-                      <>
-                        {changedFiles.map((f, i) => (
-                          <div key={i} className="flex items-center gap-2 px-2 py-1 rounded bg-surface">
-                            <span className={`font-mono ${f.staged ? 'text-green-500' : 'text-amber-500'}`}>{f.status}</span>
-                            <span className="text-foreground">{f.path}</span>
-                          </div>
-                        ))}
-                        <div className="flex gap-2 pt-2">
-                          <input
-                            value={commitMessage}
-                            onChange={(e) => setCommitMessage(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && runGitCommand(`git add -A && git commit -m "${commitMessage}"`)}
-                            placeholder={t('coding.commitMessage')}
-                            className="flex-1 bg-surface border border-border rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-primary"
-                          />
-                          <button
-                            onClick={() => { runGitCommand(`git add -A && git commit -m "${commitMessage}"`); setCommitMessage(''); loadGitStatus() }}
-                            className="px-3 py-1.5 bg-primary hover:bg-primary-hover text-white rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5"
-                          >
-                            <GitCommit size={12} /> {t('coding.commit')}
-                          </button>
-                        </div>
-                      </>
-                    ) : (
-                      <p className="text-muted text-center py-4">{t('coding.workingTreeClean')}</p>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        ) : (
-          renderChat(true)
-        )}
+        {/* Center: Agent-first chat */}
+        {renderChat(true)}
 
         {/* Right: Workspace Sidebar (Plan/Todos/Tasks/Agents) */}
         {workspaceSidebarVisible && (
@@ -1237,9 +1159,6 @@ export default function CodingPanel() {
             }}
           />
         )}
-
-        {/* Right: Coding Agent Chat (Copilot-style) */}
-        {layoutMode === 'ide' && renderChat(false)}
 
         {/* Permission Request Modal */}
         {permissionRequest && (
