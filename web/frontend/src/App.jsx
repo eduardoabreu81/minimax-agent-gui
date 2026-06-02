@@ -24,6 +24,7 @@ function App() {
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsModalOpen, setSettingsModalOpen] = useState(false)
+  const [settingsInitialTab, setSettingsInitialTab] = useState('general')
   const [chatKey, setChatKey] = useState(0)
   const [pendingTab, setPendingTab] = useState(null)
   const [showSessionGuard, setShowSessionGuard] = useState(false)
@@ -90,23 +91,24 @@ function App() {
       case 'clear-chat':
         setChatKey(k => k + 1)
         break
-      case 'git-status':
-      case 'git-fetch':
-      case 'git-pull':
-      case 'git-log':
-        setActiveTab('code')
-        window.dispatchEvent(new CustomEvent('gitAction', { detail: action }))
-        break
-      case 'new-task':
+      case 'open-task-board':
         setActiveTab('tasks')
         break
       case 'open-settings':
+        setSettingsInitialTab('general')
         setSettingsModalOpen(true)
         break
       case 'settings-api':
+        setSettingsInitialTab('api')
+        setSettingsModalOpen(true)
+        break
       case 'settings-model':
+        setSettingsInitialTab('models')
+        setSettingsModalOpen(true)
+        break
       case 'settings-theme':
-        // TODO: open settings modal
+        setSettingsInitialTab('theme')
+        setSettingsModalOpen(true)
         break
       default:
         break
@@ -156,6 +158,7 @@ function App() {
         onClose={() => setSettingsModalOpen(false)}
         isDark={isDark}
         onToggleTheme={toggleDark}
+        initialTab={settingsInitialTab}
       />
       {showSessionGuard && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">

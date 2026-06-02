@@ -48,10 +48,17 @@ const SHORTCUTS = [
   { keys: 'Shift + Enter', action: 'New line in input' },
 ]
 
-export default function SettingsModal({ isOpen, onClose, isDark, onToggleTheme }) {
+export default function SettingsModal({ isOpen, onClose, isDark, onToggleTheme, initialTab = 'general' }) {
   const { t, i18n } = useTranslation()
   const { theme, setTheme, mode, setMode, toggleMatrixEffect, matrixEffect, themes: THEME_LIST } = useTheme()
-  const [activeTab, setActiveTab] = useState('general')
+  const [activeTab, setActiveTab] = useState(initialTab)
+
+  // Sync the active tab when the parent (e.g. Command Palette) asks
+  // for a different starting tab — both when the modal first opens
+  // and when the user invokes another deep-link while it's open.
+  useEffect(() => {
+    if (isOpen) setActiveTab(initialTab)
+  }, [initialTab, isOpen])
   const [config, setConfig] = useState({})
   const [savedMessage, setSavedMessage] = useState('')
   const [showApiKey, setShowApiKey] = useState(false)
@@ -247,12 +254,31 @@ export default function SettingsModal({ isOpen, onClose, isDark, onToggleTheme }
 
   const handleSave = async () => {
     try {
-      // In a real app, this would save to the backend
-      // For now, we show a success message
-      setSavedMessage('Settings saved successfully!')
+      // Persist the API key if the user typed one. Empty field = no-op
+      // (we never want to wipe a previously configured key just because
+      // the user opened the modal and clicked Save without changing it).
+      const newKey = (localSettings.apiKey || '').trim()
+      if (newKey) {
+        const res = await fetch('/api/config/api-key', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ api_key: newKey }),
+        })
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}))
+          throw new Error(err.detail || 'Failed to save API key')
+        }
+        // Clear the field after a successful save and refresh the
+        // "configured" status badge. /api/config only returns the
+        // configured flag, never the key itself.
+        setLocalSettings(s => ({ ...s, apiKey: '', apiKeyConfigured: true }))
+        setSavedMessage('API key saved.')
+      } else {
+        setSavedMessage('Settings saved successfully!')
+      }
       setTimeout(() => setSavedMessage(''), 3000)
     } catch (e) {
-      setSavedMessage('Failed to save settings')
+      setSavedMessage(e?.message || 'Failed to save settings')
     }
   }
 

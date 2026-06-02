@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   MessageSquare, Volume2, Image, Music, Video, Code2, Layout, Settings,
-  Search, X, FileText, GitBranch, GitCommit, Terminal, Sparkles,
+  Search, X, FileText, GitBranch, Sparkles,
   ChevronRight, Sun, Moon, Keyboard
 } from 'lucide-react'
 
@@ -20,15 +20,8 @@ const ACTION_ITEMS = [
   { id: 'new-chat', label: 'Start New Chat', icon: Sparkles, action: 'new-chat', keywords: 'new chat conversation start' },
   { id: 'clear-chat', label: 'Clear Chat History', icon: X, action: 'clear-chat', keywords: 'clear reset chat history' },
   { id: 'toggle-theme', label: 'Toggle Light/Dark Theme', icon: Sun, action: 'toggle-theme', keywords: 'theme dark light mode' },
-  { id: 'new-task', label: 'Create New Task', icon: Layout, action: 'new-task', keywords: 'new task create kanban board' },
+  { id: 'open-task-board', label: 'Open Task Board', icon: Layout, action: 'open-task-board', keywords: 'task kanban board project management' },
   { id: 'open-settings', label: 'Open Quick Settings', icon: Settings, action: 'open-settings', keywords: 'settings configuration preferences' },
-]
-
-const GIT_ACTIONS = [
-  { id: 'git-status', label: 'Git: Show Status', icon: GitBranch, action: 'git-status', keywords: 'git status branch' },
-  { id: 'git-fetch', label: 'Git: Fetch Remote', icon: GitBranch, action: 'git-fetch', keywords: 'git fetch remote pull' },
-  { id: 'git-pull', label: 'Git: Pull Changes', icon: GitBranch, action: 'git-pull', keywords: 'git pull merge update' },
-  { id: 'git-log', label: 'Git: View Commit Log', icon: GitCommit, action: 'git-log', keywords: 'git log commits history' },
 ]
 
 const SETTINGS_ITEMS = [
@@ -109,19 +102,6 @@ export default function CommandPalette({ isOpen, onClose, onNavigate, onAction, 
           if (item.action === 'toggle-theme') onToggleTheme()
           else onAction(item.action)
         },
-      })
-    })
-
-    // Git group
-    GIT_ACTIONS.forEach(item => {
-      items.push({
-        group: 'Git',
-        groupOrder: 3,
-        id: item.id,
-        label: item.label,
-        icon: item.icon,
-        keywords: item.keywords,
-        action: () => onAction(item.action),
       })
     })
 

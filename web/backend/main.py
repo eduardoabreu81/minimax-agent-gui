@@ -597,19 +597,73 @@ async def update_tools_config(req: ToolsConfigRequest):
             cfg = cfg.to_dict()
         elif not isinstance(cfg, dict):
             cfg = {}
-        
+
         cfg["tools"] = {
             "web_search": req.web_search,
             "understand_image": req.understand_image,
         }
-        
+
         import yaml
         with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
             yaml.dump(cfg, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
-        
+
         config = cfg
-        
+
         return {"success": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class ApiKeyUpdate(BaseModel):
+    api_key: str
+
+
+@app.put("/api/config/api-key")
+async def set_api_key(req: ApiKeyUpdate):
+    """Persist the MiniMax API key to config/config.yaml.
+
+    The key is validated against MiniMax's known prefixes and written
+    to disk. The key is never echoed back in the response — only a
+    boolean `api_key_configured` flag.
+
+    Note: WebSocket sessions that are already open keep the key they
+    read on connect. New sessions (or a refresh of the panel) pick up
+    the updated key automatically.
+    """
+    global config
+    try:
+        key = (req.api_key or "").strip()
+        if not key:
+            raise HTTPException(status_code=400, detail="API key cannot be empty.")
+        # MiniMax API keys: 'sk-cp-...' (Token Plan) or 'sk-...' (general).
+        if not (key.startswith("sk-") and len(key) >= 16):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Invalid API key format. MiniMax keys start with "
+                    "'sk-' or 'sk-cp-' and are at least 16 characters."
+                ),
+            )
+
+        cfg = config
+        if hasattr(cfg, 'to_dict'):
+            cfg = cfg.to_dict()
+        elif not isinstance(cfg, dict):
+            cfg = {}
+        if not isinstance(cfg.get("minimax"), dict):
+            cfg["minimax"] = {}
+
+        cfg["minimax"]["api_key"] = key
+
+        import yaml
+        with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
+            yaml.dump(cfg, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+
+        config = cfg
+
+        return {"success": True, "api_key_configured": True}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

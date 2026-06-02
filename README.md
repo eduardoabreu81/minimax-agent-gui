@@ -53,12 +53,7 @@ pip install -e .
 pip install -r web/backend/requirements.txt
 (cd web && npm install)
 
-# 3. Configure your API key
-cp mini_agent/config/config-example.yaml config/config.yaml   # macOS / Linux
-# PowerShell: Copy-Item mini_agent/config/config-example.yaml config/config.yaml
-# Then edit config/config.yaml and paste your key under `api_key:`
-
-# 4. Start the dev servers
+# 3. Start the dev servers
 cd web && npm run dev
 ```
 
@@ -66,7 +61,12 @@ cd web && npm run dev
 - **Backend** — FastAPI on `http://localhost:8000`
 - **Frontend** — Vite dev server on `http://localhost:3000`
 
-Open **http://localhost:3000** in your browser and start chatting.
+Open **http://localhost:3000** in your browser. On first launch the
+**Settings → API** panel will prompt you to paste your MiniMax API key
+— that's all you need to start chatting. The key is stored locally in
+`config/config.yaml` (which is gitignored, so it never leaves your
+machine).
+
 To stop both servers, press `Ctrl+C` in the terminal that ran `npm run dev`.
 
 > **Windows tip:** If you have multiple Python versions on PATH, use
@@ -75,9 +75,10 @@ To stop both servers, press `Ctrl+C` in the terminal that ran `npm run dev`.
 > backend, so the dev server works on any machine with Python 3.10+
 > registered via the `py` launcher — no need to edit anything.
 
-> **Override at runtime:** the API key can also be set via the
-> `MINIMAX_API_KEY` environment variable, and the API base URL via
-> `MINIMAX_API_BASE`. Both take precedence over the values in
+> **Headless / CI:** The same key can also be set by editing
+> `config/config.yaml` directly, or via the `MINIMAX_API_KEY`
+> environment variable. The API base URL can be overridden with
+> `MINIMAX_API_BASE`. Both env vars take precedence over the values in
 > `config/config.yaml`.
 
 ## Usage

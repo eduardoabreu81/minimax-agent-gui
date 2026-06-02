@@ -1,0 +1,30 @@
+fix(settings): wire API key save + clean up command palette stubs
+
+Three independent UX fixes:
+
+1. Settings Modal API key field was a stub
+   - Field existed but handleSave() was a no-op (comment said
+     "In a real app, this would save to the backend"). Save toast
+     persisted nothing.
+   - Added PUT /api/config/api-key on the backend that validates
+     the key (sk- or sk-cp- prefix, >=16 chars) and writes to
+     config/config.yaml. Key is never echoed back.
+   - handleSave() now calls the endpoint when the field is
+     non-empty. Empty field is a no-op so opening the modal does
+     not wipe an existing key.
+   - README Quick Start now lists the UI as the primary way to
+     set the key. YAML and env vars are alternatives.
+
+2. Command Palette settings deep-links were no-ops
+   - settings-api, settings-model, settings-theme had a TODO
+     comment and did nothing.
+   - Added initialTab prop to SettingsModal. The three palette
+     entries now open the modal at the right tab.
+
+3. Command Palette git-* entries were decorative
+   - git-status, git-fetch, git-pull, git-log dispatched a
+     gitAction window event that no component listened to. The
+     backend only has GET /api/git/status and /api/git/branches.
+   - Removed the four entries and the dead switch cases in
+     App.jsx. Renamed "Create New Task" (which only navigated)
+     to "Open Task Board" so the label matches the action.
