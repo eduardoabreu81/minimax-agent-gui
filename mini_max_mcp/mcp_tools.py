@@ -30,8 +30,12 @@ class MiniMaxMCPClient:
 
         Args:
             query: Search query
-            recency_days: Filter results from last N days (0 = any time)
-            max_results: Maximum number of results (1-10)
+            recency_days: Filter results from last N days (0 = any time).
+                         Currently accepted but ignored — the API only
+                         honours the ``q`` field for keyword search.
+            max_results: Maximum number of results (1-10). Accepted
+                         but ignored — the API returns its own default
+                         result set.
 
         Returns:
             (success, results_text)
@@ -43,10 +47,14 @@ class MiniMaxMCPClient:
             "Content-Type": "application/json"
         }
 
+        # IMPORTANT: the Token Plan API expects the query under the
+        # ``q`` key, NOT ``query`` (the older M2.7 coding-plan endpoint
+        # used ``query``). Sending ``query`` + extra fields returns
+        # ``HTTP 400 invalid params`` because the extra fields are
+        # rejected as unknown. Match the working ``minimax-coding-plan-mcp``
+        # server's exact request shape.
         data = {
-            "query": query,
-            "recency_days": recency_days,
-            "max_results": max_results
+            "q": query,
         }
 
         _logger.debug(f"web_search] Query: {query}")

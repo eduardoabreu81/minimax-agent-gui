@@ -20,7 +20,7 @@
     "placeholder": "给 MiniMax 智能助手发消息...",
     "sendHint": "Ctrl+Enter 发送",
     "emptyTitle": "开始与 MiniMax 智能助手对话",
-    "emptySubtitle": "由 MiniMax-M2.7 驱动",
+    "emptySubtitle": "由 MiniMax-M3 驱动",
     "thinking": "思考中...",
     "newChat": "新对话",
     "clearHistory": "清除历史"
@@ -99,7 +99,7 @@
     "welcome": "欢迎使用 MiniMax 智能助手",
     "welcomeDesc": "您的一站式 MiniMax Token Plan 平台。聊天、生成媒体、编写代码、管理任务 —— 应有尽有。",
     "chat": "智能助手聊天",
-    "chatDesc": "与由 MiniMax-M2.7 驱动的智能助手聊天。提问、获取编程帮助或头脑风暴。",
+    "chatDesc": "与由 MiniMax-M3 驱动的智能助手聊天。提问、获取编程帮助或头脑风暴。",
     "media": "媒体生成",
     "mediaDesc": "使用 MiniMax API 生成语音、图像、音乐和视频。",
     "code": "代码工作区",
@@ -118,5 +118,16 @@
     "activeDesc": "智能助手正在处理您的请求。切换标签可能会中断会话。",
     "stay": "停留",
     "switchAnyway": "仍然切换"
+  },
+  "balance": {
+    "credits": "积分",
+    "tooltip": "积分余额: {{balance}} / {{total}}"
+  },
+  "media": {
+    "cost": "费用",
+    "costLabel": "费用: {{credits}} 积分 (${{usd}})",
+    "imageCostLabel": "费用: {{credits}} 积分 (${{usd}}) · {{count}} 张",
+    "daily": "每日",
+    "dailyLabel": "每日: {{used}}/{{limit}}"
   }
 }

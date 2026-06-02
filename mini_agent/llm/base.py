@@ -42,12 +42,17 @@ class LLMClientBase(ABC):
         self,
         messages: list[Message],
         tools: list[Any] | None = None,
+        model: str | None = None,
+        thinking: bool | None = None,
     ) -> LLMResponse:
         """Generate response from LLM.
 
         Args:
             messages: List of conversation messages
             tools: Optional list of Tool objects or dicts
+            model: Optional model override for this call (defaults to self.model)
+            thinking: Optional thinking override for this call.
+                       True = force thinking on, False = force off, None = auto.
 
         Returns:
             LLMResponse containing the generated content, thinking, and tool calls

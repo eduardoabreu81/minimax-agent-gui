@@ -20,7 +20,7 @@
     "placeholder": "Message MiniMax Agent...",
     "sendHint": "Ctrl+Enter to send",
     "emptyTitle": "Start a conversation with MiniMax Agent",
-    "emptySubtitle": "Powered by MiniMax-M2.7",
+    "emptySubtitle": "Powered by MiniMax-M3",
     "thinking": "thinking...",
     "newChat": "New Chat",
     "clearHistory": "Clear History"
@@ -99,7 +99,7 @@
     "welcome": "Welcome to MiniMax Agent",
     "welcomeDesc": "Your all-in-one platform for MiniMax Token Plan. Chat, generate media, code, and manage tasks — all in one place.",
     "chat": "Agent Chat",
-    "chatDesc": "Chat with MiniMax-M2.7 powered agent. Ask questions, get help with coding, or brainstorm ideas.",
+    "chatDesc": "Chat with the MiniMax-M3 powered agent. Ask questions, get help with coding, or brainstorm ideas.",
     "media": "Media Generation",
     "mediaDesc": "Generate text-to-speech, images, music, and videos using MiniMax APIs.",
     "code": "Coding Workspace",
@@ -118,5 +118,16 @@
     "activeDesc": "The agent is currently processing your request. Switching tabs may interrupt the session.",
     "stay": "Stay",
     "switchAnyway": "Switch Anyway"
+  },
+  "balance": {
+    "credits": "Credits",
+    "tooltip": "Credit balance: {{balance}} / {{total}}"
+  },
+  "media": {
+    "cost": "Cost",
+    "costLabel": "Cost: {{credits}} credits (${{usd}})",
+    "imageCostLabel": "Cost: {{credits}} credits (${{usd}}) · {{count}} image(s)",
+    "daily": "Daily",
+    "dailyLabel": "Daily: {{used}}/{{limit}}"
   }
 }

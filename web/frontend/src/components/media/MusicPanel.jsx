@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Music, Loader2, Play, Save, Wand2, Guitar, Mic2, AudioLines, Check } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
+import { Music, Loader2, Play, Save, Wand2, Guitar, Mic2, AudioLines, Check, Coins } from 'lucide-react'
 import { useSessionProtection } from '../../hooks/useSessionProtection'
 import RecentGenerations from './RecentGenerations'
 
@@ -13,6 +14,7 @@ const MUSIC_MODELS = [
 const STRUCTURE_TAGS = ['Intro', 'Verse', 'Pre Chorus', 'Chorus', 'Interlude', 'Bridge', 'Outro', 'Post Chorus', 'Hook', 'Inst']
 
 export default function MusicPanel() {
+  const { t } = useTranslation()
   const [mode, setMode] = useState('original')
   const [model, setModel] = useState('music-2.6-free')
   const [prompt, setPrompt] = useState('')
@@ -28,6 +30,7 @@ export default function MusicPanel() {
   const [key, setKey] = useState('')
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState(null)
+  const [cost, setCost] = useState(null)
   const [error, setError] = useState(null)
   const [history, setHistory] = useState([])
   const [historyLoading, setHistoryLoading] = useState(false)
@@ -85,6 +88,7 @@ export default function MusicPanel() {
     setLoading(true)
     setError(null)
     setResult(null)
+    setCost(null)
     try {
       const args = ['--model', model]
 
@@ -120,7 +124,19 @@ export default function MusicPanel() {
       const data = await res.json()
       if (data.success && data.returncode === 0) {
         setResult(outFile)
+        // Capture cost — backend may return cost_credits/cost_usd at top level
+        // or embed them in the CLI stdout JSON.
+        let parsedOut = null
+        try { parsedOut = JSON.parse(data.stdout) } catch { /* ignore */ }
+        const cc = data.cost_credits ?? parsedOut?.cost_credits
+        const cu = data.cost_usd ?? parsedOut?.cost_usd
+        if (typeof cc === 'number' || typeof cu === 'number') {
+          setCost({ cost_credits: cc, cost_usd: cu })
+        }
         fetchHistory()
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('minimax:media-complete'))
+        }
       } else {
         setError(data.stderr || data.stdout || 'Music generation failed')
       }
@@ -350,9 +366,25 @@ export default function MusicPanel() {
 
         {result && (
           <div className="bg-surface border border-border rounded-xl p-4 space-y-3">
-            <p className="text-sm text-muted flex items-center gap-2">
-              <Check size={14} className="text-success" /> Music generated
-            </p>
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <p className="text-sm text-muted flex items-center gap-2">
+                <Check size={14} className="text-success" /> Music generated
+              </p>
+              {cost && (
+                <div
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/5 border border-primary/20 text-[10px] font-medium text-primary"
+                  title="Cost for this generation"
+                >
+                  <Coins size={11} />
+                  <span>
+                    {t('media.costLabel', {
+                      credits: cost.cost_credits ?? 0,
+                      usd: typeof cost.cost_usd === 'number' ? cost.cost_usd.toFixed(4) : '0.0000',
+                    })}
+                  </span>
+                </div>
+              )}
+            </div>
             <audio controls className="w-full" src={`/api/files/content?path=${encodeURIComponent(result)}`} />
             <div className="flex gap-2">
               <a

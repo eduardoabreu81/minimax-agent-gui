@@ -23,7 +23,7 @@ export default function QuickSettings({ isOpen, onClose, isDark, onToggleTheme }
 
   if (!isOpen) return null
 
-  const model = config.agent?.model || 'MiniMax-M2.7'
+  const model = config.agent?.model || 'MiniMax-M3'
   const maxSteps = config.agent?.max_steps || 50
   const workspaceDir = config.agent?.workspace_dir || './workspace'
   const region = config.region || 'global'
@@ -97,7 +97,7 @@ export default function QuickSettings({ isOpen, onClose, isDark, onToggleTheme }
               <Cpu size={12} /> {t('settings.model')}
             </h3>
             <div className="space-y-1.5">
-              {['MiniMax-M2.7', 'MiniMax-Hailuo-2.3', 'MiniMax-speech-2.8', 'MiniMax-image-01'].map(m => (
+              {['MiniMax-M3', 'MiniMax-Hailuo-2.3', 'MiniMax-speech-2.8', 'MiniMax-image-01'].map(m => (
                 <div
                   key={m}
                   className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-colors ${

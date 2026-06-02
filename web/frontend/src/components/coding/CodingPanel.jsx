@@ -14,8 +14,22 @@ import AgentChatPanel from './AgentChatPanel'
 import { useCodingChat } from './useCodingChat'
 import { useAgentActivity } from '../../context/AgentActivityContext'
 import { useSessionProtection } from '../../hooks/useSessionProtection'
+import { useModelOverride } from '../../hooks/useModelOverride'
+import { useThinkingToggle } from '../../hooks/useThinkingToggle'
+import ModelThinkingControls from '../shared/ModelThinkingControls'
+import ThinkingBlock from '../shared/ThinkingBlock'
+import CopyButton from '../shared/CopyButton'
 
-const CODING_SYSTEM_PROMPT = `You are MiniMax Coding Agent, an expert software engineer powered by MiniMax-M2.7.
+/**
+ * Build the system prompt for the coding agent. The model is interpolated
+ * at call time so the prompt never references a stale hardcoded model id.
+ * Pass an empty/falsy model to omit the model line entirely.
+ */
+const buildCodingSystemPrompt = (model) => {
+  const modelLine = model
+    ? `You are MiniMax Coding Agent, an expert software engineer powered by ${model}.`
+    : 'You are MiniMax Coding Agent, an expert software engineer.'
+  return `${modelLine}
 You help users write, debug, refactor, and understand code.
 You have access to:
 - The currently open file (its content and path)
@@ -34,12 +48,24 @@ When asked to debug:
 3. Provide a fix with explanation
 
 Always be concise but thorough. Use markdown for code blocks.`
+}
 
 // Quick actions removed — agent now works directly from chat context
 
 export default function CodingPanel() {
   const { t } = useTranslation()
   const activity = useAgentActivity()
+  // Per-turn model + thinking controls. Independent from ChatPanel via
+  // a different localStorage key, so the two panels can have different
+  // active models.
+  const { model: activeModel, setModel: setActiveModel, supportsThinking } = useModelOverride({
+    fallback: 'MiniMax-M3',
+    storageKey: 'code-model-override',
+  })
+  const { thinkingEnabled, setThinkingEnabled } = useThinkingToggle({
+    storageKey: 'code-thinking-enabled',
+    defaultValue: true,
+  })
   const [files, setFiles] = useState([])
   const [currentPath, setCurrentPath] = useState('workspace')
   const [openFiles, setOpenFiles] = useState([])
@@ -81,7 +107,7 @@ export default function CodingPanel() {
   const [codingThinking, setCodingThinking] = useState(false)
   const [codingConnected, setCodingConnected] = useState(false)
   const [codingAttachment, setCodingAttachment] = useState(null)
-  const [codingSessionId, setCodingSessionId] = useState('coding-default')
+  const [codingSessionId, setCodingSessionId] = useState(() => `coding-${Math.random().toString(36).substring(2, 10)}`)
   const [codingConversations, setCodingConversations] = useState([])
   const [showCodingConvList, setShowCodingConvList] = useState(false)
   const [codingSearchQuery, setCodingSearchQuery] = useState('')
@@ -95,6 +121,10 @@ export default function CodingPanel() {
   const codingChatRef = useRef(null)
   const codingFileInputRef = useRef(null)
   const codingConvListRef = useRef(null)
+  // Accumulates the model's reasoning chunks streamed during the
+  // current run, so we can attach the full block to the final
+  // assistant message (rendered via ThinkingBlock).
+  const codingStreamingThinkingRef = useRef('')
 
   const { register } = useSessionProtection()
 
@@ -225,9 +255,9 @@ export default function CodingPanel() {
       if (data.success) {
         const list = data.conversations || []
         setCodingConversations(list)
-        if (codingSessionId === 'coding-default' && list.length > 0) {
-          setCodingSessionId(list[0].id)
-        }
+        // Do NOT auto-load the most recent session. Each Code-tab open
+        // starts a fresh empty session; the user picks a previous one
+        // by clicking it in the sidebar list explicitly.
       }
     } catch (e) { /* ignore */ }
   }
@@ -305,6 +335,7 @@ export default function CodingPanel() {
           m.type !== 'step_start' && m.type !== 'tool_result' && m.type !== 'tool_calls'
         )
         setCodingMessages(chatMessages)
+        codingStreamingThinkingRef.current = ''
         setCodingThinking(false)
         activity.clearActivity()
       } else if (data.type === 'status' && data.content === 'thinking...') {
@@ -327,7 +358,62 @@ export default function CodingPanel() {
         activity.addStep(data.step, data.max_steps)
         activity.setThinkingState(true)
       } else if (data.type === 'thinking') {
+        // Legacy/non-streaming thinking event (one-shot per LLM call).
+        // The new per-token path lives under thinking_delta below.
+        if (data.content) {
+          setCodingMessages((prev) => {
+            const last = prev[prev.length - 1]
+            if (last && last.type === 'thinking' && last.streaming) {
+              const updated = [...prev]
+              updated[updated.length - 1] = {
+                ...last,
+                content: last.content + '\n\n' + data.content,
+              }
+              return updated
+            }
+            return [...prev, { type: 'thinking', content: data.content, streaming: true }]
+          })
+        }
         activity.setThinkingState(true, data.content)
+      } else if (data.type === 'thinking_delta') {
+        // Per-token thinking stream. Append to the in-flight thinking
+        // message so the user sees the reasoning appear word-by-word.
+        if (data.content) {
+          setCodingMessages((prev) => {
+            const last = prev[prev.length - 1]
+            if (last && last.type === 'thinking' && last.streaming) {
+              const updated = [...prev]
+              updated[updated.length - 1] = {
+                ...last,
+                content: last.content + data.content,
+              }
+              return updated
+            }
+            return [...prev, { type: 'thinking', content: data.content, streaming: true }]
+          })
+        }
+        activity.setThinkingState(true, data.content)
+      } else if (data.type === 'text_delta') {
+        // Per-token text stream for the visible response.
+        if (data.content) {
+          setCodingMessages((prev) => {
+            const last = prev[prev.length - 1]
+            if (last && last.type === 'assistant' && last.streaming) {
+              const updated = [...prev]
+              updated[updated.length - 1] = {
+                ...last,
+                content: last.content + data.content,
+              }
+              return updated
+            }
+            return [...prev, {
+              type: 'assistant',
+              content: data.content,
+              streaming: true,
+            }]
+          })
+        }
+        activity.setThinkingState(true)
       } else if (data.type === 'skill_activated') {
         setCodingThinking(false)
         setCodingMessages((prev) => [...prev, { type: 'system', content: `Skill '${data.skill}' activated` }])
@@ -337,7 +423,49 @@ export default function CodingPanel() {
         activity.setThinkingState(false)
       } else {
         setCodingThinking(false)
-        setCodingMessages((prev) => [...prev, data])
+        // The final assistant event arrives AFTER all text_delta
+        // events have already streamed the content. Just FREEZE the
+        // in-flight assistant (and any streaming thinking) — don't
+        // add a new message or we'd duplicate the text.
+        const finalThinking = data.thinking || codingStreamingThinkingRef.current || null
+        codingStreamingThinkingRef.current = ''
+        setCodingMessages((prev) => {
+          const last = prev[prev.length - 1]
+          if (last && last.type === 'assistant' && last.streaming) {
+            const frozen = [...prev]
+            frozen[frozen.length - 1] = {
+              ...last,
+              ...data,
+              streaming: false,
+              thinking: undefined,
+            }
+            if (finalThinking) {
+              const hasThinking = prev.some(m => m.type === 'thinking' && !m.streaming)
+              if (!hasThinking) {
+                frozen.splice(frozen.length - 1, 0, {
+                  type: 'thinking',
+                  content: finalThinking,
+                  model: data.model || null,
+                })
+              }
+            }
+            return frozen
+          }
+          // No streaming assistant — fall back to building messages
+          // from scratch (covers non-streaming path / older backends).
+          const frozen = prev.map((m, i) =>
+            i === prev.length - 1 && m.type === 'thinking' && m.streaming
+              ? { ...m, streaming: false }
+              : m
+          )
+          const lastFrozen = frozen[frozen.length - 1]
+          const hasThinkingMsg = lastFrozen && lastFrozen.type === 'thinking' && !lastFrozen.streaming
+          if (!hasThinkingMsg && finalThinking) {
+            frozen.push({ type: 'thinking', content: finalThinking, model: data.model || null })
+          }
+          frozen.push({ ...data, thinking: undefined })
+          return frozen
+        })
         activity.setThinkingState(false)
       }
     }
@@ -437,7 +565,14 @@ export default function CodingPanel() {
       contextMessage = `[Context: File \`${fileName}\` is currently open]\n\n${contextMessage}\n\n[Current file content (first 3000 chars):\n\`\`\`\n${codeSnippet}\n\`\`\`]`
     }
 
-    const payload = { message: contextMessage, permission_mode: agentMode === 'yolo' ? 'yolo' : 'agent' }
+    const payload = {
+      message: contextMessage,
+      permission_mode: agentMode === 'yolo' ? 'yolo' : 'agent',
+      // Per-turn model + thinking override. Backend routes the LLM call
+      // to the chosen model and injects the thinking param if M3 + on.
+      model: activeModel,
+      thinking: supportsThinking ? thinkingEnabled : false,
+    }
     if (codingAttachment) payload.attachment = codingAttachment.path
     // Show user message immediately before sending
     setCodingMessages(prev => [...prev, {
@@ -445,11 +580,12 @@ export default function CodingPanel() {
       content: codingInput.trim() || '📎 Attachment sent',
       attachment: codingAttachment?.path
     }])
+    codingStreamingThinkingRef.current = ''
     codingWs.send(JSON.stringify(payload))
     setCodingInput('')
     setCodingAttachment(null)
     setCodingThinking(true)
-  }, [codingInput, codingWs, activeFile, fileContents, codingAttachment, agentMode, activity, gitStatus])
+  }, [codingInput, codingWs, activeFile, fileContents, codingAttachment, agentMode, activity, gitStatus, activeModel, supportsThinking, thinkingEnabled])
 
   const activateSkill = (skillName) => {
     if (codingWs && codingWs.readyState === WebSocket.OPEN) {
@@ -723,6 +859,17 @@ export default function CodingPanel() {
                 </div>
               )
             }
+            if (msg.type === 'thinking') {
+              return (
+                <div key={idx} className={isAgent ? 'max-w-[80%]' : 'max-w-[85%]'}>
+                  <ThinkingBlock
+                    thinking={msg.content}
+                    streaming={msg.streaming}
+                    compact={!isAgent}
+                  />
+                </div>
+              )
+            }
             return (
               <div key={idx} className={`flex gap-2 ${msg.type === 'user' ? 'flex-row-reverse' : ''}`}>
                 <div className={`
@@ -733,13 +880,24 @@ export default function CodingPanel() {
                   {msg.type === 'user' ? <User size={isAgent ? 14 : 10} className="text-white" /> : <Bot size={isAgent ? 14 : 10} className="text-primary" />}
                 </div>
                 <div className={`
-                  leading-relaxed
+                  leading-relaxed space-y-1.5
                   ${isAgent ? 'max-w-[80%] px-4 py-3 rounded-2xl text-sm' : 'max-w-[85%] px-3 py-2 rounded-xl text-xs'}
                   ${msg.type === 'user'
                     ? 'bg-primary text-white rounded-br-md'
                     : 'bg-surface border border-border text-foreground rounded-bl-md'
                   }
                 `}>
+                  {/* Model tag for assistant messages — confirms which
+                      model produced this turn when the user has multiple
+                      chat options. */}
+                  {msg.type === 'assistant' && msg.model && (
+                    <div className="flex items-center justify-between gap-2">
+                      <span className={isAgent ? 'text-[10px] text-primary/80 font-medium' : 'text-[9px] text-primary/80 font-medium'}>
+                        {msg.model}
+                      </span>
+                      <CopyButton text={msg.content} />
+                    </div>
+                  )}
                   <MarkdownRenderer content={msg.content} />
                   {msg.attachment && (
                     <div className="mt-2 pt-2 border-t border-white/20">
@@ -856,9 +1014,16 @@ export default function CodingPanel() {
                   </div>
                 )}
               </div>
-              <div className="flex justify-between items-center mt-1">
+              <div className="flex justify-between items-center mt-1.5 gap-2">
                 <p className={isAgent ? 'text-xs text-muted' : 'text-[9px] text-muted'}>Enter to send · Shift+Enter for new line</p>
-                <p className={isAgent ? 'text-xs text-primary font-medium' : 'text-[9px] text-primary font-medium'}>MiniMax-M2.7</p>
+                <ModelThinkingControls
+                  model={activeModel}
+                  setModel={setActiveModel}
+                  thinkingEnabled={thinkingEnabled}
+                  setThinkingEnabled={setThinkingEnabled}
+                  supportsThinking={supportsThinking}
+                  compact
+                />
               </div>
             </div>
             <div className="flex flex-col gap-1.5">

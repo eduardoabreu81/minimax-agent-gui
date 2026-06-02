@@ -20,7 +20,7 @@
     "placeholder": "MiniMax 에이전트에게 메시지...",
     "sendHint": "Ctrl+Enter 로 전송",
     "emptyTitle": "MiniMax 에이전트와 대화를 시작하세요",
-    "emptySubtitle": "Powered by MiniMax-M2.7",
+    "emptySubtitle": "Powered by MiniMax-M3",
     "thinking": "생각 중...",
     "newChat": "새 채팅",
     "clearHistory": "기록 지우기"
@@ -99,7 +99,7 @@
     "welcome": "MiniMax 에이전트에 오신 것을 환영합니다",
     "welcomeDesc": "MiniMax Token Plan을 위한 올인원 플랫폼입니다. 채팅, 미디어 생성, 코딩, 작업 관리를 한 곳에서.",
     "chat": "에이전트 채팅",
-    "chatDesc": "MiniMax-M2.7 기반 에이전트와 채팅하세요. 질문하고, 코딩 도움을 받고, 브레인스토밍하세요.",
+    "chatDesc": "MiniMax-M3 기반 에이전트와 채팅하세요. 질문하고, 코딩 도움을 받고, 브레인스토밍하세요.",
     "media": "미디어 생성",
     "mediaDesc": "MiniMax API를 사용하여 텍스트 음성 변환, 이미지, 음악, 비디오를 생성하세요.",
     "code": "코딩 워크스페이스",
@@ -118,5 +118,16 @@
     "activeDesc": "에이전트가 요청을 처리 중입니다. 탭을 전환하면 세션이 중단될 수 있습니다.",
     "stay": "머무르기",
     "switchAnyway": "그래도 전환"
+  },
+  "balance": {
+    "credits": "크레딧",
+    "tooltip": "크레딧 잔액: {{balance}} / {{total}}"
+  },
+  "media": {
+    "cost": "비용",
+    "costLabel": "비용: {{credits}} 크레딧 (${{usd}})",
+    "imageCostLabel": "비용: {{credits}} 크레딧 (${{usd}}) · {{count}}장",
+    "daily": "일일",
+    "dailyLabel": "일일: {{used}}/{{limit}}"
   }
 }

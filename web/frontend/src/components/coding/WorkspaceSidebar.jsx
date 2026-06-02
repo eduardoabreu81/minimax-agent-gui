@@ -6,6 +6,7 @@ import {
   Wrench, Clock, Terminal
 } from 'lucide-react'
 import { useAgentActivity } from '../../context/AgentActivityContext'
+import { useSelectedModel } from '../../hooks/useSelectedModel'
 
 const TABS = [
   { id: 'plan', label: 'Plan', icon: Search },
@@ -408,6 +409,7 @@ function TasksPanel() {
 
 function AgentsPanel() {
   const activity = useAgentActivity()
+  const { model: selectedModel } = useSelectedModel({ fallback: 'MiniMax-M3' })
 
   return (
     <div className="space-y-3">
@@ -418,7 +420,7 @@ function AgentsPanel() {
             <Bot size={12} className="text-primary" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-[11px] font-medium text-foreground">MiniMax-M2.7</p>
+            <p className="text-[11px] font-medium text-foreground">{selectedModel}</p>
             <p className="text-[10px] text-muted truncate">
               {activity.thinking.active ? 'Thinking...' : 'Idle'}
             </p>

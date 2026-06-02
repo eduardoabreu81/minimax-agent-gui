@@ -48,9 +48,9 @@ config/config.yaml
 ANALISE_*.md
 PROJECT_*.md
 ROADMAP_*.md
+INTEGRATION_REPORT.md
 *.local.md
-docs/PROJECT_LOG.md
-docs/PROJECT_CONTEXT.md
+docs/*.md
 
 # Node.js
 node_modules/
@@ -60,3 +60,22 @@ build/
 # OS
 .DS_Store
 Thumbs.db
+
+# Local dev scripts (Windows)
+start.bat
+close.bat
+
+# Runtime artifacts
+web/server.pid
+
+# Unrelated side project (a separate Node.js landing page that lives inside web/backend/)
+web/backend/server.js
+web/backend/package.json
+web/backend/landing-page.html
+web/backend/public/
+web/backend/visitors.json
+
+# Local tool sessions (per-dev, not part of the project)
+.claude/
+.mavis/
+.specstory/

@@ -327,6 +327,9 @@ Requirements:
         permission_mode: str = "agent",
         permission_callback: Optional[callable] = None,
         permission_policy: Optional[dict] = None,
+        model_override: str | None = None,
+        thinking_override: bool | None = None,
+        stream_callback: Optional[callable] = None,
     ) -> str:
         """Execute agent loop until task is complete or max steps reached.
 
@@ -341,6 +344,14 @@ Requirements:
                                  Receives {"tool_name", "arguments", "classification"}
                                  and must return "approved" or "rejected".
             permission_policy: Optional dict with per-category or per-tool overrides.
+            model_override: Optional model to use for THIS run, overriding the
+                            client default. Per-turn model picker in the UI.
+            thinking_override: Optional thinking toggle for THIS run.
+                                True = force on, False = force off, None = auto.
+            stream_callback: Optional async callback(kind, content) invoked for
+                              every content_block_delta (thinking or text) as
+                              the model generates. Enables real-time streaming
+                              of both reasoning and response to the client.
 
         Returns:
             The final response content, or error message (including cancellation message).
@@ -390,7 +401,13 @@ Requirements:
             self.logger.log_request(messages=self.messages, tools=tool_list)
 
             try:
-                response = await self.llm.generate(messages=self.messages, tools=tool_list)
+                response = await self.llm.generate(
+                    messages=self.messages,
+                    tools=tool_list,
+                    model=model_override,
+                    thinking=thinking_override,
+                    on_delta=stream_callback,
+                )
             except Exception as e:
                 # Check if it's a retry exhausted error
                 from .retry import RetryExhaustedError
@@ -406,6 +423,21 @@ Requirements:
             # Accumulate API reported token usage
             if response.usage:
                 self.api_total_tokens = response.usage.total_tokens
+
+            # Stream the model's reasoning (M3 extended thinking, etc.)
+            # to the WebSocket so the UI can render the thinking block
+            # in real-time alongside the streamed response. Without
+            # this, the thinking is silently captured into the agent's
+            # internal message log but never reaches the client.
+            if response.thinking and tool_callback:
+                try:
+                    await tool_callback(
+                        "__thinking__",
+                        {"thinking": response.thinking},
+                        None,
+                    )
+                except Exception:
+                    pass
 
             # Log LLM response
             self.logger.log_response(

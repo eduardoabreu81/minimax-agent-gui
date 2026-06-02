@@ -49,12 +49,21 @@ class OpenAIClient(LLMClientBase):
         self,
         api_messages: list[dict[str, Any]],
         tools: list[Any] | None = None,
+        model: str | None = None,
+        thinking: bool | None = None,
+        on_delta: Any = None,
     ) -> Any:
         """Execute API request (core method that can be retried).
 
         Args:
             api_messages: List of messages in OpenAI format
             tools: Optional list of tools
+            model: Optional model override for this call (defaults to self.model)
+            thinking: Optional thinking override (kept for signature parity;
+                       OpenAI reasoning split is controlled by extra_body).
+            on_delta: Optional per-chunk callback. Currently a no-op for
+                       the OpenAI client (reasoning_split is delivered as
+                       a single extra field per completion).
 
         Returns:
             OpenAI ChatCompletion response (full response including usage)
@@ -62,8 +71,9 @@ class OpenAIClient(LLMClientBase):
         Raises:
             Exception: API call failed
         """
+        effective_model = model or self.model
         params = {
-            "model": self.model,
+            "model": effective_model,
             "messages": api_messages,
             # Enable reasoning_split to separate thinking content
             "extra_body": {"reasoning_split": True},
@@ -262,12 +272,19 @@ class OpenAIClient(LLMClientBase):
         self,
         messages: list[Message],
         tools: list[Any] | None = None,
+        model: str | None = None,
+        thinking: bool | None = None,
+        on_delta: Any = None,
     ) -> LLMResponse:
         """Generate response from OpenAI LLM.
 
         Args:
             messages: List of conversation messages
             tools: Optional list of available tools
+            model: Optional model override for this call (defaults to self.model)
+            thinking: Optional thinking override (kept for signature parity;
+                       OpenAI reasoning split is controlled by extra_body).
+            on_delta: Optional per-chunk callback (no-op for OpenAI client).
 
         Returns:
             LLMResponse containing the generated content
@@ -283,12 +300,18 @@ class OpenAIClient(LLMClientBase):
             response = await api_call(
                 request_params["api_messages"],
                 request_params["tools"],
+                model=model,
+                thinking=thinking,
+                on_delta=on_delta,
             )
         else:
             # Don't use retry
             response = await self._make_api_request(
                 request_params["api_messages"],
                 request_params["tools"],
+                model=model,
+                thinking=thinking,
+                on_delta=on_delta,
             )
 
         # Parse and return response

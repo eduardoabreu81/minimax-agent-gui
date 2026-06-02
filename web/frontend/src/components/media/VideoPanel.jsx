@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Video, Loader2, Save, RefreshCw, Image, Film, User, Check } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
+import { Video, Loader2, Save, RefreshCw, Image, Film, User, Check, Coins, AlertTriangle } from 'lucide-react'
 import { useSessionProtection } from '../../hooks/useSessionProtection'
 import RecentGenerations from './RecentGenerations'
 
@@ -9,6 +10,7 @@ const VIDEO_MODELS = [
 ]
 
 export default function VideoPanel() {
+  const { t } = useTranslation()
   const [prompt, setPrompt] = useState('')
   const [model, setModel] = useState('MiniMax-Hailuo-2.3')
   const [mode, setMode] = useState('text2video')
@@ -20,6 +22,9 @@ export default function VideoPanel() {
   const [status, setStatus] = useState(null)
   const [progress, setProgress] = useState(0)
   const [result, setResult] = useState(null)
+  const [cost, setCost] = useState(null)
+  const [videoDailyLimit, setVideoDailyLimit] = useState(null)
+  const [videoDailyUsed, setVideoDailyUsed] = useState(null)
   const [error, setError] = useState(null)
   const [history, setHistory] = useState([])
   const [historyLoading, setHistoryLoading] = useState(false)
@@ -65,8 +70,32 @@ export default function VideoPanel() {
     setHistoryLoading(false)
   }
 
+  // Fetch video daily quota (limit/used) from /api/minimax/quota
+  const fetchDailyQuota = async () => {
+    try {
+      const res = await fetch('/api/minimax/quota')
+      if (!res.ok) return
+      const data = await res.json()
+      const payload = data?.data ?? data
+      if (typeof payload?.video_daily_limit === 'number') {
+        setVideoDailyLimit(payload.video_daily_limit)
+      }
+      if (typeof payload?.video_daily_used === 'number') {
+        setVideoDailyUsed(payload.video_daily_used)
+      }
+    } catch { /* ignore */ }
+  }
+
   useEffect(() => {
     fetchHistory()
+    fetchDailyQuota()
+  }, [])
+
+  // Refresh daily quota when notified that a media action completed
+  useEffect(() => {
+    const onMedia = () => fetchDailyQuota()
+    window.addEventListener('minimax:media-complete', onMedia)
+    return () => window.removeEventListener('minimax:media-complete', onMedia)
   }, [])
 
   const generate = async () => {
@@ -74,6 +103,7 @@ export default function VideoPanel() {
     setLoading(true)
     setError(null)
     setResult(null)
+    setCost(null)
     setProgress(0)
     try {
       const args = [
@@ -96,9 +126,24 @@ export default function VideoPanel() {
       })
       const data = await res.json()
       if (data.success && data.returncode === 0) {
+        // Capture cost from top-level or from stdout JSON
+        let parsedOut = null
+        try { parsedOut = JSON.parse(data.stdout) } catch { /* ignore */ }
+        const cc = data.cost_credits ?? parsedOut?.cost_credits
+        const cu = data.cost_usd ?? parsedOut?.cost_usd
+        if (typeof cc === 'number' || typeof cu === 'number') {
+          setCost({ cost_credits: cc, cost_usd: cu })
+        }
+        // Optimistically bump daily-used so the UI updates even before
+        // the polling round-trip finishes.
+        if (typeof videoDailyUsed === 'number') setVideoDailyUsed(videoDailyUsed + 1)
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('minimax:media-complete'))
+        }
+
         try {
-          const jsonOut = JSON.parse(data.stdout)
-          const tid = jsonOut.task_id || jsonOut.taskId
+          const jsonOut = parsedOut
+          const tid = jsonOut?.task_id || jsonOut?.taskId
           if (tid) {
             setTaskId(tid)
             setStatus('Task created. Waiting for completion...')
@@ -165,7 +210,20 @@ export default function VideoPanel() {
                 const dlData = await dlRes.json()
                 if (dlData.success && dlData.returncode === 0) {
                   setResult(videoPath)
+                  // Capture cost from the download response if not already set
+                  if (!cost) {
+                    const cc = dlData.cost_credits
+                    const cu = dlData.cost_usd
+                    if (typeof cc === 'number' || typeof cu === 'number') {
+                      setCost({ cost_credits: cc, cost_usd: cu })
+                    }
+                  }
                   fetchHistory()
+                  // Refresh authoritative daily quota after a successful gen
+                  fetchDailyQuota()
+                  if (typeof window !== 'undefined') {
+                    window.dispatchEvent(new CustomEvent('minimax:media-complete'))
+                  }
                 }
               }
               clearInterval(interval)
@@ -350,9 +408,42 @@ export default function VideoPanel() {
 
         {result && (
           <div className="bg-surface border border-border rounded-xl p-4 space-y-3">
-            <p className="text-sm text-muted flex items-center gap-2">
-              <Check size={14} className="text-success" /> Video generated
-            </p>
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <p className="text-sm text-muted flex items-center gap-2">
+                <Check size={14} className="text-success" /> Video generated
+              </p>
+              <div className="flex items-center gap-2 flex-wrap">
+                {cost && (
+                  <div
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/5 border border-primary/20 text-[10px] font-medium text-primary"
+                    title="Cost for this generation"
+                  >
+                    <Coins size={11} />
+                    <span>
+                      {t('media.costLabel', {
+                        credits: cost.cost_credits ?? 0,
+                        usd: typeof cost.cost_usd === 'number' ? cost.cost_usd.toFixed(4) : '0.0000',
+                      })}
+                    </span>
+                  </div>
+                )}
+                {videoDailyLimit !== null && videoDailyLimit !== undefined && (
+                  <div
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-medium ${
+                      (videoDailyUsed ?? 0) >= videoDailyLimit
+                        ? 'bg-error/10 border-error/20 text-error'
+                        : (videoDailyUsed ?? 0) / Math.max(videoDailyLimit, 1) >= 0.8
+                          ? 'bg-amber-500/10 border-amber-500/30 text-amber-600 dark:text-amber-400'
+                          : 'bg-surface border-border text-muted-foreground'
+                    }`}
+                    title="Daily video generation quota"
+                  >
+                    {(videoDailyUsed ?? 0) >= videoDailyLimit && <AlertTriangle size={10} />}
+                    <span>{t('media.dailyLabel', { used: videoDailyUsed ?? 0, limit: videoDailyLimit })}</span>
+                  </div>
+                )}
+              </div>
+            </div>
             <video
               controls
               className="w-full rounded-lg border border-border"

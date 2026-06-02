@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
-import { Image, Loader2, Download, Wand2, Copy, Grid3x3, Trash2, Eye, Upload, Link2, X } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
+import { Image, Loader2, Download, Wand2, Copy, Grid3x3, Trash2, Eye, Upload, Link2, X, Coins } from 'lucide-react'
 import { useSessionProtection } from '../../hooks/useSessionProtection'
 import RecentGenerations from './RecentGenerations'
 
@@ -15,6 +16,7 @@ const ASPECT_RATIOS = [
 ]
 
 export default function ImagePanel() {
+  const { t } = useTranslation()
   const [activeTab, setActiveTab] = useState('t2i') // 't2i' | 'i2i'
   const [prompt, setPrompt] = useState('')
   const [aspectRatio, setAspectRatio] = useState('1:1')
@@ -27,6 +29,7 @@ export default function ImagePanel() {
   const [seed, setSeed] = useState('')
   const [loading, setLoading] = useState(false)
   const [results, setResults] = useState([])
+  const [cost, setCost] = useState(null) // { cost_credits, cost_usd, count }
   const [error, setError] = useState(null)
   const [gallery, setGallery] = useState([])
   const [galleryLoading, setGalleryLoading] = useState(false)
@@ -116,6 +119,7 @@ export default function ImagePanel() {
     setLoading(true)
     setError(null)
     setResults([])
+    setCost(null)
     try {
       const body = {
         prompt,
@@ -141,7 +145,17 @@ export default function ImagePanel() {
       const data = await res.json()
       if (data.success) {
         setResults([{ path: data.file_path }])
+        // Capture cost from response (may be undefined for older backends)
+        const cc = data.cost_credits
+        const cu = data.cost_usd
+        if (typeof cc === 'number' || typeof cu === 'number') {
+          setCost({ cost_credits: cc, cost_usd: cu, count: batchCount })
+        }
         fetchGallery()
+        // Notify the balance widget to refresh
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('minimax:media-complete'))
+        }
       } else {
         setError(data.error || 'Image generation failed')
       }
@@ -398,7 +412,24 @@ export default function ImagePanel() {
         {/* Generated results */}
         {results.length > 0 && (
           <div className="space-y-3">
-            <p className="text-sm text-muted">Generated {results.length} image(s)</p>
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <p className="text-sm text-muted">Generated {results.length} image{results.length > 1 ? 's' : ''}</p>
+              {cost && (
+                <div
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/5 border border-primary/20 text-[10px] font-medium text-primary"
+                  title="Cost for this generation"
+                >
+                  <Coins size={11} />
+                  <span>
+                    {t('media.imageCostLabel', {
+                      credits: cost.cost_credits ?? 0,
+                      usd: typeof cost.cost_usd === 'number' ? cost.cost_usd.toFixed(4) : '0.0000',
+                      count: cost.count,
+                    })}
+                  </span>
+                </div>
+              )}
+            </div>
             <div className={`grid gap-3 ${results.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
               {results.map((r, i) => (
                 <div key={i} className="bg-surface border border-border rounded-xl p-3 space-y-2">

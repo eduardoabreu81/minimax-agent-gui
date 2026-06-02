@@ -15,7 +15,7 @@ const STEPS = [
   {
     id: 'chat',
     title: 'Agent Chat',
-    description: 'Chat with MiniMax-M2.7 powered agent. Ask questions, get help with coding, or brainstorm ideas. Use Ctrl+Enter to send messages.',
+    description: 'Chat with the MiniMax AI agent. Ask questions, get help with coding, or brainstorm ideas. Use Ctrl+Enter to send messages.',
     icon: MessageSquare,
     color: 'text-blue-500',
   },

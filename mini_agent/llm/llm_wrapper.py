@@ -5,6 +5,7 @@ This module provides a unified interface for different LLM providers
 """
 
 import logging
+from typing import Any
 
 from ..retry import RetryConfig
 from ..schema import LLMProvider, LLMResponse, Message
@@ -114,14 +115,23 @@ class LLMClient:
         self,
         messages: list[Message],
         tools: list | None = None,
+        model: str | None = None,
+        thinking: bool | None = None,
+        on_delta: Any = None,
     ) -> LLMResponse:
         """Generate response from LLM.
 
         Args:
             messages: List of conversation messages
             tools: Optional list of Tool objects or dicts
+            model: Optional model override for this call (defaults to client default)
+            thinking: Optional thinking override (True/False/None=auto)
+            on_delta: Optional async callback(kind, content) invoked for
+                       every content_block_delta chunk during streaming.
 
         Returns:
             LLMResponse containing the generated content
         """
-        return await self._client.generate(messages, tools)
+        return await self._client.generate(
+            messages, tools, model=model, thinking=thinking, on_delta=on_delta
+        )

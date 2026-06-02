@@ -16,13 +16,13 @@
 
 ## Product Positioning
 
-MiniMax Agent GUI is a simple all-in-one web interface for MiniMax. It gives MiniMax users a practical GUI for chat, image, video, music, speech, MCP tools, skills, and agent workflows without jumping between CLI commands, scripts, and separate API calls.
+MiniMax Agent GUI is a simple all-in-one web interface for MiniMax. It gives MiniMax users a practical GUI for chat, image, video, music, speech, MCP tools, skills, and agent workflows without jumping between CLI commands, scripts, and separate API calls. The default chat model is **MiniMax M3** (with M2.7 and M2.7-highspeed available via Settings).
 
 The Code Workspace is part of the app, but it is not the whole product.
 
 ## Features
 
-- **Chat** — Persistent conversations with file attachments, image understanding, markdown rendering, and code copy
+- **Chat** — Persistent conversations with per-turn model + thinking controls, real-time token-by-token streaming of both reasoning and response, file attachments, image understanding, markdown rendering, copy buttons, and recent-conversation sidebar
 - **Image Generation** — Text-to-image and image-to-image with aspect ratio, batch, gallery, prompt optimizer, and recent generations history
 - **Video** — Hailuo-2.3 text/image-to-video with multiple durations, resolutions, and recent video history
 - **Music** — Music generation from prompts or lyrics, instrumental mode, cover from reference audio, and recent music history
@@ -32,49 +32,64 @@ The Code Workspace is part of the app, but it is not the whole product.
 - **Code Workspace** — File explorer, editor, terminal, and persistent code-chat sessions
 - **Multi-language** — English, Português (BR), 日本語, 한국어, Español, 中文
 
-## Install
+### Chat details
 
-Requires **Python 3.10+**, **Node.js 18+**, and a [MiniMax API key](https://platform.minimax.io).
-
-```bash
-git clone https://github.com/eduardoabreu81/minimax-agent-gui.git
-cd minimax-agent-gui
-
-# Core Python dependencies (CLI, MCP, agent framework)
-pip install -e .
-
-# Web backend dependencies (FastAPI, WebSocket, file upload)
-pip install -r web/backend/requirements.txt
-
-# Frontend dependencies
-cd web && npm install
-```
-
-Configure your API key via `config/config.yaml` or the `MINIMAX_API_KEY` environment variable.
-
-```bash
-cp mini_agent/config/config-example.yaml config/config.yaml
-# Edit config/config.yaml and add your key
-```
+- **Model selector** (per turn): M3 (default), M2.7, M2.7-highspeed. Persisted per panel.
+- **Thinking toggle**: enables M3's extended `thinking: {type: "adaptive"}` block — visible as a separate always-expanded reasoning block above the assistant's response. Persisted per panel.
+- **Real-time streaming**: tokens arrive word-by-word for both the thinking block and the final response (no more 10-minute silent waits).
+- **Session persistence**: switching tabs or refreshing keeps the same conversation; only **New Chat** starts a new one.
 
 ## Quick Start
 
+Prerequisites: **Python 3.10+**, **Node.js 18+**, a [MiniMax API key](https://platform.minimax.io).
+
 ```bash
-cd web
-npm run dev
+# 1. Clone
+git clone https://github.com/eduardoabreu81/minimax-agent-gui.git
+cd minimax-agent-gui
+
+# 2. Install Python + Node dependencies
+pip install -e .
+pip install -r web/backend/requirements.txt
+(cd web && npm install)
+
+# 3. Configure your API key
+cp mini_agent/config/config-example.yaml config/config.yaml   # macOS / Linux
+# PowerShell: Copy-Item mini_agent/config/config-example.yaml config/config.yaml
+# Then edit config/config.yaml and paste your key under `api_key:`
+
+# 4. Start the dev servers
+cd web && npm run dev
 ```
 
-This starts:
+`npm run dev` starts both services together:
 - **Backend** — FastAPI on `http://localhost:8000`
 - **Frontend** — Vite dev server on `http://localhost:3000`
 
-Open `http://localhost:3000` and start chatting.
+Open **http://localhost:3000** in your browser and start chatting.
+To stop both servers, press `Ctrl+C` in the terminal that ran `npm run dev`.
+
+> **Windows tip:** If you have multiple Python versions on PATH, use
+> `py -3.10` instead of `pip`/`python` for the install steps above. The
+> repo's `web/package.json` already uses `py -3.10` to launch the
+> backend, so the dev server works on any machine with Python 3.10+
+> registered via the `py` launcher — no need to edit anything.
+
+> **Override at runtime:** the API key can also be set via the
+> `MINIMAX_API_KEY` environment variable, and the API base URL via
+> `MINIMAX_API_BASE`. Both take precedence over the values in
+> `config/config.yaml`.
 
 ## Usage
 
 ### Chat
 
-Upload images or text files, toggle Web Search and Image Understanding in Settings, and chat with M2.7. Conversations auto-save and can be renamed or deleted.
+- Pick a model (M3 / M2.7 / M2.7-highspeed) and toggle Thinking right
+  below the composer. Both persist per panel.
+- Upload images or text files, toggle Web Search and Image
+  Understanding in Settings.
+- Conversations auto-save, persist across refresh, and can be renamed
+  or deleted. Click **New Chat** to start a fresh session.
 
 ### Image Generation
 
@@ -139,6 +154,17 @@ Environment variables:
 | `MINIMAX_API_KEY` | Override API key |
 | `MINIMAX_API_BASE` | Override base URL |
 
+### LLM Provider
+
+`config/config.yaml` exposes a `provider` field that picks which protocol the backend uses to talk to the LLM:
+
+| Provider | When to use |
+|----------|-------------|
+| `anthropic` (default) | The MiniMax API (or any third-party endpoint that speaks Anthropic's protocol). The wrapper appends `/anthropic` to MiniMax's `api_base` automatically. |
+| `openai` | Endpoints that speak the OpenAI Chat Completions protocol. The wrapper appends `/v1` for MiniMax or uses your `api_base` as-is for third-party providers. |
+
+If you use a third-party provider such as `https://api.siliconflow.cn/v1`, leave `provider: openai` and set `api_base` to the full URL — the wrapper will not append any suffix.
+
 Example MCP server configuration in `config/config.yaml`:
 
 ```yaml
@@ -155,9 +181,41 @@ mcp_servers:
     enabled: true
 ```
 
+## Pricing & Plans
+
+MiniMax Agent GUI works with the new **MiniMax Token Plan** (credit-based,
+in USD). All tiers include the **MiniMax-M3** chat model (with M2.7 and
+M2.7-highspeed as fallbacks) and credit allowance for all media. Prices
+are summarized from the official pricing page — always check
+[platform.minimax.io](https://platform.minimax.io) for the latest.
+
+| Tier | Price | Includes |
+|------|-------|----------|
+| **Plus**  | $20 / mo | M3 chat, image, speech, music; multimodal **input** (image+video understanding). **No** Hailuo video generation, **no** MCP tool credit. |
+| **Max**   | $50 / mo | Plus features + Hailuo video generation (5/day) + MCP tool credit. |
+| **Ultra** | $120 / mo | Max features with higher video gen limits and priority credit refresh. |
+
+> **Tip:** The GUI auto-detects your tier from the live Token Plan API
+> via `mmx`. The plan badge in the sidebar (Plus / Max / Ultra) and the
+> Quota Dashboard reflect what your account actually has access to.
+> If auto-detection misses, set `minimax.plan: plus|max|ultra` in
+> `config/config.yaml` as a fallback.
+
 ## Roadmap
 
-### Shipped
+### Shipped (0.3.0 — Token Plan + M3)
+- [x] **M3 as default chat model** (1M context, agentic, native image/video input)
+- [x] **Per-turn model selector** (M3 / M2.7 / M2.7-highspeed) with `localStorage` persistence
+- [x] **Per-turn thinking toggle** (M3 only) — `thinking: {type: "adaptive"}` with persisted ON/OFF
+- [x] **Real-time token-by-token streaming** for both thinking and response (no more 10-minute waits)
+- [x] **Thinking block** as a separate always-visible message in the chat timeline
+- [x] **Copy button** on every assistant message with "Copied!" feedback
+- [x] **Token Plan auto-detection** — Plus / Max / Ultra inferred from live `mmx` access flags
+- [x] **Token Plan web_search** wired to the `/v1/coding_plan/search` endpoint (uses `q` key)
+- [x] **Image attachment framing** — agent receives description as its view of the image, not as a stray note
+- [x] **MIT license** and `pyproject.toml` 0.3.0 release metadata
+
+### Shipped (0.2.x)
 - [x] Command Palette (Ctrl+K)
 - [x] Live agent activity panel (steps, tools, thinking)
 - [x] Quick Settings panel

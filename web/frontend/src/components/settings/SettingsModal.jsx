@@ -21,20 +21,23 @@ const TABS = [
 ]
 
 const ALL_MODELS = [
-  { id: 'MiniMax-M2.7', label: 'MiniMax-M2.7', desc: 'General purpose chat model', type: 'chat', plan: 'starter' },
+  { id: 'MiniMax-M3', label: 'MiniMax-M3', desc: 'Frontier multimodal coding model (1M context, agentic tool use)', type: 'chat', plan: 'plus' },
   { id: 'MiniMax-Hailuo-2.3', label: 'MiniMax-Hailuo-2.3', desc: 'Video generation model', type: 'video', plan: 'max' },
   { id: 'MiniMax-speech-2.8', label: 'MiniMax-Speech-2.8', desc: 'Text-to-speech model', type: 'tts', plan: 'plus' },
   { id: 'MiniMax-image-01', label: 'MiniMax-Image-01', desc: 'Image generation model', type: 'image', plan: 'plus' },
-  { id: 'music-2.6', label: 'MiniMax-Music-2.6', desc: 'Music generation model', type: 'music', plan: 'starter' },
+  { id: 'music-2.6', label: 'MiniMax-Music-2.6', desc: 'Music generation model', type: 'music', plan: 'plus' },
 ]
 
 const PLAN_LABELS = {
-  starter: 'Starter',
+  // No "Starter" tier — Token Plan starts at Plus. All three paid tiers
+  // (Plus/Max/Ultra) include chat + image + speech + music; only video
+  // generation is tier-gated (Max/Ultra with a daily cap).
   plus: 'Plus',
   max: 'Max',
+  ultra: 'Ultra',
 }
 
-const PLAN_ORDER = { starter: 1, plus: 2, max: 3 }
+const PLAN_ORDER = { plus: 0, max: 1, ultra: 2 }
 
 const SHORTCUTS = [
   { keys: 'Ctrl + K', action: 'Open Command Palette' },
@@ -55,7 +58,7 @@ export default function SettingsModal({ isOpen, onClose, isDark, onToggleTheme }
   const [localSettings, setLocalSettings] = useState({
     apiKey: '',
     apiKeyConfigured: false,
-    model: 'MiniMax-M2.7',
+    model: 'MiniMax-M3',
     maxSteps: 50,
     workspaceDir: './workspace',
     systemPrompt: '',
@@ -65,7 +68,7 @@ export default function SettingsModal({ isOpen, onClose, isDark, onToggleTheme }
   })
   const [userProfile, setUserProfile] = useState({ bio: '' })
   const [profileSaving, setProfileSaving] = useState(false)
-  const [userPlan, setUserPlan] = useState('starter')
+  const [userPlan, setUserPlan] = useState('plus')
   const [quotaData, setQuotaData] = useState(null)
   const [mcpServers, setMcpServers] = useState([])
   const [mcpLoading, setMcpLoading] = useState(false)
@@ -192,7 +195,7 @@ export default function SettingsModal({ isOpen, onClose, isDark, onToggleTheme }
           ...prev,
           apiKey: '',
           apiKeyConfigured: data.api_key_configured || false,
-          model: data.agent?.model || 'MiniMax-M2.7',
+          model: data.agent?.model || 'MiniMax-M3',
           maxSteps: data.agent?.max_steps || 50,
           workspaceDir: data.agent?.workspace_dir || './workspace',
           systemPrompt: data.agent?.system_prompt || '',
@@ -216,17 +219,26 @@ export default function SettingsModal({ isOpen, onClose, isDark, onToggleTheme }
     fetch('/api/minimax/quota')
       .then(r => r.json())
       .then(data => {
-        if (data.success && data.data?.model_remains) {
+        if (data.success) {
           setQuotaData(data.data)
-          // Detect plan based on M2.7 quota
-          const m2Model = data.data.model_remains.find(m => 
-            (m.model_name || '').toLowerCase().includes('minimax-m')
-          )
-          if (m2Model) {
-            const total = m2Model.current_interval_total_count || 0
-            if (total >= 15000) setUserPlan('max')
-            else if (total >= 4500) setUserPlan('plus')
-            else setUserPlan('starter')
+          // Backend exposes the user's plan at the TOP LEVEL of the
+          // response (enriched from config.yaml + mmx). The legacy
+          // ``model_remains.includes('minimax-m')`` heuristic is kept
+          // as a last-resort fallback for older backends that don't
+          // return ``data.plan`` — but in mmx 1.0.16+ that heuristic
+          // never matches because model names are short ('general').
+          if (data.plan && PLAN_ORDER[data.plan] !== undefined) {
+            setUserPlan(data.plan)
+          } else if (data.data?.model_remains) {
+            const m2Model = data.data.model_remains.find(m =>
+              (m.model_name || '').toLowerCase().includes('minimax-m')
+            )
+            if (m2Model) {
+              const total = m2Model.current_interval_total_count || 0
+              if (total >= 15000) setUserPlan('max')
+              else if (total >= 4500) setUserPlan('plus')
+              else setUserPlan('plus')
+            }
           }
         }
       })
@@ -265,7 +277,7 @@ export default function SettingsModal({ isOpen, onClose, isDark, onToggleTheme }
     setLocalSettings({
       apiKey: '',
       apiKeyConfigured: false,
-      model: 'MiniMax-M2.7',
+      model: 'MiniMax-M3',
       maxSteps: 50,
       workspaceDir: './workspace',
       systemPrompt: '',
@@ -551,7 +563,7 @@ export default function SettingsModal({ isOpen, onClose, isDark, onToggleTheme }
                 <div className="flex items-center justify-between">
                   <h3 className="text-xs font-semibold text-muted uppercase tracking-wider">Your Token Plan</h3>
                   <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
-                    {PLAN_LABELS[userPlan] || 'Starter'} Plan
+                    {PLAN_LABELS[userPlan] || 'Plus'} Plan
                   </span>
                 </div>
 
@@ -916,6 +928,29 @@ export default function SettingsModal({ isOpen, onClose, isDark, onToggleTheme }
             {/* Agent */}
             {activeTab === 'agent' && (
               <div className="space-y-5">
+                <div>
+                  <label className="text-xs font-semibold text-muted uppercase tracking-wider mb-1 block">Model</label>
+                  <select
+                    value={localSettings.model}
+                    onChange={(e) => setLocalSettings(s => ({ ...s, model: e.target.value }))}
+                    className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-primary"
+                  >
+                    {ALL_MODELS
+                      .filter(m => m.type === 'chat')
+                      .map(m => {
+                        const available = PLAN_ORDER[m.plan] <= PLAN_ORDER[userPlan]
+                        return (
+                          <option key={m.id} value={m.id} disabled={!available}>
+                            {m.label} — {m.desc}{available ? '' : ` (${PLAN_LABELS[m.plan]})`}
+                          </option>
+                        )
+                      })}
+                  </select>
+                  <p className="text-[10px] text-muted mt-1">
+                    Currently selected model. Available models depend on your Token Plan tier.
+                  </p>
+                </div>
+
                 <div>
                   <label className="text-xs font-semibold text-muted uppercase tracking-wider mb-1 block">Max Steps</label>
                   <input

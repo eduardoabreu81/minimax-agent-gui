@@ -2,6 +2,11 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Send, User, Bot, Loader2, Paperclip, X, Image as ImageIcon, FileText, MessageSquarePlus, Trash2, ChevronDown, Pencil, Search } from 'lucide-react'
 import { useSessionProtection } from '../../hooks/useSessionProtection'
+import { useModelOverride } from '../../hooks/useModelOverride'
+import { useThinkingToggle } from '../../hooks/useThinkingToggle'
+import ModelThinkingControls from '../shared/ModelThinkingControls'
+import ThinkingBlock from '../shared/ThinkingBlock'
+import CopyButton from '../shared/CopyButton'
 import MarkdownRenderer from '../MarkdownRenderer'
 
 function generateId() {
@@ -10,12 +15,46 @@ function generateId() {
 
 export default function ChatPanel({ onProcessingChange } = {}) {
   const { t } = useTranslation()
+  // Per-turn model + thinking controls. Both are remembered in localStorage
+  // so the user's last choice sticks across reloads.
+  const { model: activeModel, setModel: setActiveModel, supportsThinking } = useModelOverride({
+    fallback: 'MiniMax-M3',
+    storageKey: 'chat-model-override',
+  })
+  const { thinkingEnabled, setThinkingEnabled } = useThinkingToggle({
+    storageKey: 'chat-thinking-enabled',
+    defaultValue: true,
+  })
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [isConnected, setIsConnected] = useState(false)
   const [isThinking, setIsThinking] = useState(false)
   const [attachment, setAttachment] = useState(null)
-  const [sessionId, setSessionId] = useState('default')
+  const [sessionId, setSessionId] = useState(() => {
+    // Persist the chat sessionId in localStorage so it survives tab
+    // switches, page refreshes, and accidental component unmounts.
+    // A new session is only created on explicit "New Chat" (which
+    // clears the storage key) or for first-time visitors. This way,
+    // a user can switch to Code, switch back, and find their
+    // conversation exactly where they left it.
+    try {
+      const stored = localStorage.getItem('chat-session-id')
+      if (stored) return stored
+    } catch { /* ignore */ }
+    return generateId()
+  })
+
+  // Keep localStorage in sync with the current sessionId. We
+  // intentionally save on every change (including the "New Chat"
+  // path which sets a new UUID) so the next mount reads the latest.
+  useEffect(() => {
+    try {
+      localStorage.setItem('chat-session-id', sessionId)
+    } catch { /* ignore */ }
+  }, [sessionId])
+  // Accumulates the model's reasoning chunks streamed during the current
+  // run, so we can attach the full block to the final assistant message.
+  const streamingThinkingRef = useRef('')
   const [conversations, setConversations] = useState([])
   const [showConvList, setShowConvList] = useState(false)
   const [skills, setSkills] = useState([])
@@ -49,15 +88,15 @@ export default function ChatPanel({ onProcessingChange } = {}) {
 
   const fetchConversations = async () => {
     try {
-      const res = await fetch('/api/conversations')
+      const res = await fetch('/api/conversations?type=chat')
       const data = await res.json()
       if (data.success) {
         const list = data.conversations || []
         setConversations(list)
-        // Load most recently active conversation on first mount
-        if (sessionId === 'default' && list.length > 0) {
-          setSessionId(list[0].id)
-        }
+        // Do NOT auto-load the most recent conversation. Each tab open
+        // (or each "New Chat" click) starts a fresh empty conversation;
+        // the user picks a previous one by clicking it in the sidebar
+        // list explicitly.
       }
     } catch (e) { /* ignore */ }
   }
@@ -82,7 +121,23 @@ export default function ChatPanel({ onProcessingChange } = {}) {
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data)
       if (data.type === 'history') {
-        setMessages(data.messages || [])
+        // Filter out internal agent-loop events (step_start, tool_*) that
+        // might have been saved to old conversations before the cleanup.
+        // Split the assistant's stored ``thinking`` into a SEPARATE
+        // message so the chat timeline shows the reasoning as its own
+        // event before the response (matches the streaming behavior).
+        const raw = (data.messages || []).filter(
+          m => m.type !== 'step_start' && m.type !== 'tool_calls' && m.type !== 'tool_result'
+        )
+        const flat = []
+        for (const m of raw) {
+          if (m.thinking) {
+            flat.push({ type: 'thinking', content: m.thinking, model: m.model || null })
+          }
+          flat.push(m)
+        }
+        setMessages(flat)
+        streamingThinkingRef.current = ''
         setIsThinking(false)
         onProcessingChange?.(false)
       } else if (data.type === 'status' && data.content === 'thinking...') {
@@ -90,6 +145,68 @@ export default function ChatPanel({ onProcessingChange } = {}) {
         onProcessingChange?.(true)
       } else if (data.type === 'user') {
         // User message was already added locally, ignore WebSocket echo
+        setIsThinking(true)
+        onProcessingChange?.(true)
+      } else if (data.type === 'thinking') {
+        // Legacy/non-streaming thinking event (one-shot per LLM call).
+        // The new per-token path lives under thinking_delta below.
+        if (data.content) {
+          setMessages((prev) => {
+            const last = prev[prev.length - 1]
+            if (last && last.type === 'thinking' && last.streaming) {
+              const updated = [...prev]
+              updated[updated.length - 1] = {
+                ...last,
+                content: last.content + '\n\n' + data.content,
+              }
+              return updated
+            }
+            return [...prev, { type: 'thinking', content: data.content, streaming: true }]
+          })
+        }
+      } else if (data.type === 'thinking_delta') {
+        // Per-token thinking stream. Append to the in-flight thinking
+        // message so the user sees the reasoning appear word-by-word.
+        if (data.content) {
+          setMessages((prev) => {
+            const last = prev[prev.length - 1]
+            if (last && last.type === 'thinking' && last.streaming) {
+              const updated = [...prev]
+              updated[updated.length - 1] = {
+                ...last,
+                content: last.content + data.content,
+              }
+              return updated
+            }
+            return [...prev, { type: 'thinking', content: data.content, streaming: true }]
+          })
+        }
+      } else if (data.type === 'text_delta') {
+        // Per-token text stream for the visible response. Append to
+        // the in-flight assistant message so it appears word-by-word.
+        if (data.content) {
+          setMessages((prev) => {
+            const last = prev[prev.length - 1]
+            if (last && last.type === 'assistant' && last.streaming) {
+              const updated = [...prev]
+              updated[updated.length - 1] = {
+                ...last,
+                content: last.content + data.content,
+              }
+              return updated
+            }
+            return [...prev, {
+              type: 'assistant',
+              content: data.content,
+              streaming: true,
+            }]
+          })
+        }
+      } else if (data.type === 'step_start') {
+        // Agent-loop step indicator — internal state, not chat content.
+        // Don't add to messages (the CodingPanel uses this for the
+        // activity widget; the chat just shows messages).
+        // Update thinking state so the spinner keeps animating.
         setIsThinking(true)
         onProcessingChange?.(true)
       } else if (data.type === 'skill_activated') {
@@ -110,7 +227,57 @@ export default function ChatPanel({ onProcessingChange } = {}) {
       } else {
         setIsThinking(false)
         onProcessingChange?.(false)
-        setMessages((prev) => [...prev, data])
+        // The final assistant message arrives AFTER all the text_delta
+        // events have already streamed the content to the in-flight
+        // assistant message. So here we just FREEZE the streaming
+        // assistant (and any streaming thinking) instead of adding
+        // a new message — that would duplicate the content.
+        const finalThinking = data.thinking || streamingThinkingRef.current || null
+        streamingThinkingRef.current = ''
+        setMessages((prev) => {
+          // Freeze the in-flight assistant message (if any) and add
+          // any metadata the backend sent (model tag, final usage).
+          const last = prev[prev.length - 1]
+          if (last && last.type === 'assistant' && last.streaming) {
+            const frozen = [...prev]
+            frozen[frozen.length - 1] = {
+              ...last,
+              ...data,
+              streaming: false,
+              thinking: undefined,  // thinking lives in its own message
+            }
+            // If there's a final thinking to add (e.g. accumulated
+            // after text finished), insert it as a separate message
+            // before the now-frozen assistant.
+            if (finalThinking) {
+              // Most likely the streaming thinking message is already
+              // present. Only inject a separate one if it isn't.
+              const hasThinking = prev.some(m => m.type === 'thinking' && !m.streaming)
+              if (!hasThinking) {
+                frozen.splice(frozen.length - 1, 0, {
+                  type: 'thinking',
+                  content: finalThinking,
+                  model: data.model || null,
+                })
+              }
+            }
+            return frozen
+          }
+          // No streaming assistant — fall back to building messages
+          // from scratch (covers non-streaming path / older backends).
+          const frozen = prev.map((m, i) =>
+            i === prev.length - 1 && m.type === 'thinking' && m.streaming
+              ? { ...m, streaming: false }
+              : m
+          )
+          const lastFrozen = frozen[frozen.length - 1]
+          const hasThinkingMsg = lastFrozen && lastFrozen.type === 'thinking' && !lastFrozen.streaming
+          if (!hasThinkingMsg && finalThinking) {
+            frozen.push({ type: 'thinking', content: finalThinking, model: data.model || null })
+          }
+          frozen.push({ ...data, thinking: undefined })
+          return frozen
+        })
       }
     }
   }, [onProcessingChange])
@@ -150,6 +317,7 @@ export default function ChatPanel({ onProcessingChange } = {}) {
   }, [])
 
   const startNewChat = () => {
+    try { localStorage.removeItem('chat-session-id') } catch { /* ignore */ }
     const newId = generateId()
     setMessages([])
     setSessionId(newId)
@@ -206,7 +374,15 @@ export default function ChatPanel({ onProcessingChange } = {}) {
 
   const sendMessage = useCallback(() => {
     if ((!input.trim() && !attachment) || !wsRef.current) return
-    const payload = { message: input, permission_mode: 'agent' }
+    const payload = {
+      message: input,
+      permission_mode: 'agent',
+      // Per-turn model + thinking override. The backend uses these to
+      // choose which LLM to call and whether to inject the Anthropic
+      // `thinking` param for this message.
+      model: activeModel,
+      thinking: supportsThinking ? thinkingEnabled : false,
+    }
     if (attachment) payload.attachment = attachment.path
     // Show user message immediately before sending
     setMessages(prev => [...prev, {
@@ -214,12 +390,13 @@ export default function ChatPanel({ onProcessingChange } = {}) {
       content: input || '📎 Attachment sent',
       attachment: attachment?.path
     }])
+    streamingThinkingRef.current = ''
     wsRef.current.send(JSON.stringify(payload))
     setInput('')
     setAttachment(null)
     setIsThinking(true)
     onProcessingChange?.(true)
-  }, [input, attachment, onProcessingChange])
+  }, [input, attachment, onProcessingChange, activeModel, supportsThinking, thinkingEnabled])
 
   const filteredSkills = input.startsWith('/')
     ? skills.filter(s =>
@@ -385,20 +562,16 @@ export default function ChatPanel({ onProcessingChange } = {}) {
             )
           }
           if (msg.type === 'thinking') {
-            const isCurrent = isThinking && idx === messages.length - 1
+            // Standalone thinking message — emitted as its own chat
+            // event so the user sees the reasoning arrive in real time
+            // BEFORE the assistant's response. The block shows a
+            // streaming cursor while chunks are still arriving.
             return (
-              <details key={idx} className="my-1">
-                <summary className="text-xs text-slate-500 cursor-pointer">
-                  💭 thinking{isCurrent && thinkingDuration > 0 ? ` · ${thinkingDuration}s` : '...'}
-                </summary>
-                <pre className="text-xs text-slate-400 p-2 bg-slate-900/50 rounded mt-1">{msg.content}</pre>
-              </details>
-            )
-          }
-          if (msg.type === 'step_start') {
-            return (
-              <div key={idx} className="text-xs text-slate-500 my-1">
-                Step {msg.step}/{msg.max_steps}
+              <div key={idx} className="max-w-[80%]">
+                <ThinkingBlock
+                  thinking={msg.content}
+                  streaming={msg.streaming}
+                />
               </div>
             )
           }
@@ -409,6 +582,10 @@ export default function ChatPanel({ onProcessingChange } = {}) {
               </div>
             )
           }
+          // Skip any internal agent-loop events that slipped through.
+          if (msg.type === 'step_start' || msg.type === 'tool_calls' || msg.type === 'tool_result') {
+            return null
+          }
           return (
             <div key={idx} className={`flex gap-3 ${msg.type === 'user' ? 'flex-row-reverse' : ''}`}>
               <div className={`
@@ -418,12 +595,22 @@ export default function ChatPanel({ onProcessingChange } = {}) {
                 {msg.type === 'user' ? <User size={14} className="text-white" /> : <Bot size={14} className="text-primary" />}
               </div>
               <div className={`
-                max-w-[80%] px-4 py-3 rounded-2xl text-sm leading-relaxed
+                max-w-[80%] px-4 py-3 rounded-2xl text-sm leading-relaxed space-y-2
                 ${msg.type === 'user'
                   ? 'bg-primary text-white rounded-br-md'
                   : 'bg-surface border border-border text-foreground rounded-bl-md'
                 }
               `}>
+                {/* Model tag for assistant messages — confirms which model
+                    produced this turn when the user has multiple options. */}
+                {msg.type === 'assistant' && msg.model && (
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[10px] text-primary/80 font-medium">
+                      {msg.model}
+                    </span>
+                    <CopyButton text={msg.content} />
+                  </div>
+                )}
                 <MarkdownRenderer content={msg.content} />
                 {msg.attachment && (
                   <div className="mt-2 pt-2 border-t border-white/20">
@@ -507,9 +694,16 @@ export default function ChatPanel({ onProcessingChange } = {}) {
                   </div>
                 )}
               </div>
-              <div className="flex justify-between items-center mt-1">
+              <div className="flex justify-between items-center mt-1.5 gap-2">
                 <p className="text-[10px] text-muted">Enter to send · Shift+Enter for new line</p>
-                <p className="text-[10px] text-primary font-medium">MiniMax-M2.7</p>
+                <ModelThinkingControls
+                  model={activeModel}
+                  setModel={setActiveModel}
+                  thinkingEnabled={thinkingEnabled}
+                  setThinkingEnabled={setThinkingEnabled}
+                  supportsThinking={supportsThinking}
+                  compact
+                />
               </div>
             </div>
             <div className="flex flex-col gap-2">

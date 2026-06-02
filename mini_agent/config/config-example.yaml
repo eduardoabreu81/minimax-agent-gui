@@ -19,7 +19,7 @@
 api_key: "YOUR_API_KEY_HERE"  # Replace with your MiniMax API Key
 api_base: "https://api.minimax.io"   # Global users (default)
 # api_base: "https://api.minimaxi.com"  # China users
-model: "MiniMax-M2.5"
+model: "MiniMax-M3"
 # LLM provider: "anthropic" or "openai"
 # For MiniMax API, the suffix (/anthropic or /v1) is auto-appended based on provider.
 # For third-party APIs (e.g., https://api.siliconflow.cn/v1), api_base is used as-is.

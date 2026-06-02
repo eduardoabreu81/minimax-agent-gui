@@ -29,6 +29,13 @@ from mini_agent.schema import Message
 from mini_agent.tools.skill_loader import SkillLoader
 
 from mini_max_mcp.client import MiniMaxSyncClient, MiniMaxClient
+from mini_max_mcp.pricing import (
+    calculate_image_cost,
+    calculate_mcp_vlm_cost,
+    calculate_music_cost,
+    calculate_tts_cost,
+    calculate_video_cost,
+)
 from mcp_runtime import test_mcp_server
 
 logging.basicConfig(level=logging.INFO)
@@ -143,7 +150,12 @@ def get_minimax_config():
         api_base = minimax_config.get("api_base", "https://api.minimax.io")
     
     _logger.debug(f"get_minimax_config: region={region}, api_base={api_base}, key_set={bool(api_key)}")
-    return {"api_key": api_key, "api_base": api_base, "region": region}
+    return {
+        "api_key": api_key,
+        "api_base": api_base,
+        "region": region,
+        "plan": minimax_config.get("plan", ""),
+    }
 
 
 # --- Conversation persistence ---
@@ -332,10 +344,12 @@ class SessionManager:
         api_key = minimax_config["api_key"]
         api_base = minimax_config["api_base"]
 
+        model = self.config.get("agent", {}).get("model", "MiniMax-M3")
+
         llm_client = LLMClient(
             api_key=api_key,
             api_base=api_base,
-            model=self.config.get("agent", {}).get("model", "MiniMax-M2.7")
+            model=model,
         )
 
         workspace_dir = self.config.get("agent", {}).get("workspace_dir", "./workspace")
@@ -383,7 +397,7 @@ class SessionManager:
 
         # Coding agent gets a specialized system prompt
         if session_id.startswith("coding"):
-            system_prompt = f"""You are MiniMax Coding Agent, an expert software engineer powered by MiniMax-M2.7.
+            system_prompt = f"""You are MiniMax Coding Agent, an expert software engineer powered by {model}.
 You help users write, debug, refactor, and understand code.
 You have access to file system tools (read_file, write_file, edit_file), bash commands, web search, and image understanding.
 
@@ -416,7 +430,7 @@ All relative paths are resolved from this directory.
 
 Always be concise but thorough."""
         else:
-            system_prompt = """You are a helpful AI assistant powered by MiniMax M2.7.
+            system_prompt = f"""You are a helpful AI assistant powered by {model}.
 You help users with daily tasks, questions, brainstorming, writing, analysis, and general problem-solving.
 You have access to file system tools, web search, and image understanding.
 
@@ -808,6 +822,10 @@ async def chat_websocket(websocket: WebSocket, session_id: str):
                         "type": msg.get("type", "user" if msg.get("is_user") else "assistant"),
                         "content": msg.get("content", msg.get("text", "")),
                         "attachment": msg.get("attachment"),
+                        # Replay the model's reasoning so the chat UI can
+                        # render the thinking block alongside the answer.
+                        "thinking": msg.get("thinking"),
+                        "model": msg.get("model"),
                     }
                     for msg in conv["messages"]
                 ]
@@ -835,6 +853,12 @@ async def chat_websocket(websocket: WebSocket, session_id: str):
             message = data.get("message", "").strip()
             attachment = data.get("attachment")
             permission_mode = data.get("permission_mode", "agent")
+            # Per-turn model + thinking overrides. The user can pick a
+            # different chat model and toggle the thinking param (only
+            # M3 supports thinking) from the composer; these fields are
+            # optional and fall back to the session's defaults.
+            model_override = data.get("model")
+            thinking_override = data.get("thinking")  # True/False/None
 
             if not message and not attachment:
                 continue
@@ -858,8 +882,24 @@ async def chat_websocket(websocket: WebSocket, session_id: str):
                             )
                             client.close()
                             if success:
-                                img_context = f"\n\n[Attached image analysis: {description}]"
-                                full_message = (message or "Please analyze this image.") + img_context
+                                # Frame the description as the IMAGE the user
+                                # is asking about — otherwise the model
+                                # treats the bracketed text as a stray note
+                                # and replies "I don't see the image". The
+                                # two cases (user question + image-only)
+                                # both produce a clean message that the
+                                # agent can answer from.
+                                if message and message.strip():
+                                    user_msg = message.strip()
+                                else:
+                                    user_msg = "What is in this image?"
+                                img_context = (
+                                    f"\n\n[User uploaded an image to the chat. "
+                                    f"Use the description below AS your view "
+                                    f"of the image when answering.]\n"
+                                    f"Image description: {description}"
+                                )
+                                full_message = f"{user_msg}{img_context}"
                         except Exception as e:
                             _logger.warning(f"Image understanding failed: {e}")
                     else:
@@ -895,12 +935,38 @@ async def chat_websocket(websocket: WebSocket, session_id: str):
             # Run agent and stream response
             await websocket.send_json({"type": "status", "content": "thinking..."})
 
+            # Accumulate the model's reasoning across all agent-loop steps so
+            # we can include the full thinking block in the final assistant
+            # message (and persist it in the conversation).
+            accumulated_thinking: list[str] = []
+            effective_model: str | None = None
+            # Set to True once we've streamed a thinking_delta or
+            # text_delta — the tool-level __thinking__ event from the
+            # agent would re-send the same accumulated content as one
+            # big payload, duplicating what the user already saw
+            # arrive live. Use this flag to skip the tool-level event
+            # whenever streaming has already covered the ground.
+            streamed_deltas = False
+
             try:
                 async def tool_callback(tool_name, arguments, result):
                     if tool_name == "__thinking__":
+                        # If the per-delta stream already delivered the
+                        # reasoning to the client, skip the redundant
+                        # bulk event (which would re-send the same
+                        # accumulated text as one big payload).
+                        if streamed_deltas:
+                            return
+                        # Stream-level thinking is the whole accumulated
+                        # block from the LLM (not delta-by-delta). The
+                        # delta stream from the LLM client arrives via
+                        # ``stream_callback`` (thinking_delta events).
+                        thinking_text = arguments.get("thinking", "")
+                        if thinking_text:
+                            accumulated_thinking.append(thinking_text)
                         await websocket.send_json({
                             "type": "thinking",
-                            "content": arguments.get("thinking", ""),
+                            "content": thinking_text,
                         })
                     elif tool_name == "__tool_calls__":
                         await websocket.send_json({
@@ -948,20 +1014,55 @@ async def chat_websocket(websocket: WebSocket, session_id: str):
                         _logger.warning(f"Permission request {req_id} error: {e}")
                         return "rejected"
 
+                async def stream_callback(kind: str, content: str) -> None:
+                    """Forward per-token deltas from the LLM to the WebSocket.
+
+                    ``kind`` is "thinking" (extended-thinking block) or
+                    "text" (visible response). The frontend appends each
+                    delta to the in-flight message so the user sees
+                    the reasoning and response stream word-by-word.
+                    """
+                    nonlocal streamed_deltas
+                    streamed_deltas = True
+                    try:
+                        await websocket.send_json({
+                            "type": f"{kind}_delta",
+                            "content": content,
+                        })
+                    except Exception:
+                        # Client disconnected mid-stream — let the
+                        # agent.run loop fail naturally on the next
+                        # send. Don't raise from the callback.
+                        pass
+
                 result = await agent.run(
                     tool_callback=tool_callback,
                     permission_mode=permission_mode,
                     permission_callback=permission_callback,
+                    model_override=model_override,
+                    thinking_override=thinking_override,
+                    stream_callback=stream_callback,
                 )
+
+                # Resolve which model actually ran (override or default)
+                effective_model = model_override or getattr(agent.llm, "model", None)
+                full_thinking = "\n\n".join(s for s in accumulated_thinking if s) or None
 
                 await websocket.send_json({
                     "type": "assistant",
                     "content": result,
+                    "thinking": full_thinking,
+                    "model": effective_model,
                 })
 
-                # Auto-save: append assistant message
+                # Auto-save: append assistant message (with thinking + model)
                 conv = load_conversation(session_id)
-                conv["messages"].append({"type": "assistant", "content": result})
+                conv["messages"].append({
+                    "type": "assistant",
+                    "content": result,
+                    "thinking": full_thinking,
+                    "model": effective_model,
+                })
                 save_conversation(session_id, conv.get("title", get_conversation_title(conv["messages"])), conv["messages"])
             except Exception as e:
                 _logger.error(f"Agent error: {e}")
@@ -991,6 +1092,8 @@ async def tts_generate(req: GenerateRequest, background_tasks: BackgroundTasks):
         output_path = PROJECT_ROOT / "workspace" / f"tts_web_{asyncio.get_event_loop().time()}.mp3"
         output_path.parent.mkdir(exist_ok=True)
 
+        tts_model = req.settings.get("model", "speech-2.8-turbo")
+
         success, result = tts_sync(
             api_key, api_base, req.prompt,
             req.settings.get("voice", "male-qn-qingque"),
@@ -999,7 +1102,14 @@ async def tts_generate(req: GenerateRequest, background_tasks: BackgroundTasks):
         )
 
         if success:
-            return {"success": True, "file_path": str(result)}
+            cost = calculate_tts_cost(len(req.prompt or ""), tts_model)
+            return {
+                "success": True,
+                "file_path": str(result),
+                "model": tts_model,
+                "characters": len(req.prompt or ""),
+                **cost,
+            }
         else:
             return {"success": False, "error": result}
     except Exception as e:
@@ -1048,13 +1158,15 @@ async def image_generate(req: ImageRequest):
         output_path = PROJECT_ROOT / "workspace" / f"image_web_{asyncio.get_event_loop().time()}.png"
         output_path.parent.mkdir(exist_ok=True)
 
+        n = max(int(req.n or 1), 1)
+
         success, result = image_sync(
             api_key, api_base, req.prompt,
             str(output_path),
             aspect_ratio=req.aspect_ratio,
             width=req.width,
             height=req.height,
-            n=req.n,
+            n=n,
             prompt_optimizer=req.prompt_optimizer,
             watermark=req.watermark,
             seed=req.seed
@@ -1063,7 +1175,13 @@ async def image_generate(req: ImageRequest):
         if success:
             # Return path relative to PROJECT_ROOT for frontend
             rel_path = str(Path(result).relative_to(PROJECT_ROOT)).replace('\\', '/')
-            return {"success": True, "file_path": rel_path}
+            cost = calculate_image_cost(n)
+            return {
+                "success": True,
+                "file_path": rel_path,
+                "count": n,
+                **cost,
+            }
         else:
             return {"success": False, "error": result}
     except Exception as e:
@@ -1093,6 +1211,8 @@ async def image_i2i_generate(req: ImageRequest):
         output_path = PROJECT_ROOT / "workspace" / f"image_i2i_{asyncio.get_event_loop().time()}.png"
         output_path.parent.mkdir(exist_ok=True)
 
+        n = max(int(req.n or 1), 1)
+
         success, result = image_variations_sync(
             api_key, api_base,
             str(full_image_path),
@@ -1101,7 +1221,7 @@ async def image_i2i_generate(req: ImageRequest):
             aspect_ratio=req.aspect_ratio,
             width=req.width,
             height=req.height,
-            n=req.n,
+            n=n,
             prompt_optimizer=req.prompt_optimizer,
             watermark=req.watermark,
             seed=req.seed
@@ -1109,7 +1229,13 @@ async def image_i2i_generate(req: ImageRequest):
 
         if success:
             rel_path = str(Path(result).relative_to(PROJECT_ROOT)).replace('\\', '/')
-            return {"success": True, "file_path": rel_path}
+            cost = calculate_image_cost(n)
+            return {
+                "success": True,
+                "file_path": rel_path,
+                "count": n,
+                **cost,
+            }
         else:
             return {"success": False, "error": result}
     except Exception as e:
@@ -1131,17 +1257,27 @@ async def music_generate(req: GenerateRequest):
         output_path = PROJECT_ROOT / "workspace" / f"music_web_{asyncio.get_event_loop().time()}.mp3"
         output_path.parent.mkdir(exist_ok=True)
 
+        lyrics = req.settings.get("lyrics", "") or ""
+        music_model = req.settings.get("model", "music-2.6")
+
         success, result = client.music_generate(
             prompt=req.prompt,
-            lyrics=req.settings.get("lyrics", ""),
-            model=req.settings.get("model", "music-2.6"),
+            lyrics=lyrics,
+            model=music_model,
             output_path=str(output_path),
             output_format="hex"
         )
         client.close()
 
         if success:
-            return {"success": True, "file_path": str(result)}
+            cost = calculate_music_cost(include_lyrics=bool(lyrics.strip()))
+            return {
+                "success": True,
+                "file_path": str(result),
+                "model": music_model,
+                "include_lyrics": bool(lyrics.strip()),
+                **cost,
+            }
         else:
             return {"success": False, "error": result}
     except Exception as e:
@@ -1159,15 +1295,29 @@ async def video_generate(req: GenerateRequest):
         if not api_key:
             raise HTTPException(status_code=400, detail="API key not configured")
 
+        video_model = req.settings.get("model", "MiniMax-Hailuo-2.3")
+        resolution = req.settings.get("resolution", "768P")
+        duration = int(req.settings.get("duration", 6) or 6)
+
         client = MiniMaxSyncClient(api_key, api_base)
         success, task_id = client.video_generate(
             prompt=req.prompt,
-            model=req.settings.get("model", "MiniMax-Hailuo-2.3")
+            model=video_model,
+            duration=duration,
+            resolution=resolution,
         )
         client.close()
 
         if success:
-            return {"success": True, "task_id": task_id}
+            cost = calculate_video_cost(video_model, resolution, duration)
+            return {
+                "success": True,
+                "task_id": task_id,
+                "model": video_model,
+                "resolution": resolution,
+                "duration": duration,
+                **cost,
+            }
         else:
             return {"success": False, "error": task_id}
     except Exception as e:
@@ -1497,9 +1647,286 @@ async def shell_websocket(websocket: WebSocket):
 
 # ============ MiniMax CLI Integration ============
 
+# Canonical plan identifiers for the current MiniMax Token Plan.
+# There is no "starter" tier — Token Plan starts at Plus. All three paid
+# tiers (Plus/Max/Ultra) include chat + image + speech + music; only
+# video generation is tier-gated.
+# Order matters: longest alias first so ``plus-hs`` wins over ``plus``.
+_PLAN_ALIASES: list = [
+    ("plus-hs", "plus-hs"),
+    ("plus_hs", "plus-hs"),
+    ("plushs", "plus-hs"),
+    ("plus hs", "plus-hs"),
+    ("ultra", "ultra"),
+    ("plus", "plus"),
+    ("max", "max"),
+]
+_PLAN_LOOKUP: dict = {alias: canonical for alias, canonical in _PLAN_ALIASES}
+
+
+def _normalise_plan(raw: object) -> str:
+    """Map a free-form plan name from the mmx CLI to a canonical identifier.
+
+    Returns ``"unknown"`` for empty / unrecognised values so the frontend
+    can always render a stable enum-like value.
+    """
+    if not raw:
+        return "unknown"
+    key = str(raw).strip().lower().replace(" ", "-")
+    # 1) Exact match.
+    if key in _PLAN_LOOKUP:
+        return _PLAN_LOOKUP[key]
+    # 2) Prefix match: alias is the start of the key, the next char is
+    #    non-alphanumeric (or end of string). This handles "max-plan" and
+    #    "ultra_v2" but rejects "max-hs" (no canonical for that).
+    for alias, canonical in _PLAN_ALIASES:
+        if key.startswith(alias):
+            tail = key[len(alias):]
+            if tail == "" or not tail[0].isalnum():
+                return canonical
+    return "unknown"
+
+
+def _get_user_configured_plan() -> str:
+    """Fallback plan source: read ``minimax.plan`` from config.yaml.
+
+    This is a **fallback** — the primary plan source is auto-detection
+    from mmx ``model_remains[]`` access flags (see ``_detect_plan_from_mmx``).
+    We keep this for two reasons:
+      1) Users whose mmx response is empty (fresh key, transient network
+         blip) still see the right tier in the UI.
+      2) Future mmx versions might add Ultra-specific signals that we
+         can't auto-detect yet — config.yaml gives the user a manual
+         override.
+    The cost of a wrong value is bounded — a user lying about their tier
+    only unlocks UI affordances; actual API calls still fail with
+    401/403/429 if the plan doesn't match.
+    """
+    try:
+        cfg = get_minimax_config()
+        plan_raw = cfg.get("plan") if isinstance(cfg, dict) else None
+        if plan_raw:
+            return _normalise_plan(plan_raw)
+    except Exception:
+        pass
+    return "unknown"
+
+
+def _detect_plan_from_mmx(model_remains: list) -> str:
+    """Auto-detect the user's plan from mmx ``model_remains[]`` access flags.
+
+    mmx 1.0.16+ no longer returns the plan name directly, but every model
+    entry carries ``current_interval_status`` (1 = active, 3 = inactive
+    for this plan). The set of models the user has access to uniquely
+    identifies the plan:
+
+        + video gen active          → max (or ultra; ultra is a superset)
+        + image/speech/music active  → plus
+        + only text (general) active → plus (lowest paid tier; no
+                                         "starter" tier in current
+                                         Token Plan)
+        + nothing                   → unknown (mmx error / fresh key)
+
+    This is the **primary** plan source — every other user with a working
+    mmx quota endpoint gets the right tier automatically, with no need
+    to hand-edit ``config.yaml``. Config.yaml is only consulted as a
+    fallback when mmx returns nothing usable.
+    """
+    if not model_remains:
+        return "unknown"
+    by_name = {(m.get("model_name") or "").lower(): m for m in model_remains}
+
+    def active(name: str) -> bool:
+        m = by_name.get(name)
+        if not m:
+            return False
+        # 1 = active, 3 = inactive. Some mmx versions report 0 for
+        # "no access for this plan" — treat anything other than 1 as
+        # inactive. Prefer the 5h interval status, fall back to weekly.
+        status = _coerce_number(m.get("current_interval_status"))
+        if status is None:
+            status = _coerce_number(m.get("current_weekly_status"))
+        return status == 1
+
+    # Video gen is the only capability that distinguishes Max+ from Plus.
+    if active("video"):
+        return "max"  # covers Max and Ultra (Ultra is a strict superset of Max)
+    # Media gen: image/speech/music — Plus+ only. (All paid tiers have
+    # these; there's no "starter" tier anymore.)
+    if active("image") or active("speech") or active("music"):
+        return "plus"
+    # Text-only (general) access is unusual on the current Token Plan —
+    # treat as Plus (the lowest paid tier) rather than inventing a
+    # legacy "starter" value the UI no longer recognises.
+    if active("general"):
+        return "plus"
+    return "unknown"
+
+
+def _coerce_number(value: object) -> Optional[float]:
+    """Coerce a value coming from the mmx CLI into ``float`` (or ``None``)."""
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return float(value)
+    if isinstance(value, (int, float)):
+        return float(value)
+    try:
+        return float(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+
+
+def _enrich_quota(data: object) -> dict:
+    """Build the enriched quota payload from raw mmx output.
+
+    The mmx CLI returns the plan and credit fields under a few different
+    keys depending on the version; we probe them all and fall back to
+    safe defaults so the frontend always receives a stable shape.
+    """
+    payload: dict = data if isinstance(data, dict) else {}
+    # `data` may itself be wrapped — mmx often returns {"data": {...}}.
+    inner = payload.get("data") if isinstance(payload.get("data"), dict) else payload
+
+    # Plan resolution order:
+    #   1) Auto-detect from mmx model_remains[] access flags (works for
+    #      any user, no config required)
+    #   2) Explicit plan field in the mmx response (older versions)
+    #   3) User-declared ``minimax.plan`` in config.yaml (manual override)
+    #   4) Default to ``starter`` (lowest tier) as a safe last resort
+    model_remains = inner.get("model_remains") if isinstance(inner.get("model_remains"), list) else []
+    plan = _detect_plan_from_mmx(model_remains)
+    if plan == "unknown":
+        plan_raw = (
+            inner.get("plan")
+            or inner.get("tier")
+            or inner.get("package")
+            or inner.get("plan_name")
+            or payload.get("plan")
+            or payload.get("tier")
+        )
+        plan = _normalise_plan(plan_raw)
+    if plan == "unknown":
+        plan = _get_user_configured_plan()
+    if plan == "unknown":
+        # No starter tier in the current Token Plan — default to Plus
+        # (the lowest paid tier) so the UI doesn't accidentally show
+        # the user as a legacy free user.
+        plan = "plus"
+
+    # mmx 1.0.16+ removed credit_balance/total fields. Instead, the response
+    # carries ``model_remains[]`` with per-model remaining *percentages*.
+    # We surface the chat ("general") quota as credit_balance so the existing
+    # CreditBalanceWidget has something numeric to render. credit_total is
+    # fixed at 100 since the new format is percentage-based.
+    # ``model_remains`` was already loaded above for plan auto-detection.
+    general_model = next(
+        (m for m in model_remains if (m.get("model_name") or "").lower() == "general"),
+        None,
+    )
+    video_model = next(
+        (m for m in model_remains if (m.get("model_name") or "").lower() == "video"),
+        None,
+    )
+
+    if general_model is not None:
+        # Use the 5h rolling quota as the "balance" — it matches the
+        # "credits remaining" semantic that CreditBalanceWidget already
+        # displays, even though the unit is now a percentage (0-100).
+        credit_balance = _coerce_number(general_model.get("current_interval_remaining_percent"))
+    else:
+        credit_balance = _coerce_number(
+            inner.get("credit_balance")
+            or inner.get("balance")
+            or inner.get("remaining_credits")
+            or inner.get("credits_remaining")
+        )
+    credit_total: Optional[float] = 100.0 if general_model is not None else _coerce_number(
+        inner.get("credit_total")
+        or inner.get("total_credits")
+        or inner.get("credits_total")
+        or inner.get("plan_credits")
+    )
+
+    # window_reset_at: prefer explicit fields, fall back to end_time of
+    # the "general" model's current interval (Unix ms → ISO 8601 UTC).
+    window_reset_at = (
+        inner.get("window_reset_at")
+        or inner.get("reset_at")
+        or inner.get("next_reset")
+        or inner.get("next_reset_at")
+    )
+    if window_reset_at is None and general_model is not None:
+        end_ms = _coerce_number(general_model.get("end_time"))
+        if end_ms:
+            try:
+                from datetime import datetime, timezone
+                window_reset_at = datetime.fromtimestamp(end_ms / 1000, tz=timezone.utc).isoformat()
+            except Exception:
+                window_reset_at = None
+
+    # video_daily_limit: explicit field > plan-based default.
+    # Max users get 3 generations/day, Ultra users get 5. Auto-detection
+    # only returns "max" (it can't tell Max from Ultra — they have the
+    # same model access). Ultra users should set ``minimax.plan: ultra``
+    # in config.yaml to get the correct 5/day cap; otherwise they see
+    # the safer 3/day default.
+    video_daily_limit_raw = (
+        inner.get("video_daily_limit")
+        or inner.get("daily_video_limit")
+        or payload.get("video_daily_limit")
+    )
+    video_daily_limit: Optional[int] = None
+    if video_daily_limit_raw is not None:
+        try:
+            video_daily_limit = int(video_daily_limit_raw)
+        except (TypeError, ValueError):
+            video_daily_limit = None
+    elif plan == "ultra":
+        video_daily_limit = 5
+    elif plan == "max" or (
+        video_model is not None
+        and _coerce_number(video_model.get("current_interval_status")) == 1
+    ):
+        # Auto-detected "max" or any user with active video access
+        # defaults to the Max tier cap (3/day).
+        video_daily_limit = 3
+
+    video_daily_used = _coerce_number(
+        inner.get("video_daily_used")
+        or inner.get("daily_video_used")
+        or payload.get("video_daily_used")
+    )
+    if video_daily_used is None and video_model is not None:
+        # Derive used from remaining percentage when the cap is known.
+        if video_daily_limit:
+            remaining_pct = _coerce_number(video_model.get("current_interval_remaining_percent")) or 0
+            video_daily_used = int(round(video_daily_limit * (100 - remaining_pct) / 100))
+        else:
+            video_daily_used = 0
+    elif video_daily_used is None:
+        video_daily_used = 0
+    else:
+        video_daily_used = int(video_daily_used)
+
+    return {
+        "plan": plan,
+        "credit_balance": credit_balance,
+        "credit_total": credit_total,
+        "window_reset_at": window_reset_at,
+        "video_daily_limit": video_daily_limit,
+        "video_daily_used": video_daily_used,
+    }
+
+
 @app.get("/api/minimax/quota")
 async def get_quota():
-    """Get Token Plan quota using mmx CLI."""
+    """Get Token Plan quota using mmx CLI.
+
+    The response is enriched at the root level with canonical fields
+    (plan, credit_balance, credit_total, window_reset_at, video_daily_*)
+    while preserving the raw ``data`` payload for backwards compatibility.
+    """
     try:
         minimax_config = get_minimax_config()
         api_key = minimax_config["api_key"]
@@ -1519,9 +1946,11 @@ async def get_quota():
 
         try:
             data = json.loads(result.stdout)
-            return {"success": True, "data": data}
         except json.JSONDecodeError:
             return {"success": True, "raw": result.stdout}
+
+        enriched = _enrich_quota(data)
+        return {"success": True, "data": data, **enriched}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

@@ -5,23 +5,30 @@ import {
   Layout, Settings, Crown, ChevronsLeft, ChevronsRight
 } from 'lucide-react'
 import QuotaDashboard from './QuotaDashboard'
+import CreditBalanceWidget from './CreditBalanceWidget'
 
-const PLAN_ORDER = { starter: 1, plus: 2, max: 3 }
-const PLAN_LABELS = { starter: 'Starter', plus: 'Plus', max: 'Max' }
+const PLAN_ORDER = { plus: 0, max: 1, ultra: 2 }
+const PLAN_LABELS = { plus: 'Plus', max: 'Max', ultra: 'Ultra' }
 
 const NAV_META = {
-  chat: { plan: 'starter', always: true },
+  // All Token Plan subscribers (Plus/Max/Ultra) get chat + media generation
+  // (image / speech / music). Only video gen is tier-gated. There is no
+  // "starter" tier in the current Token Plan.
+  chat: { plan: 'plus', always: true },
   tts: { plan: 'plus' },
   image: { plan: 'plus' },
-  music: { plan: 'starter' },
+  music: { plan: 'plus' },
   video: { plan: 'max' },
-  code: { plan: 'starter', always: true },
-  tasks: { plan: 'starter', always: true },
+  code: { plan: 'plus', always: true },
+  tasks: { plan: 'plus', always: true },
 }
 
 export default function Sidebar({ activeTab, onTabChange, onOpenSettings }) {
   const { t } = useTranslation()
-  const [userPlan, setUserPlan] = useState('starter')
+  // Default to the lowest paid tier (Plus). When the API is reachable,
+  // the auto-detected plan overrides this; when it isn't, we still show
+  // a tier that matches what every paying subscriber has.
+  const [userPlan, setUserPlan] = useState('plus')
   const [planLoaded, setPlanLoaded] = useState(false)
   const [collapsed, setCollapsed] = useState(() => {
     try {
@@ -32,21 +39,19 @@ export default function Sidebar({ activeTab, onTabChange, onOpenSettings }) {
   })
 
   useEffect(() => {
+    // The /api/minimax/quota endpoint returns the user's plan at the top
+    // level (enriched server-side from config.yaml + mmx). The legacy
+    // ``model_remains.includes('minimax-m')`` heuristic no longer matches
+    // mmx 1.0.16+ responses (which use short bucket names like 'general'),
+    // so we read the enriched ``plan`` field directly.
     fetch('/api/minimax/quota')
       .then(r => r.json())
       .then(data => {
-        if (data.success && data.data?.model_remains) {
-          const m2Model = data.data.model_remains.find(m =>
-            (m.model_name || '').toLowerCase().includes('minimax-m')
-          )
-          if (m2Model) {
-            const total = m2Model.current_interval_total_count || 0
-            if (total >= 15000) setUserPlan('max')
-            else if (total >= 4500) setUserPlan('plus')
-            else setUserPlan('starter')
-          }
-          setPlanLoaded(true)
+        const plan = (data?.plan || '').toLowerCase()
+        if (plan && PLAN_ORDER[plan] !== undefined) {
+          setUserPlan(plan)
         }
+        setPlanLoaded(true)
       })
       .catch(() => setPlanLoaded(true))
   }, [])
@@ -60,16 +65,15 @@ export default function Sidebar({ activeTab, onTabChange, onOpenSettings }) {
   }
 
   const allNavItems = [
-    { id: 'chat', label: t('nav.chat'), icon: MessageSquare, plan: 'starter', always: true },
+    { id: 'chat', label: t('nav.chat'), icon: MessageSquare, plan: 'plus', always: true },
     { id: 'tts', label: t('nav.tts'), icon: Volume2, plan: 'plus' },
     { id: 'image', label: t('nav.image'), icon: Image, plan: 'plus' },
-    { id: 'music', label: t('nav.music'), icon: Music, plan: 'starter' },
+    { id: 'music', label: t('nav.music'), icon: Music, plan: 'plus' },
     { id: 'video', label: t('nav.video'), icon: Video, plan: 'max' },
-    { id: 'code', label: t('nav.code'), icon: Code2, plan: 'starter', always: true },
-    { id: 'tasks', label: t('nav.tasks'), icon: Layout, plan: 'starter', always: true },
+    { id: 'code', label: t('nav.code'), icon: Code2, plan: 'plus', always: true },
+    { id: 'tasks', label: t('nav.tasks'), icon: Layout, plan: 'plus', always: true },
   ]
 
-  const PLAN_ORDER = { starter: 1, plus: 2, max: 3 }
   const navItems = allNavItems.filter(item => item.always || PLAN_ORDER[item.plan] <= PLAN_ORDER[userPlan])
 
   return (
@@ -131,6 +135,20 @@ export default function Sidebar({ activeTab, onTabChange, onOpenSettings }) {
           )
         })}
       </nav>
+
+      {/* Credit balance widget — hidden when sidebar is collapsed to keep
+          the rail narrow. The widget polls every 30s and also refreshes
+          after any media panel dispatches `minimax:media-complete`. */}
+      {!collapsed && (
+        <div className="px-3 pt-2 shrink-0">
+          <CreditBalanceWidget />
+        </div>
+      )}
+      {collapsed && (
+        <div className="px-2 py-2 shrink-0 flex justify-center">
+          <CreditBalanceWidget compact />
+        </div>
+      )}
 
       {/* Quota Dashboard — hidden when collapsed */}
       {!collapsed && (

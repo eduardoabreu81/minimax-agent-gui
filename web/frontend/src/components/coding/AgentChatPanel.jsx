@@ -7,10 +7,12 @@ import MarkdownRenderer from '../MarkdownRenderer'
 import XTermTerminal from './XTermTerminal'
 import { useCodingChat } from './useCodingChat'
 import { useAgentActivity } from '../../context/AgentActivityContext'
+import { useSelectedModel } from '../../hooks/useSelectedModel'
 import { useState } from 'react'
 
 export default function AgentChatPanel({ activeFile, openFiles, fileContents, onOpenFile, onCloseFile, onSaveFile, getLanguage, gitStatus, changedFiles, runGitCommand, loadGitStatus, onFileChange }) {
   const { t } = useTranslation()
+  const { model: selectedModel } = useSelectedModel({ fallback: 'MiniMax-M3' })
   const chat = useCodingChat({
     onActivity: (data) => {
       if (data.type === 'tool_result' && (data.tool === 'write_file' || data.tool === 'edit_file')) {
@@ -202,7 +204,7 @@ export default function AgentChatPanel({ activeFile, openFiles, fileContents, on
               </div>
               <div className="flex justify-between items-center mt-1">
                 <p className="text-[10px] text-muted">Enter to send · Shift+Enter for new line</p>
-                <p className="text-[10px] text-primary font-medium">MiniMax-M2.7</p>
+                <p className="text-[10px] text-primary font-medium">{selectedModel}</p>
               </div>
             </div>
             <div className="flex flex-col gap-2">

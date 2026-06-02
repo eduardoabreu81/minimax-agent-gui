@@ -69,6 +69,11 @@ class Config(BaseModel):
     llm: LLMConfig
     agent: AgentConfig
     tools: ToolsConfig
+    # External MCP servers (loaded by the web backend into the agent's
+    # tool list). Format: dict of server_id -> {command, args, env,
+    # enabled, description, ...}. The pydantic model accepts any dict
+    # shape so users can add/remove servers without code changes.
+    mcp_servers: dict[str, dict] = Field(default_factory=dict)
 
     @classmethod
     def load(cls) -> "Config":

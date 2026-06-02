@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react'
-import { Volume2, Play, Save, Loader2, RefreshCw, Mic, Gauge, Check } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
+import { Volume2, Play, Save, Loader2, RefreshCw, Mic, Gauge, Check, Coins } from 'lucide-react'
 import { useSessionProtection } from '../../hooks/useSessionProtection'
 import RecentGenerations from './RecentGenerations'
 
 export default function TTSPanel() {
+  const { t } = useTranslation()
   const [text, setText] = useState('')
   const [voice, setVoice] = useState('English_expressive_narrator')
   const [speed, setSpeed] = useState(1.0)
@@ -13,6 +15,7 @@ export default function TTSPanel() {
   const [loading, setLoading] = useState(false)
   const [voicesLoading, setVoicesLoading] = useState(false)
   const [result, setResult] = useState(null)
+  const [cost, setCost] = useState(null)
   const [error, setError] = useState(null)
   const [voices, setVoices] = useState([])
   const [voiceFilter, setVoiceFilter] = useState('')
@@ -100,6 +103,7 @@ export default function TTSPanel() {
     setLoading(true)
     setError(null)
     setResult(null)
+    setCost(null)
     try {
       const res = await fetch('/api/minimax/cli', {
         method: 'POST',
@@ -121,16 +125,27 @@ export default function TTSPanel() {
       if (data.success && data.returncode === 0) {
         // Try to parse result or use stdout
         let outputPath = null
+        let parsedOut = null
         try {
-          const jsonOut = JSON.parse(data.stdout)
-          outputPath = jsonOut.file_path || jsonOut.path
+          parsedOut = JSON.parse(data.stdout)
+          outputPath = parsedOut.file_path || parsedOut.path
         } catch {
           // Extract path from stdout
           const match = data.stdout.match(/workspace[\\/]tts_\d+\./)
           if (match) outputPath = match[0]
         }
         setResult(outputPath || `workspace/tts_${Date.now()}.${format}`)
+        // Capture cost — backend may return cost_credits/cost_usd at top level
+        // or embed them in the CLI stdout JSON.
+        const cc = data.cost_credits ?? parsedOut?.cost_credits
+        const cu = data.cost_usd ?? parsedOut?.cost_usd
+        if (typeof cc === 'number' || typeof cu === 'number') {
+          setCost({ cost_credits: cc, cost_usd: cu })
+        }
         fetchHistory()
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('minimax:media-complete'))
+        }
       } else {
         setError(data.stderr || data.stdout || 'TTS failed')
       }
@@ -301,9 +316,25 @@ export default function TTSPanel() {
 
         {result && (
           <div className="bg-surface border border-border rounded-xl p-4 space-y-3">
-            <p className="text-sm text-muted flex items-center gap-2">
-              <Check size={14} className="text-success" /> Audio generated successfully
-            </p>
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <p className="text-sm text-muted flex items-center gap-2">
+                <Check size={14} className="text-success" /> Audio generated successfully
+              </p>
+              {cost && (
+                <div
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/5 border border-primary/20 text-[10px] font-medium text-primary"
+                  title="Cost for this generation"
+                >
+                  <Coins size={11} />
+                  <span>
+                    {t('media.costLabel', {
+                      credits: cost.cost_credits ?? 0,
+                      usd: typeof cost.cost_usd === 'number' ? cost.cost_usd.toFixed(4) : '0.0000',
+                    })}
+                  </span>
+                </div>
+              )}
+            </div>
             <audio controls className="w-full" src={`/api/files/content?path=${encodeURIComponent(result)}`} />
             <div className="flex gap-2">
               <a

@@ -5,7 +5,7 @@
 
 ## Project Overview
 
-**MiniMax Agent GUI** is a personal AI agent application powered by the MiniMax M2.7 model. It provides:
+**MiniMax Agent GUI** is a personal AI agent application powered by the MiniMax M3 model (with M2.7 and M2.7-highspeed as selectable options). It provides:
 1. A **web app** (FastAPI + React 18 + Vite + Tailwind) — primary and recommended interface
 2. A **CLI framework** — terminal-based interactive agent
 
@@ -225,6 +225,70 @@ Async loop: receive message → call LLM → execute tool_calls → repeat until
 
 Response format uses `base_resp` for error codes and `content` for VLM text / `organic` array for search results.
 
+> **Important:** The Token Plan search endpoint expects the query under
+> the short key `"q"`, NOT `"query"`. The legacy `recency_days` /
+> `max_results` fields are no longer accepted (return HTTP 400 invalid
+> params). Match the working `minimax-coding-plan-mcp` server's
+> request shape: `{"q": "<query>"}`.
+
+## Key Features (as of 0.3.0)
+
+### Per-turn Model + Thinking Controls
+
+Every chat/code panel composer has a compact **ModelThinkingControls**
+row below the textarea:
+
+- **Model selector** (`<select>`): M3, M2.7, M2.7-highspeed. Persisted
+  per-panel via `localStorage` (`chat-model-override` /
+  `code-model-override`).
+- **Thinking toggle** (button with Brain icon): only visible for M3.
+  When ON, sends the Anthropic `thinking: {type: "adaptive"}` param.
+  Persisted via `localStorage` (`chat-thinking-enabled` /
+  `code-thinking-enabled`).
+
+The model and thinking override are sent in the WebSocket payload
+and forwarded to `agent.run(model_override, thinking_override)`,
+which passes them to `llm.generate(model=..., thinking=...)`.
+
+### Real-time Thinking + Text Streaming
+
+The LLM client uses the Anthropic SDK's `messages.stream()` to stream
+content_block_delta events as they arrive. The chat/code panels
+receive `thinking_delta` and `text_delta` events over the WebSocket
+and append them to the in-flight message so the user sees the
+reasoning and response stream **word-by-word** in real time.
+
+The final `assistant` event from the backend freezes the streaming
+message (no duplication) and attaches the model tag + any metadata.
+
+### Thinking Block
+
+`ThinkingBlock` (in `web/frontend/src/components/shared/`) renders the
+model's reasoning as its own message in the chat timeline (above the
+assistant's response). Always visible (per user preference). Shows a
+streaming spinner while chunks are still arriving. A separate
+`{type: 'thinking', streaming: true}` message handles the live
+accumulation; the final assistant message freezes it.
+
+### Session Persistence
+
+Chat and code session IDs are persisted in `localStorage`
+(`chat-session-id` / `code-session-id`). Switching tabs or refreshing
+the page keeps the same conversation. Only the explicit "New Chat"
+action clears the storage key and generates a fresh UUID.
+
+### Plan Auto-Detection
+
+mmx 1.0.16+ dropped the `plan` field from quota output. The backend
+infers the tier from `model_remains[].current_interval_status`:
+- `video` status=1 → max+ (default `max`; Ultra is a superset)
+- `image`/`speech`/`music` status=1 → plus
+- only `general` status=1 → plus (lowest paid tier; no "starter")
+- nothing active → `unknown`, falls back to `config.minimax.plan`
+
+See `mini_agent/llm/...` and `_detect_plan_from_mmx()` in
+`web/backend/main.py`.
+
 ## Testing Strategy
 
 - **Framework**: `pytest` with `pytest-asyncio`
@@ -258,5 +322,17 @@ Response format uses `base_resp` for error codes and `content` for VLM text / `o
 - When editing `main.py`, the server may need manual restart (Uvicorn StatReload can hang).
 - The `MiniMaxSyncClient` and `MiniMaxClient` have **separate** method signatures — sync uses `requests`, async uses `httpx`.
 - The `image_variations` (I2I) method uses `subject_reference` with `image_file` (data URL), not `image_base64`.
-- Frontend WebSocket connects directly to `ws://localhost:8000` (not through Vite proxy for `/ws/chat/`).
+- Frontend WebSocket connects directamente to `ws://localhost:8000` (not through Vite proxy for `/ws/chat/`).
 - Conversation IDs starting with `coding-` are filtered by backend as coding sessions.
+- **Token Plan web_search uses `"q"` not `"query"`** — see the
+  warning in section 4 above. Hardcoding the legacy field name
+  silently breaks the tool with HTTP 400.
+- **Default model is MiniMax-M3**, not M2.7 or M2.5. The settings
+  picker offers M3 / M2.7 / M2.7-highspeed.
+- **Anthropic SDK blocks non-streaming calls >10 min.** Any LLM
+  call must use `messages.stream()` (already the default in
+  `anthropic_client.py`).
+- **mmx CLI 1.0.16+ renamed model buckets** (`general`, `image`,
+  `video`, `speech`, `music`). The legacy `minimax-m2.7` etc. names
+  no longer appear. If you grep for them, you'll find nothing.
+- **Model is user-selectable in Settings** — system prompts use the `{model}` placeholder, do not hardcode M3 (or M2.7) in new code.

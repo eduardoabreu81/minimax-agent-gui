@@ -5,10 +5,10 @@
   "description": "MiniMax Agent — All-in-One Web Platform",
   "scripts": {
     "dev": "concurrently \"npm run backend\" \"npm run frontend\" --names \"API,UI\" --prefix-colors \"blue,green\"",
-    "backend": "cd backend && python main.py",
+    "backend": "cd backend && py -3.10 main.py",
     "frontend": "cd frontend && npm run dev",
     "build": "cd frontend && npm run build",
-    "start": "cd backend && python main.py",
+    "start": "cd backend && py -3.10 main.py",
     "install:all": "cd frontend && npm install"
   },
   "devDependencies": {

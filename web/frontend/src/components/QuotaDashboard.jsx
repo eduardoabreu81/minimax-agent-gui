@@ -5,14 +5,25 @@ import {
 } from 'lucide-react'
 
 const OFFICIAL_MODELS = [
-  { match: 'minimax-m', icon: Zap, label: 'M2.7', desc: 'Text', interval: '5h', group: 'text', hasWeekly: true },
-  { match: 'speech-hd', icon: Volume2, label: 'Speech 2.8', desc: 'TTS', interval: '24h', group: 'daily' },
-  { match: 'image-01', icon: Image, label: 'Image-01', desc: 'Image', interval: '24h', group: 'daily' },
-  { match: 'minimax-hailuo-2.3-fast', icon: Video, label: 'Hailuo Fast', desc: 'Video', interval: '24h', group: 'daily' },
-  { match: 'minimax-hailuo-2.3-6s', icon: Video, label: 'Hailuo 2.3', desc: 'Video', interval: '24h', group: 'daily' },
-  { match: 'music-2.6', icon: Music, label: 'Music-2.6', desc: 'Music', interval: '24h', group: 'daily' },
+  // Token Plan buckets. Every paid tier (Plus/Max/Ultra) includes chat +
+  // image + speech + music — those are gated at 'plus'. Video is the
+  // only capability that requires Max+ (with a daily cap). The Token
+  // Plan dashboard is about *quota*, not about plan-tier UI: when mmx
+  // returns quota data for a bucket we render the bar; when it doesn't
+  // (media buckets aren't always tracked) we render an "Available" pill.
+  // Do NOT add per-model entries for M3 / M2.7 / M2.7-highspeed — they
+  // all share the ``general`` quota and show as one row.
+  { match: 'general', icon: Zap,     label: 'Text (M-series)', desc: 'Chat',      interval: '5h',  group: 'text',  hasWeekly: true,  plan: 'plus' },
+  { match: 'image',   icon: Image,   label: 'Image-01',        desc: 'Image gen', interval: '24h', group: 'daily', hasWeekly: false, plan: 'plus' },
+  { match: 'speech',  icon: Volume2, label: 'Speech 2.8',      desc: 'TTS',       interval: '24h', group: 'daily', hasWeekly: false, plan: 'plus' },
+  { match: 'music',   icon: Music,   label: 'Music-2.6',       desc: 'Music gen', interval: '24h', group: 'daily', hasWeekly: false, plan: 'plus' },
+  { match: 'video',   icon: Video,   label: 'Hailuo Video',    desc: 'Video gen', interval: '24h', group: 'daily', hasWeekly: false, plan: 'max'  },
 ]
 
+// Plan ordering — used to filter the OFFICIAL_MODELS list to what the
+// current user's subscription actually unlocks. There is no "starter"
+// tier: Token Plan starts at Plus.
+const PLAN_ORDER = { plus: 0, max: 1, ultra: 2 }
 const EXCLUDED_NAMES = ['music-2.5', 'music-cover', 'lyrics_generation', 'coding-plan-vlm', 'coding-plan-search']
 
 function formatTime(ms) {
@@ -36,7 +47,7 @@ export default function QuotaDashboard({ compact = false }) {
     try {
       const res = await fetch('/api/minimax/quota')
       const data = await res.json()
-      if (data.success) setQuota(data.data)
+      if (data.success) setQuota(data)  // keep full envelope so parse() can read enriched fields
       else setError(data.error || 'Failed')
     } catch (e) { setError(e.message) }
     finally { setLoading(false) }
@@ -49,19 +60,63 @@ export default function QuotaDashboard({ compact = false }) {
     return () => clearInterval(iv)
   }, [])
 
-  const parse = (data) => {
-    if (!data?.model_remains) return []
-    return data.model_remains.map(item => {
-      const name = (item.model_name || '').toLowerCase()
-      if (EXCLUDED_NAMES.some(ex => name.includes(ex))) return null
-      const meta = OFFICIAL_MODELS.find(m => name.includes(m.match))
-      if (!meta) return null
-      const useWeekly = meta.group === 'text' && textView === 'weekly'
-      const total = useWeekly ? (item.current_weekly_total_count || 0) : (item.current_interval_total_count || 0)
-      const used = useWeekly ? (item.current_weekly_usage_count || 0) : (item.current_interval_usage_count || 0)
-      if (total === 0) return null
-      // Use correct reset time based on current view
-      const resetMs = useWeekly ? (item.weekly_remains_time || 0) : (item.remains_time || 0)
+  const parse = (envelope) => {
+    // ``envelope`` is the full response from /api/minimax/quota (we keep
+    // the full shape so we can read the enriched ``plan`` field). The
+    // raw mmx data lives under ``envelope.data``.
+    const data = envelope?.data
+    // Default to Plus when the API is unreachable or returns no plan —
+    // it's the lowest paid tier and matches what every Token Plan
+    // subscriber has for chat + media. If the user is on Max/Ultra and
+    // mmx is up, the backend's auto-detect will return the right tier.
+    const userPlan = envelope?.plan || 'plus'
+    const userPlanLevel = PLAN_ORDER[userPlan] ?? 0
+    const modelRemains = data?.model_remains || []
+    // Index mmx quota entries by lowercase model_name for O(1) lookup.
+    const quotaByName = new Map()
+    for (const item of modelRemains) {
+      const n = (item.model_name || '').toLowerCase()
+      if (n) quotaByName.set(n, item)
+    }
+    return OFFICIAL_MODELS.map(meta => {
+      // Only show models the user's plan unlocks. The ``plan`` field on
+      // each entry uses the same tier names as the backend (starter <
+      // plus < max < ultra).
+      if (PLAN_ORDER[meta.plan] > userPlanLevel) return null
+      // mmx quota entries use the new short names ('general', 'video', ...)
+      // or legacy long names. Try exact short match first, then prefix.
+      const quotaItem = quotaByName.get(meta.match)
+        || Array.from(quotaByName.entries()).find(([n]) => n.startsWith(meta.match + '-'))?.[1]
+      if (quotaItem) {
+        // mmx reports ``current_interval_status``: 1 = active, 3 = inactive.
+        // Hide models the user has no access to (e.g. Plus sees "video"
+        // with status 3 in mmx but the dashboard shouldn't render it).
+        const status = Number(quotaItem.current_interval_status ?? quotaItem.current_weekly_status)
+        if (status === 3) return null
+        const useWeekly = meta.group === 'text' && textView === 'weekly'
+        const remainingPct = useWeekly
+          ? (quotaItem.current_weekly_remaining_percent || 0)
+          : (quotaItem.current_interval_remaining_percent || 0)
+        const usedPct = Math.max(0, Math.min(100, 100 - remainingPct))
+        const resetMs = useWeekly ? (quotaItem.weekly_remains_time || 0) : (quotaItem.remains_time || 0)
+        return {
+          key: meta.match,
+          name: meta.label,
+          desc: meta.desc,
+          icon: meta.icon,
+          group: meta.group,
+          hasWeekly: meta.hasWeekly,
+          used: usedPct,
+          total: 100,
+          pct: usedPct,
+          remainingPct,
+          resetMs,
+          displayLabel: `${remainingPct}% remaining`,
+        }
+      }
+      // No quota entry in mmx — model is part of the plan but not
+      // tracked by the Token Plan quota (e.g. Image-01, Speech 2.8,
+      // Music-2.6 on Plus). Render as "Available" without a bar.
       return {
         key: meta.match,
         name: meta.label,
@@ -69,9 +124,13 @@ export default function QuotaDashboard({ compact = false }) {
         icon: meta.icon,
         group: meta.group,
         hasWeekly: meta.hasWeekly,
-        used, total,
-        pct: total > 0 ? Math.round((used / total) * 100) : 0,
-        resetMs,
+        used: 0,
+        total: 100,
+        pct: 0,
+        remainingPct: null,
+        resetMs: 0,
+        available: true,
+        displayLabel: 'Available',
       }
     }).filter(Boolean)
   }
@@ -84,14 +143,14 @@ export default function QuotaDashboard({ compact = false }) {
   const dailyReset = dailyItems.length > 0 ? Math.max(...dailyItems.map(i => i.resetMs)) : 0
   const textReset = textItems.length > 0 ? textItems[0].resetMs : 0
 
-  const Progress = ({ used, total, pct }) => (
+  const Progress = ({ used, total, pct, label }) => (
     <div className="h-4 bg-surface rounded-full overflow-hidden relative">
       <div
         className={`h-full transition-all duration-500 ${pct >= 90 ? 'bg-error' : pct >= 70 ? 'bg-amber-500' : 'bg-success'}`}
         style={{ width: `${Math.min(pct, 100)}%` }}
       />
       <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-white drop-shadow">
-        {used.toLocaleString()}/{total.toLocaleString()} ({pct}%)
+        {label || `${used.toLocaleString()}/${total.toLocaleString()} (${pct}%)`}
       </span>
     </div>
   )
@@ -137,7 +196,7 @@ export default function QuotaDashboard({ compact = false }) {
                           <span className="text-[10px] text-muted">{item.name}</span>
                           {item.pct >= 90 && <AlertCircle size={10} className="text-error" />}
                         </div>
-                        <Progress used={item.used} total={item.total} pct={item.pct} />
+                        <Progress used={item.used} total={item.total} pct={item.pct} label={item.displayLabel} />
                       </div>
                     ))}
                   </div>
@@ -157,7 +216,7 @@ export default function QuotaDashboard({ compact = false }) {
                           <span className="text-[10px] text-muted">{item.name}</span>
                           {item.pct >= 90 && <AlertCircle size={10} className="text-error" />}
                         </div>
-                        <Progress used={item.used} total={item.total} pct={item.pct} />
+                        <Progress used={item.used} total={item.total} pct={item.pct} label={item.displayLabel} />
                       </div>
                     ))}
                   </div>
@@ -212,7 +271,7 @@ export default function QuotaDashboard({ compact = false }) {
                     <item.icon size={12} className="text-muted" />
                     <span className="text-xs text-muted">{item.name} <span className="text-muted/60">({item.desc})</span></span>
                   </div>
-                  <Progress used={item.used} total={item.total} pct={item.pct} />
+                  <Progress used={item.used} total={item.total} pct={item.pct} label={item.displayLabel} />
                 </div>
               ))}
             </div>
@@ -230,7 +289,7 @@ export default function QuotaDashboard({ compact = false }) {
                     <item.icon size={12} className="text-muted" />
                     <span className="text-xs text-muted">{item.name} <span className="text-muted/60">({item.desc})</span></span>
                   </div>
-                  <Progress used={item.used} total={item.total} pct={item.pct} />
+                  <Progress used={item.used} total={item.total} pct={item.pct} label={item.displayLabel} />
                 </div>
               ))}
             </div>
