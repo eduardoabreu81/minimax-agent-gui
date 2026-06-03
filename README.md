@@ -196,11 +196,14 @@ are summarized from the official pricing page — always check
 | **Max**   | $50 / mo | Plus features + Hailuo video generation (5/day) + MCP tool credit. |
 | **Ultra** | $120 / mo | Max features with higher video gen limits and priority credit refresh. |
 
-> **Tip:** The GUI auto-detects your tier from the live Token Plan API
-> via `mmx`. The plan badge in the sidebar (Plus / Max / Ultra) and the
-> Quota Dashboard reflect what your account actually has access to.
-> If auto-detection misses, set `minimax.plan: plus|max|ultra` in
-> `config/config.yaml` as a fallback.
+> **Plan auto-detection:** The Quota Dashboard and the plan badge in
+> the sidebar are populated by calling the Token Plan `remains`
+> endpoint directly (`GET /v1/api/openplatform/coding_plan/remains`).
+> This works out of the box — no extra CLI is required. If you happen
+> to have the official `mmx` CLI installed, the backend will fall back
+> to it if the direct call fails. If auto-detection can't reach the
+> API for any reason, set `minimax.plan: plus|max|ultra` in
+> `config/config.yaml` as a manual fallback.
 
 ## Roadmap
 
@@ -211,7 +214,7 @@ are summarized from the official pricing page — always check
 - [x] **Real-time token-by-token streaming** for both thinking and response (no more 10-minute waits)
 - [x] **Thinking block** as a separate always-visible message in the chat timeline
 - [x] **Copy button** on every assistant message with "Copied!" feedback
-- [x] **Token Plan auto-detection** — Plus / Max / Ultra inferred from live `mmx` access flags
+- [x] **Token Plan auto-detection** — Plus / Max / Ultra inferred from a direct call to the Token Plan `remains` endpoint (works without the `mmx` CLI installed)
 - [x] **Token Plan web_search** wired to the `/v1/coding_plan/search` endpoint (uses `q` key)
 - [x] **Image attachment framing** — agent receives description as its view of the image, not as a stray note
 - [x] **MIT license** and `pyproject.toml` 0.3.0 release metadata

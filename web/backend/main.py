@@ -20,6 +20,7 @@ from fastapi.responses import FileResponse
 
 from pydantic import BaseModel
 from typing import Optional
+import httpx
 
 # Import our existing Python modules
 from mini_agent.config import Config as AgentConfig
@@ -1975,7 +1976,12 @@ def _enrich_quota(data: object) -> dict:
 
 @app.get("/api/minimax/quota")
 async def get_quota():
-    """Get Token Plan quota using mmx CLI.
+    """Get Token Plan quota and auto-detect the user's plan tier.
+
+    Tries the direct HTTP call to the Token Plan ``remains`` endpoint
+    first (no external dependency), and falls back to the ``mmx`` CLI
+    subprocess if the user happens to have it installed and the direct
+    call fails for any reason.
 
     The response is enriched at the root level with canonical fields
     (plan, credit_balance, credit_total, window_reset_at, video_daily_*)
@@ -1989,24 +1995,97 @@ async def get_quota():
         if not api_key:
             raise HTTPException(status_code=400, detail="API key not configured")
 
-        import subprocess
-        import shutil
-        mmx_cmd = shutil.which("mmx") or "mmx"
-        cmd_str = f'"{mmx_cmd}" quota --api-key {api_key} --region {region} --output json'
-        result = subprocess.run(cmd_str, capture_output=True, text=True, timeout=30, shell=True)
+        # 1) Direct HTTP call (preferred — works without mmx installed).
+        data = await _fetch_quota_via_api(api_key, region)
 
-        if result.returncode != 0:
-            return {"success": False, "error": result.stderr or "CLI error"}
+        # 2) Fallback: mmx CLI subprocess (for users who happen to have it
+        #    installed and want the CLI's exact output format).
+        if data is None:
+            data = _fetch_quota_via_mmx(api_key, region)
 
-        try:
-            data = json.loads(result.stdout)
-        except json.JSONDecodeError:
-            return {"success": True, "raw": result.stdout}
+        if data is None:
+            return {
+                "success": False,
+                "error": (
+                    "Could not fetch quota via direct API or mmx CLI. "
+                    "Set minimax.plan: plus|max|ultra in config/config.yaml "
+                    "as a fallback."
+                ),
+            }
 
         enriched = _enrich_quota(data)
         return {"success": True, "data": data, **enriched}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+async def _fetch_quota_via_api(api_key: str, region: str) -> Optional[dict]:
+    """Direct HTTP call to the Token Plan ``remains`` endpoint.
+
+    Equivalent to ``mmx quota --output json`` but without requiring the
+    mmx CLI to be installed. Returns the parsed JSON payload, or ``None``
+    on any failure (network error, non-2xx response, malformed JSON).
+
+    Endpoint (mirrors what mmx-cli does internally):
+        GET https://api.minimax.io/v1/api/openplatform/coding_plan/remains
+        GET https://api.minimaxi.com/v1/api/openplatform/coding_plan/remains  (CN)
+        Authorization: Bearer <api_key>
+    """
+    host = "https://api.minimaxi.com" if region == "cn" else "https://api.minimax.io"
+    url = f"{host}/v1/api/openplatform/coding_plan/remains"
+    headers = {"Authorization": f"Bearer {api_key}"}
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            r = await client.get(url, headers=headers)
+            if r.status_code != 200:
+                _logger.debug(
+                    "Direct quota fetch returned %s: %s",
+                    r.status_code,
+                    r.text[:200],
+                )
+                return None
+            data = r.json()
+            # The Token Plan API returns HTTP 200 even for credential
+            # errors; the real status lives in `base_resp.status_code`
+            # (0 = success, anything else = API-level error). Mirror
+            # the behavior of the mmx CLI: treat non-zero as failure.
+            base_resp = data.get("base_resp") or {}
+            if base_resp.get("status_code", 0) != 0:
+                _logger.debug(
+                    "Direct quota fetch API error: %s",
+                    base_resp.get("status_msg", "unknown"),
+                )
+                return None
+            return data
+    except Exception as e:
+        _logger.debug(f"Direct quota fetch failed: {e}")
+        return None
+
+
+def _fetch_quota_via_mmx(api_key: str, region: str) -> Optional[dict]:
+    """Subprocess call to ``mmx quota``. Returns parsed JSON or ``None``.
+
+    Used only as a fallback if the direct API call fails. Returns
+    ``None`` if mmx is not installed, the subprocess fails, or the
+    output is not valid JSON.
+    """
+    import subprocess
+    import shutil
+
+    mmx_cmd = shutil.which("mmx")
+    if not mmx_cmd:
+        return None
+    try:
+        cmd_str = f'"{mmx_cmd}" quota --api-key {api_key} --region {region} --output json'
+        result = subprocess.run(
+            cmd_str, capture_output=True, text=True, timeout=30, shell=True
+        )
+        if result.returncode != 0:
+            return None
+        return json.loads(result.stdout)
+    except Exception as e:
+        _logger.debug(f"mmx quota subprocess failed: {e}")
+        return None
 
 
 @app.post("/api/minimax/cli")

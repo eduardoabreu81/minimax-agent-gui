@@ -75,6 +75,14 @@ controls and fixed a number of Token Plan API quirks.
   search endpoint expects the query under the short key `q`, not
   `query`. The legacy code sent `query` + `recency_days` + `max_results`,
   which the new API rejects as unknown fields.
+- **Plan auto-detection requires `mmx` CLI** — `/api/minimax/quota`
+  used to shell out to `mmx quota` via subprocess. If the user
+  didn't have `mmx` installed, the call silently failed and the
+  GUI fell back to the `minimax.plan` value in `config.yaml`. The
+  feature now calls the Token Plan `remains` endpoint directly
+  (`GET /v1/api/openplatform/coding_plan/remains`) using `httpx`,
+  with `mmx` as a fallback for users who happen to have it.
+  Auto-detection now works out of the box.
 - **`understand_image` attachment context** — the upload flow
   prepended a bare `[Attached image analysis: ...]` block that the
   agent treated as a stray note. Re-framed as
