@@ -529,7 +529,16 @@ async def get_config():
             })
 
     safe_config = {
-        "agent": config.get("agent", {}) if isinstance(config, dict) else {},
+        # The config schema keeps model / max_steps / workspace_dir at
+        # the top level (not under an `agent` key), but the Settings UI
+        # reads them from `data.agent.*`. Project them under `agent` so
+        # the form is populated from the real config rather than
+        # always showing the JS-side fallbacks.
+        "agent": {
+            "model": config.get("model", "MiniMax-M3") if isinstance(config, dict) else "MiniMax-M3",
+            "max_steps": config.get("max_steps", 50) if isinstance(config, dict) else 50,
+            "workspace_dir": config.get("workspace_dir", "./workspace") if isinstance(config, dict) else "./workspace",
+        },
         "tts": config.get("tts", {}) if isinstance(config, dict) else {},
         "image": config.get("image", {}) if isinstance(config, dict) else {},
         "music": config.get("music", {}) if isinstance(config, dict) else {},
@@ -663,6 +672,73 @@ async def set_api_key(req: ApiKeyUpdate):
         config = cfg
 
         return {"success": True, "api_key_configured": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class AgentConfigUpdate(BaseModel):
+    model: Optional[str] = None
+    max_steps: Optional[int] = None
+    workspace_dir: Optional[str] = None
+    region: Optional[str] = None  # "global" or "cn"
+
+
+@app.put("/api/config/agent")
+async def update_agent_config(req: AgentConfigUpdate):
+    """Persist the agent's runtime settings to config/config.yaml.
+
+    Only the fields provided in the body are written; missing fields
+    are left untouched. ``region`` is stored under the ``minimax``
+    section (``minimax.region``) so the existing ``get_minimax_config``
+    helper can pick it up without any further changes. ``model``,
+    ``max_steps`` and ``workspace_dir`` are stored at the top level
+    (matching the rest of the config schema).
+    """
+    global config
+    try:
+        cfg = config
+        if hasattr(cfg, 'to_dict'):
+            cfg = cfg.to_dict()
+        elif not isinstance(cfg, dict):
+            cfg = {}
+
+        if req.model is not None:
+            if not isinstance(req.model, str) or not req.model.strip():
+                raise HTTPException(status_code=400, detail="model must be a non-empty string.")
+            cfg["model"] = req.model.strip()
+
+        if req.max_steps is not None:
+            if not isinstance(req.max_steps, int) or req.max_steps < 1 or req.max_steps > 1000:
+                raise HTTPException(
+                    status_code=400,
+                    detail="max_steps must be an integer between 1 and 1000.",
+                )
+            cfg["max_steps"] = req.max_steps
+
+        if req.workspace_dir is not None:
+            if not isinstance(req.workspace_dir, str) or not req.workspace_dir.strip():
+                raise HTTPException(status_code=400, detail="workspace_dir must be a non-empty string.")
+            cfg["workspace_dir"] = req.workspace_dir.strip()
+
+        if req.region is not None:
+            if req.region not in ("global", "cn"):
+                raise HTTPException(
+                    status_code=400,
+                    detail="region must be 'global' or 'cn'.",
+                )
+            if not isinstance(cfg.get("minimax"), dict):
+                cfg["minimax"] = {}
+            cfg["minimax"]["region"] = req.region
+
+        import yaml
+        with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
+            yaml.dump(cfg, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+
+        config = cfg
+
+        return {"success": True}
     except HTTPException:
         raise
     except Exception as e:

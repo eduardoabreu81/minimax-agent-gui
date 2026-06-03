@@ -254,9 +254,12 @@ export default function SettingsModal({ isOpen, onClose, isDark, onToggleTheme, 
 
   const handleSave = async () => {
     try {
-      // Persist the API key if the user typed one. Empty field = no-op
-      // (we never want to wipe a previously configured key just because
-      // the user opened the modal and clicked Save without changing it).
+      const messages = []
+
+      // 1) Persist the API key if the user typed one. Empty field =
+      //    no-op (we never want to wipe a previously configured key
+      //    just because the user opened the modal and clicked Save
+      //    without changing it).
       const newKey = (localSettings.apiKey || '').trim()
       if (newKey) {
         const res = await fetch('/api/config/api-key', {
@@ -272,10 +275,33 @@ export default function SettingsModal({ isOpen, onClose, isDark, onToggleTheme, 
         // "configured" status badge. /api/config only returns the
         // configured flag, never the key itself.
         setLocalSettings(s => ({ ...s, apiKey: '', apiKeyConfigured: true }))
-        setSavedMessage('API key saved.')
-      } else {
-        setSavedMessage('Settings saved successfully!')
+        messages.push('API key saved.')
       }
+
+      // 2) Persist the agent's runtime settings. We always send the
+      //    current values (loaded from /api/config on open) so a Save
+      //    click is idempotent and round-trips whatever the user has
+      //    in the form.
+      const agentPayload = {}
+      if (localSettings.model) agentPayload.model = localSettings.model
+      if (localSettings.maxSteps) agentPayload.max_steps = Number(localSettings.maxSteps)
+      if (localSettings.workspaceDir) agentPayload.workspace_dir = localSettings.workspaceDir
+      if (localSettings.region) agentPayload.region = localSettings.region
+
+      if (Object.keys(agentPayload).length > 0) {
+        const res = await fetch('/api/config/agent', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(agentPayload),
+        })
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}))
+          throw new Error(err.detail || 'Failed to save agent settings')
+        }
+        messages.push('Agent settings saved.')
+      }
+
+      setSavedMessage(messages.length ? messages.join(' ') : 'Settings saved successfully!')
       setTimeout(() => setSavedMessage(''), 3000)
     } catch (e) {
       setSavedMessage(e?.message || 'Failed to save settings')
@@ -1000,14 +1026,19 @@ export default function SettingsModal({ isOpen, onClose, isDark, onToggleTheme, 
 
                 <div>
                   <label className="text-xs font-semibold text-muted uppercase tracking-wider mb-1 block">System Prompt</label>
-                  <textarea
-                    value={localSettings.systemPrompt}
-                    onChange={(e) => setLocalSettings(s => ({ ...s, systemPrompt: e.target.value }))}
-                    placeholder="Custom system prompt for the agent..."
-                    rows={4}
-                    className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted focus:outline-none focus:border-primary resize-none"
-                  />
-                  <p className="text-[10px] text-muted mt-1">Leave empty to use the default system prompt</p>
+                  <div className="bg-surface border border-border rounded-lg px-3 py-2.5 text-xs text-muted leading-relaxed">
+                    The system prompt is loaded from{' '}
+                    <code className="px-1 py-0.5 rounded bg-card border border-border font-mono text-foreground">
+                      system_prompt.md
+                    </code>{' '}
+                    in your config directory (the same folder as{' '}
+                    <code className="px-1 py-0.5 rounded bg-card border border-border font-mono text-foreground">
+                      config.yaml
+                    </code>
+                    ). Edit that file directly to customize the base prompt. The full agent
+                    prompt is generated at session start by combining that file with your
+                    profile, configured MCP tools, and the current workspace.
+                  </div>
                 </div>
               </div>
             )}

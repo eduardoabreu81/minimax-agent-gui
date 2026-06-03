@@ -68,6 +68,10 @@ close.bat
 # Runtime artifacts
 web/server.pid
 
+# Scratch / one-off test scripts (not part of the test suite)
+test_*.py
+!tests/
+
 # Unrelated side project (a separate Node.js landing page that lives inside web/backend/)
 web/backend/server.js
 web/backend/package.json
