@@ -538,7 +538,6 @@ async def get_config():
             "model": config.get("model", "MiniMax-M3") if isinstance(config, dict) else "MiniMax-M3",
             "max_steps": config.get("max_steps", 50) if isinstance(config, dict) else 50,
             "workspace_dir": config.get("workspace_dir", "./workspace") if isinstance(config, dict) else "./workspace",
-            "provider": config.get("provider", "anthropic") if isinstance(config, dict) else "anthropic",
         },
         "tts": config.get("tts", {}) if isinstance(config, dict) else {},
         "image": config.get("image", {}) if isinstance(config, dict) else {},
@@ -684,8 +683,7 @@ class AgentConfigUpdate(BaseModel):
     max_steps: Optional[int] = None
     workspace_dir: Optional[str] = None
     region: Optional[str] = None  # "global" or "cn"
-    provider: Optional[str] = None  # "anthropic" or "openai"
-    api_base: Optional[str] = None  # full URL, e.g. https://api.siliconflow.cn/v1
+    api_base: Optional[str] = None  # full URL, e.g. https://api.minimax.io/anthropic or a proxy
 
 
 @app.put("/api/config/agent")
@@ -696,8 +694,8 @@ async def update_agent_config(req: AgentConfigUpdate):
     are left untouched. ``region`` is stored under the ``minimax``
     section (``minimax.region``) so the existing ``get_minimax_config``
     helper can pick it up without any further changes. ``model``,
-    ``max_steps``, ``workspace_dir``, ``provider`` and ``api_base`` are
-    stored at the top level (matching the rest of the config schema).
+    ``max_steps``, ``workspace_dir`` and ``api_base`` are stored at the
+    top level (matching the rest of the config schema).
     """
     global config
     try:
@@ -735,14 +733,6 @@ async def update_agent_config(req: AgentConfigUpdate):
                 cfg["minimax"] = {}
             cfg["minimax"]["region"] = req.region
 
-        if req.provider is not None:
-            if req.provider not in ("anthropic", "openai"):
-                raise HTTPException(
-                    status_code=400,
-                    detail="provider must be 'anthropic' or 'openai'.",
-                )
-            cfg["provider"] = req.provider
-
         if req.api_base is not None:
             base = req.api_base.strip()
             if not base:
@@ -755,9 +745,6 @@ async def update_agent_config(req: AgentConfigUpdate):
             if not isinstance(cfg.get("minimax"), dict):
                 cfg["minimax"] = {}
             cfg["minimax"]["api_base"] = base.rstrip("/")
-            # The LLM wrapper will auto-append /anthropic or /v1 based on
-            # the chosen provider when it detects a MiniMax host, so we
-            # keep the user's explicit provider choice here.
 
         import yaml
         with open(CONFIG_PATH, 'w', encoding='utf-8') as f:

@@ -116,13 +116,13 @@ controls and fixed a number of Token Plan API quirks.
 
 ### Added
 
-- **Settings Modal: provider + API base URL** — the Agent tab now lets
-  users switch between Anthropic-compatible and OpenAI-compatible
-  protocols, and set a custom `api_base` (e.g. SiliconFlow, OpenRouter,
-  or MiniMax itself). The backend validates the URL and persists both
-  fields via the existing `PUT /api/config/agent` endpoint. The LLM
-  wrapper appends `/anthropic` or `/v1` based on the chosen provider
-  (MiniMax supports both).
+- **Settings Modal: custom API base URL** — the Agent tab now lets
+  users override the default MiniMax Anthropic-compatible endpoint.
+  The backend validates the URL and persists it via the existing
+  `PUT /api/config/agent` endpoint. The project uses Anthropic SDK
+  as the single LLM protocol (MiniMax's docs recommend it for
+  prompt-cache benefits); the `api_base` override is intended for
+  proxies or advanced routing only.
 
 ## [0.3.1] — 2026-06-02 — Stub cleanup
 
