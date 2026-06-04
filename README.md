@@ -146,7 +146,7 @@ Each media panel also displays a **Recent Generations** gallery that surfaces ou
 
 | File | Purpose |
 |------|---------|
-| `config/config.yaml` | API key, region (`global` or `cn`), default model, built-in tool toggles, custom MCP servers |
+| `config/config.yaml` | API key, region (`global` or `cn`), default model, API base URL override, built-in tool toggles, custom MCP servers |
 
 Environment variables:
 
@@ -155,16 +155,21 @@ Environment variables:
 | `MINIMAX_API_KEY` | Override API key |
 | `MINIMAX_API_BASE` | Override base URL |
 
-### LLM Provider
+### LLM Protocol
 
-`config/config.yaml` exposes a `provider` field that picks which protocol the backend uses to talk to the LLM:
+MiniMax Agent GUI uses the **Anthropic SDK** as its single LLM protocol.
+MiniMax's own docs recommend the Anthropic-compatible interface for
+prompt-cache benefits, and it supports the full feature set we expose
+(streaming thinking blocks, tool use, image/video input on M3, etc.).
 
-| Provider | When to use |
-|----------|-------------|
-| `anthropic` (default) | The MiniMax API (or any third-party endpoint that speaks Anthropic's protocol). The wrapper appends `/anthropic` to MiniMax's `api_base` automatically. |
-| `openai` | Endpoints that speak the OpenAI Chat Completions protocol. The wrapper appends `/v1` for MiniMax or uses your `api_base` as-is for third-party providers. |
+The default endpoint is MiniMax's Anthropic-compatible route:
+`https://api.minimax.io/anthropic` (or `https://api.minimaxi.com/anthropic`
+for the China region).
 
-If you use a third-party provider such as `https://api.siliconflow.cn/v1`, leave `provider: openai` and set `api_base` to the full URL — the wrapper will not append any suffix.
+You can override `api_base` in `config/config.yaml` or via the
+`MINIMAX_API_BASE` environment variable if you need to route through a
+proxy or an alternative Anthropic-compatible endpoint. Leave it empty
+to use the MiniMax defaults.
 
 Example MCP server configuration in `config/config.yaml`:
 
