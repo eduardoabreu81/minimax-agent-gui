@@ -112,6 +112,17 @@ controls and fixed a number of Token Plan API quirks.
   Sidebar. The Token Plan has no free tier; the previous fallback
   was confusing.
 
+## [Unreleased]
+
+### Added
+
+- **Settings Modal: provider + API base URL** — the Agent tab now lets
+  users switch between Anthropic-compatible and OpenAI-compatible
+  protocols, and set a custom `api_base` (e.g. SiliconFlow, OpenRouter).
+  The backend validates the URL, auto-forces `provider: anthropic` when
+  the host is `api.minimax.io` or `api.minimaxi.com`, and persists both
+  fields via the existing `PUT /api/config/agent` endpoint.
+
 ## [0.3.1] — 2026-06-02 — Stub cleanup
 
 Follow-up to 0.3.0: removes the last batch of UI stubs that survived

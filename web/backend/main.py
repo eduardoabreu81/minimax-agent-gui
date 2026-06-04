@@ -538,6 +538,7 @@ async def get_config():
             "model": config.get("model", "MiniMax-M3") if isinstance(config, dict) else "MiniMax-M3",
             "max_steps": config.get("max_steps", 50) if isinstance(config, dict) else 50,
             "workspace_dir": config.get("workspace_dir", "./workspace") if isinstance(config, dict) else "./workspace",
+            "provider": config.get("provider", "anthropic") if isinstance(config, dict) else "anthropic",
         },
         "tts": config.get("tts", {}) if isinstance(config, dict) else {},
         "image": config.get("image", {}) if isinstance(config, dict) else {},
@@ -683,6 +684,8 @@ class AgentConfigUpdate(BaseModel):
     max_steps: Optional[int] = None
     workspace_dir: Optional[str] = None
     region: Optional[str] = None  # "global" or "cn"
+    provider: Optional[str] = None  # "anthropic" or "openai"
+    api_base: Optional[str] = None  # full URL, e.g. https://api.siliconflow.cn/v1
 
 
 @app.put("/api/config/agent")
@@ -693,8 +696,8 @@ async def update_agent_config(req: AgentConfigUpdate):
     are left untouched. ``region`` is stored under the ``minimax``
     section (``minimax.region``) so the existing ``get_minimax_config``
     helper can pick it up without any further changes. ``model``,
-    ``max_steps`` and ``workspace_dir`` are stored at the top level
-    (matching the rest of the config schema).
+    ``max_steps``, ``workspace_dir``, ``provider`` and ``api_base`` are
+    stored at the top level (matching the rest of the config schema).
     """
     global config
     try:
@@ -731,6 +734,36 @@ async def update_agent_config(req: AgentConfigUpdate):
             if not isinstance(cfg.get("minimax"), dict):
                 cfg["minimax"] = {}
             cfg["minimax"]["region"] = req.region
+
+        if req.provider is not None:
+            if req.provider not in ("anthropic", "openai"):
+                raise HTTPException(
+                    status_code=400,
+                    detail="provider must be 'anthropic' or 'openai'.",
+                )
+            cfg["provider"] = req.provider
+
+        if req.api_base is not None:
+            base = req.api_base.strip()
+            if not base:
+                raise HTTPException(status_code=400, detail="api_base must be a non-empty URL.")
+            if not (base.startswith("http://") or base.startswith("https://")):
+                raise HTTPException(
+                    status_code=400,
+                    detail="api_base must start with http:// or https://",
+                )
+            if not isinstance(cfg.get("minimax"), dict):
+                cfg["minimax"] = {}
+            cfg["minimax"]["api_base"] = base.rstrip("/")
+            # Force provider to anthropic if the user pasted a MiniMax
+            # host (the wrapper appends /anthropic or /v1 based on
+            # provider; only anthropic mode covers the /anthropic suffix
+            # needed for api.minimax.io / api.minimaxi.com).
+            is_minimax_host = any(
+                d in base for d in ("api.minimax.io", "api.minimaxi.com")
+            )
+            if is_minimax_host and cfg.get("provider") not in ("anthropic",):
+                cfg["provider"] = "anthropic"
 
         import yaml
         with open(CONFIG_PATH, 'w', encoding='utf-8') as f:

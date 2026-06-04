@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import {
   X, Globe, Moon, Sun, Key, Cpu, Shield, Keyboard,
   Info, Check, AlertCircle, Save, RotateCcw, Eye, EyeOff,
-  MapPin, BarChart3, Lock, Unlock, Search, Monitor, Palette, User, Trash2, Pencil, Activity
+  MapPin, BarChart3, Lock, Unlock, Search, Monitor, Palette, User, Trash2, Pencil, Activity, Server
 } from 'lucide-react'
 import { useTheme } from '../../context/ThemeContext'
 
@@ -72,6 +72,8 @@ export default function SettingsModal({ isOpen, onClose, isDark, onToggleTheme, 
     region: 'global',
     webSearch: true,
     understandImage: true,
+    provider: 'anthropic',
+    apiBase: '',
   })
   const [userProfile, setUserProfile] = useState({ bio: '' })
   const [profileSaving, setProfileSaving] = useState(false)
@@ -206,6 +208,8 @@ export default function SettingsModal({ isOpen, onClose, isDark, onToggleTheme, 
           maxSteps: data.agent?.max_steps || 50,
           workspaceDir: data.agent?.workspace_dir || './workspace',
           systemPrompt: data.agent?.system_prompt || '',
+          provider: data.agent?.provider || 'anthropic',
+          apiBase: data.api_base || '',
           region: data.region || 'global',
           webSearch: data.tools?.web_search ?? true,
           understandImage: data.tools?.understand_image ?? true,
@@ -287,6 +291,8 @@ export default function SettingsModal({ isOpen, onClose, isDark, onToggleTheme, 
       if (localSettings.maxSteps) agentPayload.max_steps = Number(localSettings.maxSteps)
       if (localSettings.workspaceDir) agentPayload.workspace_dir = localSettings.workspaceDir
       if (localSettings.region) agentPayload.region = localSettings.region
+      if (localSettings.provider) agentPayload.provider = localSettings.provider
+      if (localSettings.apiBase) agentPayload.api_base = localSettings.apiBase
 
       if (Object.keys(agentPayload).length > 0) {
         const res = await fetch('/api/config/agent', {
@@ -334,6 +340,8 @@ export default function SettingsModal({ isOpen, onClose, isDark, onToggleTheme, 
       workspaceDir: './workspace',
       systemPrompt: '',
       region: 'global',
+      provider: 'anthropic',
+      apiBase: '',
     })
   }
 
@@ -1022,6 +1030,50 @@ export default function SettingsModal({ isOpen, onClose, isDark, onToggleTheme, 
                     onChange={(e) => setLocalSettings(s => ({ ...s, workspaceDir: e.target.value }))}
                     className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:border-primary"
                   />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-muted uppercase tracking-wider mb-1 block">Provider</label>
+                  <div className="flex gap-2">
+                    {[
+                      { id: 'anthropic', label: 'Anthropic-compatible' },
+                      { id: 'openai', label: 'OpenAI-compatible' },
+                    ].map((p) => (
+                      <button
+                        key={p.id}
+                        onClick={() => setLocalSettings(s => ({ ...s, provider: p.id }))}
+                        className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg border text-xs font-medium transition-colors ${
+                          localSettings.provider === p.id
+                            ? 'bg-primary/10 border-primary text-primary'
+                            : 'bg-surface border-border text-muted-foreground hover:border-primary'
+                        }`}
+                      >
+                        {localSettings.provider === p.id && <Check size={12} />}
+                        {p.label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[10px] text-muted mt-1">
+                    Protocol used to talk to the LLM endpoint. Anthropic mode appends{' '}
+                    <code className="font-mono text-foreground">/anthropic</code> to the base URL.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-muted uppercase tracking-wider mb-1 block">API Base URL</label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={localSettings.apiBase}
+                      onChange={(e) => setLocalSettings(s => ({ ...s, apiBase: e.target.value }))}
+                      placeholder="https://api.minimax.io"
+                      className="w-full bg-surface border border-border rounded-lg px-3 py-2 pl-9 text-sm text-foreground placeholder:text-muted focus:outline-none focus:border-primary"
+                    />
+                    <Server size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+                  </div>
+                  <p className="text-[10px] text-muted mt-1">
+                    Leave empty to use the default for the selected region. Set a custom URL for third-party endpoints (e.g. SiliconFlow, OpenRouter).
+                  </p>
                 </div>
 
                 <div>
