@@ -755,15 +755,9 @@ async def update_agent_config(req: AgentConfigUpdate):
             if not isinstance(cfg.get("minimax"), dict):
                 cfg["minimax"] = {}
             cfg["minimax"]["api_base"] = base.rstrip("/")
-            # Force provider to anthropic if the user pasted a MiniMax
-            # host (the wrapper appends /anthropic or /v1 based on
-            # provider; only anthropic mode covers the /anthropic suffix
-            # needed for api.minimax.io / api.minimaxi.com).
-            is_minimax_host = any(
-                d in base for d in ("api.minimax.io", "api.minimaxi.com")
-            )
-            if is_minimax_host and cfg.get("provider") not in ("anthropic",):
-                cfg["provider"] = "anthropic"
+            # The LLM wrapper will auto-append /anthropic or /v1 based on
+            # the chosen provider when it detects a MiniMax host, so we
+            # keep the user's explicit provider choice here.
 
         import yaml
         with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
