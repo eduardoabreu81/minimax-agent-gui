@@ -319,6 +319,273 @@ class MiniMaxSyncClient:
         except Exception as e:
             return False, str(e)
 
+    # ============ Speech (full MiniMax APIs) ============
+    # The legacy ``tts_synthesize`` above is kept for MCP tool compatibility.
+    # New endpoints below mirror the four sub-modes in TAURI_SPEC.md §6b.
+
+    def _get_json(self, endpoint: str, params: dict | None = None, timeout: float = 60.0) -> Tuple[bool, dict]:
+        """GET JSON. Returns (success, payload). Same error envelope as _post_json."""
+        url = f"{self.api_base}{endpoint}"
+        try:
+            resp = self.session.get(url, params=params, timeout=timeout)
+            resp.raise_for_status()
+            return True, resp.json()
+        except requests.HTTPError as e:
+            try:
+                err_body = e.response.json()
+            except Exception:
+                err_body = {"status_msg": e.response.text}
+            return False, err_body
+        except Exception as e:
+            return False, {"status_msg": str(e)}
+
+    def speech_synthesize_v2(
+        self,
+        text: str,
+        model: str = "speech-2.8-hd",
+        voice_id: str = "English_Graceful_Lady",
+        speed: float = 1.0,
+        vol: float = 1.0,
+        pitch: int = 0,
+        emotion: str = "",
+        audio_setting: Optional[dict] = None,
+        voice_modify: Optional[dict] = None,
+        language_boost: str = "auto",
+        output_format: str = "hex",
+    ) -> Tuple[bool, dict]:
+        """POST /v1/t2a_v2 — full T2A sync with voice_setting, voice_modify,
+        language_boost. Returns the parsed JSON envelope (hex-encoded audio
+        in ``data.audio``). For files on disk, the FastAPI layer decodes
+        the hex and writes the bytes.
+        """
+        voice_setting = {
+            "voice_id": voice_id,
+            "speed": speed,
+            "vol": vol,
+            "pitch": pitch,
+        }
+        if emotion:
+            voice_setting["emotion"] = emotion
+
+        data: dict = {
+            "model": model,
+            "text": text,
+            "stream": False,
+            "language_boost": language_boost,
+            "output_format": output_format,
+            "voice_setting": voice_setting,
+        }
+        if audio_setting is not None:
+            data["audio_setting"] = audio_setting
+        if voice_modify is not None:
+            data["voice_modify"] = voice_modify
+
+        success, result = self._post_json("/v1/t2a_v2", data, timeout=180.0)
+        if not success:
+            return False, result
+        if "base_resp" in result and result["base_resp"].get("status_code", 0) != 0:
+            return False, {
+                "error": result["base_resp"].get("status_msg", "T2A failed"),
+                "status_code": result["base_resp"].get("status_code"),
+            }
+        return True, result
+
+    def speech_synthesize_async_create(
+        self,
+        text: str,
+        model: str = "speech-2.8-hd",
+        voice_id: str = "English_Graceful_Lady",
+        speed: float = 1.0,
+        vol: float = 1.0,
+        pitch: int = 0,
+        audio_setting: Optional[dict] = None,
+        voice_modify: Optional[dict] = None,
+        language_boost: str = "auto",
+    ) -> Tuple[bool, dict]:
+        """POST /v1/t2a_async_v2 — kick off an async long-text T2A task.
+        Returns ``{task_id, file_id, usage_characters, task_token, base_resp}``.
+        Poll ``speech_synthesize_async_query`` to know when it's done.
+        """
+        voice_setting = {
+            "voice_id": voice_id,
+            "speed": speed,
+            "vol": vol,
+            "pitch": pitch,
+        }
+        data: dict = {
+            "model": model,
+            "text": text,
+            "voice_setting": voice_setting,
+            "language_boost": language_boost,
+        }
+        if audio_setting is not None:
+            data["audio_setting"] = audio_setting
+        if voice_modify is not None:
+            data["voice_modify"] = voice_modify
+
+        success, result = self._post_json("/v1/t2a_async_v2", data, timeout=180.0)
+        if not success:
+            return False, result
+        if "base_resp" in result and result["base_resp"].get("status_code", 0) != 0:
+            return False, {
+                "error": result["base_resp"].get("status_msg", "Async T2A failed"),
+                "status_code": result["base_resp"].get("status_code"),
+            }
+        return True, result
+
+    def speech_synthesize_async_query(self, task_id: int) -> Tuple[bool, dict]:
+        """GET /v1/query/t2a_async_query_v2 — poll task status.
+        Returns ``{task_id, status, file_id, base_resp}`` where status is one
+        of ``processing | success | failed | expired``.
+        """
+        success, result = self._get_json(
+            "/v1/query/t2a_async_query_v2", params={"task_id": task_id}, timeout=30.0
+        )
+        if not success:
+            return False, result
+        if "base_resp" in result and result["base_resp"].get("status_code", 0) != 0:
+            return False, {
+                "error": result["base_resp"].get("status_msg", "Async query failed"),
+                "status_code": result["base_resp"].get("status_code"),
+            }
+        return True, result
+
+    def speech_voices_list(self, voice_type: str = "all") -> Tuple[bool, dict]:
+        """POST /v1/get_voice — list system + cloned + generated voices.
+
+        Returns the envelope with three arrays (system_voice, voice_cloning,
+        voice_generation). Note: cloned voices are inactive until used once.
+        """
+        data = {"voice_type": voice_type}
+        success, result = self._post_json("/v1/get_voice", data, timeout=60.0)
+        if not success:
+            return False, result
+        if "base_resp" in result and result["base_resp"].get("status_code", 0) != 0:
+            return False, {
+                "error": result["base_resp"].get("status_msg", "List voices failed"),
+                "status_code": result["base_resp"].get("status_code"),
+            }
+        return True, result
+
+    def speech_voice_clone(
+        self,
+        file_id: int,
+        voice_id: str,
+        clone_prompt: Optional[dict] = None,
+        text: str = "",
+        model: str = "",
+        language_boost: str = "",
+        need_noise_reduction: bool = False,
+        need_volume_normalization: bool = False,
+        text_validation: str = "",
+        accuracy: float = 0.0,
+    ) -> Tuple[bool, dict]:
+        """POST /v1/voice_clone — register a cloned voice.
+
+        file_id comes from ``speech_file_upload`` with purpose=voice_clone.
+        voice_id: 8-256 chars, must start with a letter, [A-Za-z0-9_-], no
+        trailing -/_.
+        Sample rules: mp3/m4a/wav, 10s-5min, ≤20MB. Errors: 2038 = no cloning
+        permission (account not verified).
+        """
+        data: dict = {
+            "file_id": file_id,
+            "voice_id": voice_id,
+            "need_noise_reduction": need_noise_reduction,
+            "need_volume_normalization": need_volume_normalization,
+        }
+        if clone_prompt:
+            data["clone_prompt"] = clone_prompt
+        if text:
+            data["text"] = text
+        if model:
+            data["model"] = model
+        if language_boost:
+            data["language_boost"] = language_boost
+        if text_validation:
+            data["text_validation"] = text_validation
+        if accuracy > 0:
+            data["accuracy"] = accuracy
+
+        success, result = self._post_json("/v1/voice_clone", data, timeout=120.0)
+        if not success:
+            return False, result
+        if "base_resp" in result and result["base_resp"].get("status_code", 0) != 0:
+            return False, {
+                "error": result["base_resp"].get("status_msg", "Voice clone failed"),
+                "status_code": result["base_resp"].get("status_code"),
+            }
+        return True, result
+
+    def speech_voice_design(
+        self,
+        prompt: str,
+        preview_text: str,
+        voice_id: str = "",
+    ) -> Tuple[bool, dict]:
+        """POST /v1/voice_design — design a custom voice from text.
+
+        Returns ``{voice_id, trial_audio (hex), base_resp}``. voice_id is
+        auto-generated when not provided.
+        """
+        data: dict = {"prompt": prompt, "preview_text": preview_text}
+        if voice_id:
+            data["voice_id"] = voice_id
+        success, result = self._post_json("/v1/voice_design", data, timeout=120.0)
+        if not success:
+            return False, result
+        if "base_resp" in result and result["base_resp"].get("status_code", 0) != 0:
+            return False, {
+                "error": result["base_resp"].get("status_msg", "Voice design failed"),
+                "status_code": result["base_resp"].get("status_code"),
+            }
+        return True, result
+
+    def speech_voice_delete(self, voice_type: str, voice_id: str) -> Tuple[bool, dict]:
+        """POST /v1/delete_voice — delete a cloned or generated voice.
+
+        voice_type ∈ {"voice_cloning", "voice_generation"}. System voices
+        cannot be deleted (the API rejects with 2013).
+        """
+        data = {"voice_type": voice_type, "voice_id": voice_id}
+        success, result = self._post_json("/v1/delete_voice", data, timeout=60.0)
+        if not success:
+            return False, result
+        if "base_resp" in result and result["base_resp"].get("status_code", 0) != 0:
+            return False, {
+                "error": result["base_resp"].get("status_msg", "Voice delete failed"),
+                "status_code": result["base_resp"].get("status_code"),
+            }
+        return True, result
+
+    def speech_file_upload(
+        self,
+        file_path: str,
+        purpose: str = "voice_clone",
+    ) -> Tuple[bool, dict]:
+        """POST /v1/files/upload (multipart) — upload a file with a purpose.
+
+        purpose ∈ {"voice_clone", "prompt_audio", "t2a_async_input",
+        "video_understanding"}. Returns the file envelope including
+        ``file_id`` (used by voice_clone and asr queries).
+        """
+        url = f"{self.api_base}/v1/files/upload"
+        try:
+            with open(file_path, "rb") as f:
+                files = {"file": (Path(file_path).name, f)}
+                data = {"purpose": purpose}
+                resp = self.session.post(url, files=files, data=data, timeout=120.0)
+                resp.raise_for_status()
+                return True, resp.json()
+        except requests.HTTPError as e:
+            try:
+                err_body = e.response.json()
+            except Exception:
+                err_body = {"status_msg": e.response.text}
+            return False, err_body
+        except Exception as e:
+            return False, {"status_msg": str(e)}
+
     # ============ Music Generation ============
 
     def music_generate(
@@ -333,9 +600,48 @@ class MiniMaxSyncClient:
         audio_url: str = "",
         audio_base64: str = "",
         cover_feature_id: str = "",
-        output_format: str = "hex"
-    ) -> Tuple[bool, str]:
-        """Generate music from prompt and lyrics (sync)."""
+        output_format: str = "hex",
+        timeout: float = 300.0,
+    ) -> Tuple[bool, dict]:
+        """Generate music from prompt and lyrics (sync).
+
+        Returns:
+            ``(True, {"output_path": str, "extra_info": dict, "trace_id": str})``
+            on success, or ``(False, {"error": str, "status_code": int | None})``
+            on failure. The structured dict lets callers propagate
+            ``extra_info`` (duration, sample_rate, channels, bitrate, size)
+            and the ``trace_id`` back to the frontend without a second
+            round-trip.
+        """
+        # Phase 1 client-side guard: cover-related params must not be sent
+        # together with non-cover models. The backend enforces the same
+        # rule (defense in depth) so the user sees a clean 400 instead
+        # of a cryptic 2013 from the API.
+        if cover_feature_id and audio_url:
+            return False, {
+                "error": (
+                    "cover_feature_id and audio_url are mutually exclusive "
+                    "in the music-cover flow."
+                ),
+                "status_code": None,
+            }
+        if cover_feature_id and audio_base64:
+            return False, {
+                "error": (
+                    "cover_feature_id and audio_base64 are mutually exclusive "
+                    "in the music-cover flow."
+                ),
+                "status_code": None,
+            }
+        if audio_url and audio_base64:
+            return False, {
+                "error": (
+                    "audio_url and audio_base64 are mutually exclusive — "
+                    "pass exactly one for music-cover."
+                ),
+                "status_code": None,
+            }
+
         data: dict = {"model": model, "output_format": output_format}
         if prompt:
             data["prompt"] = prompt
@@ -355,13 +661,16 @@ class MiniMaxSyncClient:
             data["cover_feature_id"] = cover_feature_id
 
         _logger.debug(f"music_generate] Request: {data}")
-        success, result = self._post_json("/v1/music_generation", data, timeout=300.0)
+        success, result = self._post_json("/v1/music_generation", data, timeout=timeout)
         _logger.info(f"[Music] _post_json returned: success={success}")
         if not success:
             msg = result.get("status_msg", "Unknown error")
             code = result.get("status_code", 0)
             _logger.error(f"[Music] _post_json failed: {msg}")
-            return False, format_api_error(code, msg) if code else msg
+            return False, {
+                "error": format_api_error(code, msg) if code else msg,
+                "status_code": code or None,
+            }
 
         # Log response metadata only (avoid printing multi-MB hex strings)
         _logger.info(f"[Music] Response keys: {list(result.keys())}")
@@ -369,20 +678,27 @@ class MiniMaxSyncClient:
             data_info = {k: (f"<string:{len(v)} chars>" if isinstance(v, str) and len(v) > 500 else v) for k, v in result["data"].items()}
             _logger.info(f"[Music] Response data (truncated): {data_info}")
 
-        # Save response for potential retry
-        script_dir = Path(__file__).parent.parent
-        last_resp_path = script_dir / "workspace" / ".last_music_response.json"
-        last_resp_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(last_resp_path, "w", encoding="utf-8") as f:
-            json.dump(result, f, ensure_ascii=False, indent=2)
-        _logger.info(f"[Music] Response saved to: {last_resp_path}")
+        # Save response for potential retry (debug aid; trimmed — hex
+        # payloads can be 8MB+, so we don't write them to disk anymore
+        # to keep workspace/ clean).
+        # Commented out to avoid filling disk; uncomment if needed.
+        # last_resp_path = script_dir / "workspace" / ".last_music_response.json"
+        # last_resp_path.parent.mkdir(parents=True, exist_ok=True)
+        # with open(last_resp_path, "w", encoding="utf-8") as f:
+        #     json.dump(result, f, ensure_ascii=False, indent=2)
 
         if "base_resp" in result:
             status_code = result["base_resp"].get("status_code", 0)
             if status_code != 0:
                 err_msg = result["base_resp"].get("status_msg", "")
                 _logger.error(f"[Music] base_resp error: {status_code} - {err_msg}")
-                return False, format_api_error(status_code, err_msg)
+                return False, {
+                    "error": format_api_error(status_code, err_msg),
+                    "status_code": status_code,
+                }
+
+        extra_info = result.get("extra_info") or {}
+        trace_id = result.get("trace_id", "")
 
         if "data" in result:
             _logger.info(f"[Music] Response has 'data' key: {list(result['data'].keys())}")
@@ -391,7 +707,10 @@ class MiniMaxSyncClient:
             _logger.info(f"[Music] status={status}, audio_data_len={len(audio_data)}")
             if status == 1:
                 _logger.warning("[Music] API returned status=1 (in progress)")
-                return False, "Music still generating (status=1). Please retry in a moment."
+                return False, {
+                    "error": "Music still generating (status=1). Please retry in a moment.",
+                    "status_code": None,
+                }
             if audio_data:
                 _logger.info(f"[Music] Audio data received: {len(audio_data)} chars, format={output_format}")
                 if output_format == "hex":
@@ -407,7 +726,10 @@ class MiniMaxSyncClient:
                     _logger.info(f"[Music] Downloading from URL: {audio_data[:120]}...")
                     ok, content = self._get_binary(audio_data)
                     if not ok:
-                        return False, f"Download failed: {content}"
+                        return False, {
+                            "error": f"Download failed: {content}",
+                            "status_code": None,
+                        }
                     audio_bytes = content
                     _logger.info(f"[Music] Downloaded {len(audio_bytes)} bytes")
 
@@ -416,13 +738,20 @@ class MiniMaxSyncClient:
                 with open(output_path, "wb") as f:
                     f.write(audio_bytes)
                 _logger.info(f"[Music] File written successfully: {output_path}")
-                return True, output_path
+                return True, {
+                    "output_path": str(output_path),
+                    "extra_info": extra_info,
+                    "trace_id": trace_id,
+                }
             else:
                 _logger.warning("[Music] No audio_data in response data")
         else:
             _logger.warning(f"[Music] No 'data' key in response. Keys: {list(result.keys())}")
 
-        return False, f"No audio data in response. Raw: {result}"
+        return False, {
+            "error": f"No audio data in response. Raw: {result}",
+            "status_code": None,
+        }
 
     def music_cover_preprocess(
         self,
@@ -444,6 +773,48 @@ class MiniMaxSyncClient:
             status_code = result["base_resp"].get("status_code", 0)
             if status_code != 0:
                 return False, {"error": format_api_error(status_code, result["base_resp"].get("status_msg", ""))}
+
+        return True, result
+
+    def lyrics_generate(
+        self,
+        mode: str = "write_full_song",
+        prompt: str = "",
+        lyrics: str = "",
+        title: str = "",
+    ) -> Tuple[bool, dict]:
+        """Generate or refine song lyrics (sync).
+
+        Two modes (per MiniMax spec):
+          - ``write_full_song``: prompt = theme/brief, lyrics ignored.
+          - ``edit``: prompt = editing instructions, lyrics = source lyrics
+            to be refined.
+
+        Returns the parsed API payload, which includes ``song_title``,
+        ``style_tags`` (comma-separated string), ``lyrics`` (with 14
+        structure tags), and ``trace_id``.
+        """
+        if mode not in ("write_full_song", "edit"):
+            return False, {"error": f"Invalid mode: {mode!r}. Must be 'write_full_song' or 'edit'."}
+        data: dict = {"mode": mode, "prompt": prompt}
+        if lyrics:
+            data["lyrics"] = lyrics
+        if title:
+            data["title"] = title
+
+        success, result = self._post_json("/v1/lyrics_generation", data)
+        if not success:
+            return False, {"error": result.get("status_msg", "Lyrics generation failed")}
+
+        if "base_resp" in result:
+            status_code = result["base_resp"].get("status_code", 0)
+            if status_code != 0:
+                return False, {
+                    "error": format_api_error(
+                        status_code, result["base_resp"].get("status_msg", "")
+                    ),
+                    "status_code": status_code,
+                }
 
         return True, result
 
@@ -837,9 +1208,42 @@ class MiniMaxClient:
         audio_url: str = "",
         audio_base64: str = "",
         cover_feature_id: str = "",
-        output_format: str = "hex"
-    ) -> Tuple[bool, str]:
-        """Generate music from prompt and lyrics (async)."""
+        output_format: str = "hex",
+        timeout: float = 300.0,
+    ) -> Tuple[bool, dict]:
+        """Generate music from prompt and lyrics (async).
+
+        Returns:
+            ``(True, {"output_path": str, "extra_info": dict, "trace_id": str})``
+            on success, or ``(False, {"error": str, "status_code": int | None})``
+            on failure. Same shape as the sync version above.
+        """
+        # Same Phase 1 cover-param guard as the sync client.
+        if cover_feature_id and audio_url:
+            return False, {
+                "error": (
+                    "cover_feature_id and audio_url are mutually exclusive "
+                    "in the music-cover flow."
+                ),
+                "status_code": None,
+            }
+        if cover_feature_id and audio_base64:
+            return False, {
+                "error": (
+                    "cover_feature_id and audio_base64 are mutually exclusive "
+                    "in the music-cover flow."
+                ),
+                "status_code": None,
+            }
+        if audio_url and audio_base64:
+            return False, {
+                "error": (
+                    "audio_url and audio_base64 are mutually exclusive — "
+                    "pass exactly one for music-cover."
+                ),
+                "status_code": None,
+            }
+
         url = f"{self.api_base}/v1/music_generation"
 
         headers = {
@@ -865,8 +1269,17 @@ class MiniMaxClient:
         if cover_feature_id:
             data["cover_feature_id"] = cover_feature_id
 
+        # The shared httpx client was created with a default timeout that
+        # may be too short for music gen (60-180s typical). Override per
+        # request via a one-off client so we don't change global state.
+        timeout_client = None
+        client_to_use = self.http_client
+        if timeout and timeout != 120.0:
+            timeout_client = httpx.AsyncClient(timeout=timeout)
+            client_to_use = timeout_client
+
         try:
-            response = await self.http_client.post(url, headers=headers, json=data)
+            response = await client_to_use.post(url, headers=headers, json=data)
             response.raise_for_status()
 
             result = response.json()
@@ -875,15 +1288,24 @@ class MiniMaxClient:
                 status_code = result["base_resp"].get("status_code", 0)
                 if status_code != 0:
                     error_msg = result["base_resp"].get("status_msg", "Unknown error")
-                    return False, format_api_error(status_code, error_msg)
+                    return False, {
+                        "error": format_api_error(status_code, error_msg),
+                        "status_code": status_code,
+                    }
+
+            extra_info = result.get("extra_info") or {}
+            trace_id = result.get("trace_id", "")
 
             if "data" in result:
                 audio_data = result["data"].get("audio", "")
                 if audio_data:
                     if output_format == "hex":
-                        audio_bytes = bytes.fromhex(audio_data)
+                        try:
+                            audio_bytes = bytes.fromhex(audio_data)
+                        except ValueError:
+                            audio_bytes = base64.b64decode(audio_data)
                     else:
-                        audio_resp = await self.http_client.get(audio_data)
+                        audio_resp = await client_to_use.get(audio_data)
                         audio_resp.raise_for_status()
                         audio_bytes = audio_resp.content
 
@@ -891,14 +1313,30 @@ class MiniMaxClient:
                     with open(output_path, "wb") as f:
                         f.write(audio_bytes)
 
-                    return True, output_path
+                    return True, {
+                        "output_path": str(output_path),
+                        "extra_info": extra_info,
+                        "trace_id": trace_id,
+                    }
 
-            return False, "No audio data in response"
+            return False, {
+                "error": "No audio data in response",
+                "status_code": None,
+            }
 
         except httpx.HTTPStatusError as e:
-            return False, f"HTTP Error {e.response.status_code}: {e.response.text}"
+            return False, {
+                "error": f"HTTP Error {e.response.status_code}: {e.response.text}",
+                "status_code": e.response.status_code,
+            }
         except Exception as e:
-            return False, str(e)
+            return False, {
+                "error": str(e),
+                "status_code": None,
+            }
+        finally:
+            if timeout_client is not None:
+                await timeout_client.aclose()
 
     async def music_cover_preprocess(
         self,
@@ -1103,9 +1541,15 @@ def music_sync(
     audio_url: str = "",
     audio_base64: str = "",
     cover_feature_id: str = "",
-    output_format: str = "hex"
-) -> Tuple[bool, str]:
-    """Synchronous music generation wrapper."""
+    output_format: str = "hex",
+    timeout: float = 300.0,
+) -> Tuple[bool, dict]:
+    """Synchronous music generation wrapper.
+
+    Returns the same dict shape as ``MiniMaxSyncClient.music_generate``:
+    ``(True, {"output_path": str, "extra_info": dict, "trace_id": str})`` or
+    ``(False, {"error": str, "status_code": int | None})``.
+    """
     client = MiniMaxSyncClient(api_key, api_base)
     try:
         return client.music_generate(
@@ -1113,7 +1557,7 @@ def music_sync(
             audio_setting=audio_setting, lyrics_optimizer=lyrics_optimizer,
             is_instrumental=is_instrumental, audio_url=audio_url,
             audio_base64=audio_base64, cover_feature_id=cover_feature_id,
-            output_format=output_format
+            output_format=output_format, timeout=timeout,
         )
     finally:
         client.close()

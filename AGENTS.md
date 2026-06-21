@@ -6,19 +6,20 @@
 ## Project Overview
 
 **MiniMax Agent GUI** is a personal AI agent application powered by the MiniMax M3 model (with M2.7 and M2.7-highspeed as selectable options). It provides:
-1. A **web app** (FastAPI + React 18 + Vite + Tailwind) — primary and recommended interface
-2. A **CLI framework** — terminal-based interactive agent
+1. A **desktop app** (`desktop/`, Tauri 2 + Vite + React 18 + Tailwind) — primary and recommended interface
+2. A **web app** (`web/`, FastAPI + React 18 + Vite + Tailwind) — legacy, slated for a separate fork
+3. A **CLI framework** (`mini_agent/cli.py`) — terminal-based interactive agent
 
-> Note: The PyQt6 desktop GUI exists in `gui/` but is no longer actively maintained. All new development targets the web app.
+> Note: The PyQt6 desktop GUI exists in `gui/` but is no longer actively maintained.
 
 The project wraps MiniMax MCP tools (`web_search`, `understand_image`) as standard agent tools and provides media generation (TTS, Image, Music, Video) via MiniMax APIs.
 
 - **Name**: `minimax-agent-gui`
-- **Version**: `0.3.0`
+- **Version**: `0.4.0`
 - **License**: MIT
 - **Python**: `>=3.10`
 - **Node**: `>=18`
-- **Status**: Active development
+- **Status**: Active development — desktop-first migration complete (Tauri scaffold + speech 4 sub-modes + settings index rail)
 
 ## Technology Stack
 
@@ -279,15 +280,14 @@ action clears the storage key and generates a fresh UUID.
 
 ### Plan Auto-Detection
 
-mmx 1.0.16+ dropped the `plan` field from quota output. The backend
-infers the tier from `model_remains[].current_interval_status`:
+The Token Plan API returns each model entry with a
+`current_interval_status` field (1 = active for this plan, 3 =
+inactive). The backend infers the user's tier from `model_remains[]`
+in `_detect_plan_from_api()` (`web/backend/main.py`):
 - `video` status=1 → max+ (default `max`; Ultra is a superset)
 - `image`/`speech`/`music` status=1 → plus
 - only `general` status=1 → plus (lowest paid tier; no "starter")
 - nothing active → `unknown`, falls back to `config.minimax.plan`
-
-See `mini_agent/llm/...` and `_detect_plan_from_mmx()` in
-`web/backend/main.py`.
 
 ## Testing Strategy
 
@@ -336,3 +336,31 @@ See `mini_agent/llm/...` and `_detect_plan_from_mmx()` in
   `video`, `speech`, `music`). The legacy `minimax-m2.7` etc. names
   no longer appear. If you grep for them, you'll find nothing.
 - **Model is user-selectable in Settings** — system prompts use the `{model}` placeholder, do not hardcode M3 (or M2.7) in new code.
+
+## Token Plan video limits (canonical)
+
+Backend `web/backend/main.py` (`_detect_plan_from_api` + the quota
+endpoint) enforces these per-tier daily caps and **the frontend
+must not redefine them**:
+
+- **Plus** — `video_daily_limit = null` (no video access; status=3 in
+  `model_remains[video]`). The QuotaDashboard `parse()` filters Plus
+  out via `if (limit == null) return null`.
+- **Max** — `video_daily_limit = 3` (default; also used for
+  auto-detected Max since `_detect_plan_from_api` can't tell Max from
+  Ultra — they share the same `model_remains` access flags).
+- **Ultra** — `video_daily_limit = 5`, **only when `minimax.plan: ultra`
+  is explicitly set in `config/config.yaml`**. Without that, the
+  auto-detector returns "max" and the user sees the conservative 3/day.
+
+QuotaDashboard `OFFICIAL_MODELS[video]` is gated by `plan: 'max'` and
+reads `data.video_daily_limit/used` directly (no percentage math).
+
+## No CLI dependency for Token Plan operations
+
+As of the mmx→API migration, the backend **only** uses direct HTTP
+calls to the Token Plan API (`/v1/api/openplatform/coding_plan/remains`)
+for plan detection and quota enrichment. The mmx CLI subprocess and
+the `_fetch_quota_via_mmx` helper were removed. Subsequent PRs migrate
+the remaining `/api/minimax/cli` and `/api/minimax/voices` endpoints
+to direct API calls (see migration roadmap).

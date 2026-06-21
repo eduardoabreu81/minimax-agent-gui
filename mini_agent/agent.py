@@ -84,6 +84,11 @@ class Agent:
 
         # Token usage from last API response (updated after each LLM call)
         self.api_total_tokens: int = 0
+        # Full per-turn usage block from the most recent LLM call.
+        # Surfaced to the WebSocket so the StatusBar's context-window chip
+        # can show real numbers instead of guessing. Reset to None between
+        # turns so callers can tell "no usage recorded yet" from "zero".
+        self.last_usage: dict | None = None
         # Flag to skip token check right after summary (avoid consecutive triggers)
         self._skip_next_token_check: bool = False
 
@@ -420,9 +425,20 @@ Requirements:
                     _logger.error(f"Error: {error_msg}")
                 return error_msg
 
-            # Accumulate API reported token usage
+            # Accumulate API reported token usage + store the full block
+            # so the WebSocket can forward it to the StatusBar's
+            # context-window chip. Anthropic SDK gives us input_tokens,
+            # output_tokens, cache_read_input_tokens,
+            # cache_creation_input_tokens — we ship them all.
             if response.usage:
                 self.api_total_tokens = response.usage.total_tokens
+                usage = response.usage
+                self.last_usage = {
+                    "input_tokens": getattr(usage, "input_tokens", 0) or 0,
+                    "output_tokens": getattr(usage, "output_tokens", 0) or 0,
+                    "cache_read_input_tokens": getattr(usage, "cache_read_input_tokens", 0) or 0,
+                    "cache_creation_input_tokens": getattr(usage, "cache_creation_input_tokens", 0) or 0,
+                }
 
             # Stream the model's reasoning (M3 extended thinking, etc.)
             # to the WebSocket so the UI can render the thinking block

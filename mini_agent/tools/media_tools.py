@@ -108,16 +108,41 @@ class MusicGenerateTool(Tool):
         output_path = self.workspace_dir / output_name
         output_path.parent.mkdir(parents=True, exist_ok=True)
         try:
-            success, result = await asyncio.to_thread(
-                self.client.music_generate,
-                prompt=prompt,
-                lyrics=lyrics,
-                is_instrumental=is_instrumental,
-                output_path=str(output_path),
-            )
+            # ``self.client`` is ``MiniMaxClient`` (async) per the
+            # SessionManager wiring. Calling an async function through
+            # ``asyncio.to_thread`` is a pre-existing bug (the coroutine
+            # is never awaited in the right loop). Use ``asyncio.to_thread``
+            # only if the client is sync, otherwise ``await`` directly.
+            import inspect
+            if inspect.iscoroutinefunction(self.client.music_generate):
+                success, result = await self.client.music_generate(
+                    prompt=prompt,
+                    lyrics=lyrics,
+                    is_instrumental=is_instrumental,
+                    output_path=str(output_path),
+                )
+            else:
+                success, result = await asyncio.to_thread(
+                    self.client.music_generate,
+                    prompt=prompt,
+                    lyrics=lyrics,
+                    is_instrumental=is_instrumental,
+                    output_path=str(output_path),
+                )
             if success:
-                return ToolResult(success=True, content=f"Music saved to: {output_path}")
-            return ToolResult(success=False, error=result)
+                # ``result`` is now ``{"output_path": ..., "extra_info": ..., "trace_id": ...}``
+                # or a plain path string (backward compat with older clients).
+                if isinstance(result, dict):
+                    saved = result.get("output_path", str(output_path))
+                    extra = result.get("extra_info") or {}
+                    extra_hint = ""
+                    if extra.get("music_duration"):
+                        ms = int(extra["music_duration"])
+                        extra_hint = f" (~{ms // 1000}s, {extra.get('music_sample_rate', '?')}Hz)"
+                    return ToolResult(success=True, content=f"Music saved to: {saved}{extra_hint}")
+                return ToolResult(success=True, content=f"Music saved to: {result}")
+            err = result.get("error", "Unknown error") if isinstance(result, dict) else str(result)
+            return ToolResult(success=False, error=err)
         except Exception as e:
             return ToolResult(success=False, error=str(e))
 

@@ -7,6 +7,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > **Note:** Pre-0.3.0 history lives in [docs/PROJECT_LOG.md](docs/PROJECT_LOG.md)
 > and [git history](https://github.com/eduardoabreu81/minimax-agent-gui/commits/main).
 
+## [0.4.0] — 2026-06-21 — Desktop-first migration (Tauri)
+
+**Major milestone.** The desktop app (`desktop/`, Tauri 2 + Vite + React 18) is now the **primary interface**. The legacy web app (`web/`) is preserved but slated for a separate fork. Three major feature sprints landed on the backend that power the new desktop panels.
+
+### Added — Backend
+
+- **Speech (T2A) full stack** — `mini_max_mcp/client.py` gets 8 new methods (`speech_synthesize_v2`, `speech_synthesize_async_create`, `speech_synthesize_async_query`, `voices_list`, `voice_clone`, `voice_design`, `voice_delete`, `file_upload`). `web/backend/main.py` exposes them via 8 FastAPI endpoints: `POST /api/minimax/speech/{synthesize, synthesize-async, clone/upload, clone, design}`, `GET /api/minimax/speech/{voices, synthesize-async/{id}}`, `DELETE /api/minimax/speech/voices/{type}/{id}`. Error mapping: 2038→403 (no clone permission), 2013→400, 1008→402, 1002→429, 1042→422 (invalid chars), 1026→422.
+- **Music Phase 2 (cover)** — `music_cover` + `music_cover_free` endpoints with quick/custom modes; `preprocess` endpoint validates uploaded reference audio (size + format) before the API round-trip. Cleared cached feature IDs when a new audio is uploaded.
+- **Music Phase 3 (lyrics generation)** — `POST /api/minimax/music/lyrics` with `lyrics_generation` API; supports `write_full_song` and `edit` modes; returns `{song_title, style_tags, lyrics, trace_id}`.
+- **Generation defaults** — `GET/PUT /api/config/defaults/audio` with full validation: `format ∈ {mp3, pcm, flac, wav}`, `sample_rate ∈ {8000, 16000, 22050, 24000, 32000, 44100}`, `bitrate ∈ {32000, 64000, 128000, 256000}`, `channel ∈ {1, 2}`.
+
+### Added — Desktop (Tauri)
+
+- **`desktop/`** — Tauri 2.x desktop scaffold. Vite + React 18 + Tailwind + shadcn-style components (`lucide-react`, `radix-ui`, `class-variance-authority`). Tauri Rust backend (`src-tauri/`) auto-spawns the PyInstaller FastAPI bundle on `:8765`. Same 7 panels as the web app, plus a Command Palette (Ctrl+K).
+- **`SpeechPanel.jsx`** — 4 sub-modes per TAURI_SPEC §6b: **Synthesize** (standard + async, 8 models, voice_modify pitch/intensity/timbre/sound_effects, 41 language boosts, pause hint `<#0.5#>`), **Clone** (drag/drop, voice_id validator 8-256 chars + must start with letter, NR/VN toggles, "auto-deleted if unused 7 days" warning), **Design** (prompt + preview_text ≤500 + optional voice_id), **Voices** (3 buckets: system/cloning/generation with delete for non-system).
+- **`SettingsPanel.jsx`** — Index rail (TAURI_SPEC §3 row Settings): 224px left rail with 11 entries, scroll-spy via IntersectionObserver, click-to-scroll. New **Generation defaults** section wired to `GET/PUT /api/config/defaults/audio` (format / sample_rate / bitrate / channel + Save).
+- **`MusicPanel.jsx`** — Switched from `/api/config` (`.music.audio_setting`) to the dedicated `/api/config/defaults/audio` endpoint.
+- **i18n** — 10 new keys (`generationDefaults`, `audioFormatDesc`, `audioSampleRateDesc`, `audioBitrateDesc`, `audioChannel`, `audioChannelDesc`, `audioChannelMono`, `audioChannelStereo`, `generationDefaultsSaved`, `generationDefaultsHint`) added across all 6 locales (en, pt-BR, es, ja, zh-CN, ko).
+
+### Added — Tests
+
+- **`tests/test_speech.py`** (NEW) — 32 tests covering all 8 Speech endpoints + error mapping.
+- **`tests/test_generation_defaults.py`** (NEW) — 17 tests covering validation enums + persistence.
+- **`tests/_run_all.py`, `tests/_run_speech.py`, `tests/_summarize.py`** (NEW) — Test runner helpers.
+- Total: **104/104 tests passing** across 5 suites (speech 32, music_phase1 19, music_cover 20, music_lyrics 16, generation_defaults 17).
+
+### Changed
+
+- **AGENTS.md** — Project Overview updated for desktop-first; added **Token Plan video limits** (canonical per-tier caps) and **No CLI dependency for Token Plan operations** sections.
+- **pyproject.toml** — Bumped to `0.4.0`.
+
+### Removed
+
+- **`/api/minimax/cli`** — `speech` removed from allowlist (no longer routes through mmx CLI).
+- **`/api/minimax/voices`** — Deleted; replaced by `/api/minimax/speech/voices`.
+
+### Deprecated
+
+- **`web/`** — Legacy web app preserved but slated for a separate fork. The desktop app (`desktop/`) is now the primary interface. The web frontend will keep working but is no longer the focus of new development.
+
+### Known follow-ups
+
+- Audio output formats pcm and flac are wired through the backend but not all desktop panels surface them yet.
+- MusicPanel lyrics tab ships in Phase 3 but the editor mode (`edit`) UI is minimal; polish pending.
+- SpeechPanel "Voices" sub-mode lists all 3 buckets but lacks pagination (works fine for typical 30+30 voices).
+- Tauri dev mode requires the PyInstaller backend bundle to be built; first `npm run tauri:dev` will rebuild it.
+
 ## [0.3.0] — 2026-06-02 — Token Plan migration (M2.7 → M3)
 
 The biggest release since the project started: migrated from the legacy

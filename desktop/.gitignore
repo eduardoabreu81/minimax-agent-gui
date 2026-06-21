@@ -1,0 +1,29 @@
+# Tauri / Rust — src-tauri/target is the build output
+src-tauri/target/
+src-tauri/Cargo.lock
+
+# Vite / React
+node_modules/
+dist/
+
+# OS / Editor noise
+.DS_Store
+.vscode/
+.idea/
+*.swp
+
+# Logs / caches / temp
+*.log
+.cache/
+.tmp/
+
+# Tauri auto-generated
+src-tauri/gen/
+
+# PyInstaller bundles (built by backend scripts)
+src-tauri/binaries/
+
+# TypeScript build cache
+*.tsbuildinfo
+vite.config.d.ts
+vite.config.js.map

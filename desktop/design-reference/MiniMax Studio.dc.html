@@ -1,0 +1,1236 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; }
+  body { font-family: 'Inter', system-ui, sans-serif; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: hsl(var(--bd, 217 33% 22%)); border-radius: 6px; border: 2px solid transparent; background-clip: padding-box; }
+  ::-webkit-scrollbar-thumb:hover { background: hsl(var(--mfg, 215 20% 65%) / .5); background-clip: padding-box; }
+  @keyframes mmpulse { 0%,100% { opacity: 1; transform: scale(1);} 50% { opacity: .45; transform: scale(.82);} }
+  @keyframes mmblink { 0%,100% { opacity: 1;} 50% { opacity: 0;} }
+  @keyframes mmfade { from { opacity: 0; transform: translateY(6px);} to { opacity: 1; transform: translateY(0);} }
+  @keyframes mmspin { to { transform: rotate(360deg);} }
+</style>
+</helmet>
+
+<div ref="{{ rootRef }}" style="display:flex; flex-direction:column; height:100vh; width:100%; overflow:hidden; background:hsl(var(--bg,222 47% 7%)); color:hsl(var(--fg,210 40% 98%)); font-family:'Inter',system-ui,sans-serif; font-size:14px; line-height:1.5; position:relative;">
+
+  <!-- ============ TITLEBAR (Windows) ============ -->
+  <header style="height:44px; flex:none; display:flex; align-items:center; padding:0 0 0 12px; background:hsl(var(--sur,217 33% 14%)); border-bottom:1px solid hsl(var(--bd,217 33% 22%)); user-select:none; gap:14px;">
+    <!-- App mark + workspace -->
+    <div style="display:flex; align-items:center; gap:10px; flex:none;">
+      <div style="width:22px; height:22px; border-radius:6px; background:linear-gradient(135deg, hsl(var(--pri,217 91% 60%)), hsl(var(--pri,217 91% 60%) / .55)); display:flex; align-items:center; justify-content:center; box-shadow:0 1px 3px rgba(0,0,0,.35);">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--pfg,0 0% 100%))" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V7l5 5 3-4 3 4 5-5v12"/></svg>
+      </div>
+      <div style="display:flex; align-items:center; gap:7px; font-size:12.5px;">
+        <span style="font-weight:600; letter-spacing:-.01em;">MiniMax Studio</span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--mfg,215 20% 65%))" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
+        <span style="color:hsl(var(--mfg,215 20% 65%));">minimax-agent-gui</span>
+        <span style="display:inline-flex; align-items:center; gap:4px; padding:2px 7px; border-radius:5px; background:hsl(var(--sec,217 33% 17%)); color:hsl(var(--mfg,215 20% 65%)); font-size:11px;">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
+          main
+        </span>
+      </div>
+    </div>
+
+    <!-- Command palette trigger (center) -->
+    <div style="flex:1; display:flex; justify-content:center;">
+      <button onClick="{{ openPalette }}" style="display:flex; align-items:center; gap:10px; width:min(440px,46%); min-width:280px; height:28px; padding:0 12px; border-radius:8px; border:1px solid hsl(var(--bd,217 33% 22%)); background:hsl(var(--bg,222 47% 7%) / .6); color:hsl(var(--mfg,215 20% 65%)); cursor:pointer; font-size:12.5px; transition:border-color .15s;" style-hover="border-color:hsl(var(--pri,217 91% 60%) / .5);">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+        <span style="flex:1; text-align:left; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Search or run a command</span>
+        <span style="display:flex; align-items:center; gap:2px; font-size:10.5px; font-weight:600;">
+          <kbd style="padding:1px 5px; border-radius:4px; background:hsl(var(--sec,217 33% 17%)); border:1px solid hsl(var(--bd,217 33% 22%));">Ctrl</kbd>
+          <kbd style="padding:1px 5px; border-radius:4px; background:hsl(var(--sec,217 33% 17%)); border:1px solid hsl(var(--bd,217 33% 22%));">K</kbd>
+        </span>
+      </button>
+    </div>
+
+    <!-- Right cluster: agent status + model + window controls -->
+    <div style="display:flex; align-items:center; gap:10px; flex:none;">
+      <!-- Agent status -->
+      <div style="display:flex; align-items:center; gap:7px; padding:4px 10px; border-radius:7px; background:hsl(var(--suc,142 71% 45%) / .12); border:1px solid hsl(var(--suc,142 71% 45%) / .25);">
+        <span style="width:7px; height:7px; border-radius:50%; background:hsl(var(--suc,142 71% 45%)); animation:mmpulse 1.6s ease-in-out infinite;"></span>
+        <span style="font-size:11.5px; font-weight:500; color:hsl(var(--suc,142 71% 45%));">Agent running</span>
+      </div>
+
+      <div style="width:1px; height:18px; background:hsl(var(--bd,217 33% 22%)); margin:0 2px;"></div>
+
+      <!-- Window controls (Windows, right) -->
+      <div style="display:flex; align-items:center; height:44px;">
+        <button title="Minimize" style="width:46px; height:44px; display:flex; align-items:center; justify-content:center; background:transparent; border:none; color:hsl(var(--mfg,215 20% 65%)); cursor:pointer;" style-hover="background:hsl(var(--sec,217 33% 17%)); color:hsl(var(--fg,210 40% 98%));">
+          <svg width="12" height="12" viewBox="0 0 12 12"><rect x="1.5" y="5.5" width="9" height="1" fill="currentColor"/></svg>
+        </button>
+        <button title="Maximize" style="width:46px; height:44px; display:flex; align-items:center; justify-content:center; background:transparent; border:none; color:hsl(var(--mfg,215 20% 65%)); cursor:pointer;" style-hover="background:hsl(var(--sec,217 33% 17%)); color:hsl(var(--fg,210 40% 98%));">
+          <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1"><rect x="1.5" y="1.5" width="9" height="9"/></svg>
+        </button>
+        <button title="Close" style="width:46px; height:44px; display:flex; align-items:center; justify-content:center; background:transparent; border:none; color:hsl(var(--mfg,215 20% 65%)); cursor:pointer;" style-hover="background:#e81123; color:#fff;">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M1.5 1.5 10.5 10.5M10.5 1.5 1.5 10.5"/></svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ============ BODY ============ -->
+  <div style="flex:1; display:flex; min-height:0;">
+
+    <!-- ===== SIDEBAR ===== -->
+    <aside style="width:236px; flex:none; display:flex; flex-direction:column; background:hsl(var(--sur,217 33% 14%)); border-right:1px solid hsl(var(--bd,217 33% 22%));">
+      <div style="padding:16px 14px 8px;">
+        <div style="font-size:10.5px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:hsl(var(--mfg,215 20% 65%)); padding:0 8px 8px;">Workspace</div>
+        <nav style="display:flex; flex-direction:column; gap:3px;">
+          <button onClick="{{ navTo.chat }}" style="{{ nav.chat }}">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            <span style="flex:1; text-align:left;">Chat</span>
+          </button>
+          <button onClick="{{ navTo.code }}" style="{{ nav.code }}">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 16 4-4-4-4"/><path d="m6 8-4 4 4 4"/><path d="m14.5 4-5 16"/></svg>
+            <span style="flex:1; text-align:left;">Code</span>
+            <span style="font-size:9px; font-weight:700; letter-spacing:.04em; padding:2px 5px; border-radius:4px; background:hsl(var(--pri,217 91% 60%) / .16); color:hsl(var(--pri,217 91% 60%));">AGENT</span>
+          </button>
+          <button onClick="{{ navTo.image }}" style="{{ nav.image }}">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/></svg>
+            <span style="flex:1; text-align:left;">Image</span>
+          </button>
+          <button onClick="{{ navTo.video }}" style="{{ nav.video }}">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 8-6 4 6 4V8Z"/><rect x="2" y="6" width="14" height="12" rx="2"/></svg>
+            <span style="flex:1; text-align:left;">Video</span>
+          </button>
+          <button onClick="{{ navTo.music }}" style="{{ nav.music }}">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+            <span style="flex:1; text-align:left;">Music</span>
+          </button>
+          <button onClick="{{ navTo.tts }}" style="{{ nav.tts }}">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19.1 4.9a10 10 0 0 1 0 14.2"/></svg>
+            <span style="flex:1; text-align:left;">Speech</span>
+          </button>
+          <button onClick="{{ navTo.tasks }}" style="{{ nav.tasks }}">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+            <span style="flex:1; text-align:left;">Tasks</span>
+          </button>
+        </nav>
+      </div>
+
+      <div style="flex:1;"></div>
+
+      <!-- Usage widget (CLI-driven, % per session + weekly) -->
+      <div style="margin:10px; padding:13px 13px 14px; border-radius:10px; background:hsl(var(--card,222 47% 9%)); border:1px solid hsl(var(--bd,217 33% 22%));">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+          <span style="font-size:11px; font-weight:600; color:hsl(var(--mfg,215 20% 65%));">Usage</span>
+          <span style="display:inline-flex; align-items:center; gap:4px; font-size:10px; font-weight:600; padding:2px 6px; border-radius:5px; background:hsl(var(--pri,217 91% 60%) / .14); color:hsl(var(--pri,217 91% 60%));">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="m11.6 3.2-7 8.4a.5.5 0 0 0 .4.8H10l-1.6 7.8a.3.3 0 0 0 .5.3l7.7-9.3a.5.5 0 0 0-.4-.8H12l1.5-6.9a.3.3 0 0 0-.5-.3Z"/></svg>
+            Max
+          </span>
+        </div>
+        <!-- Session (5h) -->
+        <div style="display:flex; align-items:baseline; justify-content:space-between; margin-bottom:5px;">
+          <span style="font-size:11px; color:hsl(var(--mfg,215 20% 65%));">Session · resets in 2h 14m</span>
+          <span style="font-size:11.5px; font-weight:700; font-variant-numeric:tabular-nums;">42%</span>
+        </div>
+        <div style="height:6px; border-radius:3px; background:hsl(var(--sec,217 33% 17%)); overflow:hidden; margin-bottom:12px;">
+          <div style="width:42%; height:100%; border-radius:3px; background:linear-gradient(90deg, hsl(var(--pri,217 91% 60%)), hsl(var(--pri,217 91% 60%) / .6));"></div>
+        </div>
+        <!-- Weekly -->
+        <div style="display:flex; align-items:baseline; justify-content:space-between; margin-bottom:5px;">
+          <span style="font-size:11px; color:hsl(var(--mfg,215 20% 65%));">Weekly · resets Mon</span>
+          <span style="font-size:11.5px; font-weight:700; font-variant-numeric:tabular-nums;">68%</span>
+        </div>
+        <div style="height:6px; border-radius:3px; background:hsl(var(--sec,217 33% 17%)); overflow:hidden;">
+          <div style="width:68%; height:100%; border-radius:3px; background:linear-gradient(90deg, hsl(var(--suc,142 71% 45%)), hsl(var(--suc,142 71% 45%) / .55));"></div>
+        </div>
+      </div>
+
+      <!-- Settings -->
+      <div style="padding:8px 10px 12px; border-top:1px solid hsl(var(--bd,217 33% 22%));">
+        <button onClick="{{ navTo.settings }}" style="{{ nav.settings }}">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>
+          <span style="flex:1; text-align:left;">Settings</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- ===== MAIN ===== -->
+    <main style="flex:1; min-width:0; display:flex; flex-direction:column; background:hsl(var(--bg,222 47% 7%));">
+
+      <!-- CHAT -->
+      <sc-if value="{{ isChat }}" hint-placeholder-val="{{ true }}">
+        <div style="flex:1; display:flex; flex-direction:column; min-height:0;">
+          <div style="height:52px; flex:none; display:flex; align-items:center; justify-content:space-between; padding:0 22px; border-bottom:1px solid hsl(var(--bd,217 33% 22%));">
+            <div style="display:flex; align-items:center; gap:10px;">
+              <span style="font-size:15px; font-weight:600;">Refactor auth middleware</span>
+              <span style="font-size:11px; color:hsl(var(--mfg,215 20% 65%)); padding:2px 8px; border-radius:5px; background:hsl(var(--sec,217 33% 17%));">12 messages</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <button style="width:32px; height:32px; display:flex; align-items:center; justify-content:center; border-radius:8px; border:1px solid hsl(var(--bd,217 33% 22%)); background:transparent; color:hsl(var(--mfg,215 20% 65%)); cursor:pointer;" style-hover="color:hsl(var(--fg,210 40% 98%));">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+              </button>
+              <button style="display:flex; align-items:center; gap:7px; height:32px; padding:0 12px; border-radius:8px; border:1px solid hsl(var(--bd,217 33% 22%)); background:transparent; color:hsl(var(--fg,210 40% 98%)); cursor:pointer; font-size:12.5px; font-weight:500;" style-hover="border-color:hsl(var(--pri,217 91% 60%) / .5);">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+                New Chat
+              </button>
+            </div>
+          </div>
+
+          <div style="flex:1; overflow-y:auto; overflow-x:hidden; padding:28px 0;">
+            <div style="max-width:760px; margin:0 auto; padding:0 24px; display:flex; flex-direction:column; gap:26px;">
+              <!-- user -->
+              <div style="display:flex; gap:14px; align-items:flex-start;">
+                <div style="width:30px; height:30px; flex:none; border-radius:8px; background:hsl(var(--sec,217 33% 17%)); display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:600; color:hsl(var(--mfg,215 20% 65%));">EA</div>
+                <div style="flex:1; padding-top:4px;">
+                  <div style="font-size:13.5px;">Our auth middleware re-validates the JWT on every request and it's slow. Can you refactor it to cache the decoded token per request and add proper error handling?</div>
+                </div>
+              </div>
+              <!-- assistant -->
+              <div style="display:flex; gap:14px; align-items:flex-start;">
+                <div style="width:30px; height:30px; flex:none; border-radius:8px; background:linear-gradient(135deg, hsl(var(--pri,217 91% 60%)), hsl(var(--pri,217 91% 60%) / .55)); display:flex; align-items:center; justify-content:center;">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--pfg,0 0% 100%))" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V7l5 5 3-4 3 4 5-5v12"/></svg>
+                </div>
+                <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:14px;">
+                  <!-- thinking block -->
+                  <div style="border:1px solid hsl(var(--bd,217 33% 22%)); border-radius:10px; background:hsl(var(--card,222 47% 9%) / .5); overflow:hidden;">
+                    <div style="display:flex; align-items:center; gap:8px; padding:9px 13px; border-bottom:1px solid hsl(var(--bd,217 33% 22%)); color:hsl(var(--mfg,215 20% 65%));">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44A2.5 2.5 0 0 1 2.5 17.5"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44A2.5 2.5 0 0 0 21.5 17.5"/></svg>
+                      <span style="font-size:11.5px; font-weight:600; letter-spacing:.02em;">Thinking</span>
+                      <span style="font-size:11px;">· 4s</span>
+                    </div>
+                    <div style="padding:11px 13px; font-size:12.5px; color:hsl(var(--mfg,215 20% 65%)); line-height:1.6;">The hot path is <span style="font-family:'JetBrains Mono',monospace; font-size:11.5px; color:hsl(var(--fg,210 40% 98%));">jwt.verify()</span> running per route. I'll decode once in the middleware, attach the payload to <span style="font-family:'JetBrains Mono',monospace; font-size:11.5px; color:hsl(var(--fg,210 40% 98%));">req.user</span>, and wrap it in a try/catch that maps verification failures to a 401 instead of a 500.</div>
+                  </div>
+                  <div style="font-size:13.5px; line-height:1.65;">Here's the refactor. I moved verification into a single guard and added typed error handling:</div>
+                  <!-- code block -->
+                  <div style="border:1px solid hsl(var(--bd,217 33% 22%)); border-radius:10px; overflow:hidden; background:hsl(var(--card,222 47% 9%));">
+                    <div style="display:flex; align-items:center; justify-content:space-between; padding:8px 13px; border-bottom:1px solid hsl(var(--bd,217 33% 22%)); background:hsl(var(--sur,217 33% 14%));">
+                      <span style="font-size:11.5px; font-family:'JetBrains Mono',monospace; color:hsl(var(--mfg,215 20% 65%));">middleware/auth.ts</span>
+                      <button style="display:flex; align-items:center; gap:5px; font-size:11px; color:hsl(var(--mfg,215 20% 65%)); background:transparent; border:none; cursor:pointer;" style-hover="color:hsl(var(--fg,210 40% 98%));">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                        Copy
+                      </button>
+                    </div>
+                    <pre style="margin:0; padding:13px 15px; font-family:'JetBrains Mono',monospace; font-size:12px; line-height:1.6; overflow-x:auto;"><span style="color:hsl(var(--pri,217 91% 60%));">export const</span> <span style="color:hsl(var(--fg,210 40% 98%));">requireAuth</span> = <span style="color:hsl(var(--pri,217 91% 60%));">async</span> (req, res, next) =&gt; {
+  <span style="color:hsl(var(--pri,217 91% 60%));">const</span> token = req.headers.authorization?.<span style="color:hsl(var(--suc,142 71% 45%));">slice</span>(<span style="color:hsl(var(--err,0 63% 51%));">7</span>);
+  <span style="color:hsl(var(--pri,217 91% 60%));">if</span> (!token) <span style="color:hsl(var(--pri,217 91% 60%));">return</span> res.<span style="color:hsl(var(--suc,142 71% 45%));">status</span>(<span style="color:hsl(var(--err,0 63% 51%));">401</span>).<span style="color:hsl(var(--suc,142 71% 45%));">end</span>();
+  <span style="color:hsl(var(--pri,217 91% 60%));">try</span> {
+    req.user = <span style="color:hsl(var(--pri,217 91% 60%));">await</span> verify(token);
+    <span style="color:hsl(var(--suc,142 71% 45%));">next</span>();
+  } <span style="color:hsl(var(--pri,217 91% 60%));">catch</span> {
+    res.<span style="color:hsl(var(--suc,142 71% 45%));">status</span>(<span style="color:hsl(var(--err,0 63% 51%));">401</span>).<span style="color:hsl(var(--suc,142 71% 45%));">json</span>({ error: <span style="color:hsl(var(--suc,142 71% 45%));">'Invalid token'</span> });
+  }
+};</pre>
+                  </div>
+                  <div style="font-size:13.5px; line-height:1.65;">This decodes the token once per request and returns a clean <span style="font-family:'JetBrains Mono',monospace; font-size:11.5px; padding:1px 5px; border-radius:4px; background:hsl(var(--sec,217 33% 17%));">401</span> on failure. Want me to add a short-lived in-memory cache keyed by token hash too?<span style="display:inline-block; width:8px; height:15px; margin-left:2px; vertical-align:text-bottom; background:hsl(var(--pri,217 91% 60%)); animation:mmblink 1s step-end infinite;"></span></div>
+                  <div style="display:flex; gap:6px; padding-top:2px;">
+                    <button style="display:flex; align-items:center; gap:5px; height:28px; padding:0 10px; border-radius:7px; border:1px solid hsl(var(--bd,217 33% 22%)); background:transparent; color:hsl(var(--mfg,215 20% 65%)); cursor:pointer; font-size:11.5px;" style-hover="color:hsl(var(--fg,210 40% 98%));"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Copy</button>
+                    <button style="display:flex; align-items:center; gap:5px; height:28px; padding:0 10px; border-radius:7px; border:1px solid hsl(var(--bd,217 33% 22%)); background:transparent; color:hsl(var(--mfg,215 20% 65%)); cursor:pointer; font-size:11.5px;" style-hover="color:hsl(var(--fg,210 40% 98%));"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>Retry</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- composer -->
+          <div style="flex:none; padding:0 24px 22px;">
+            <div style="max-width:760px; margin:0 auto;">
+              <div style="border:1px solid hsl(var(--bd,217 33% 22%)); border-radius:14px; background:hsl(var(--card,222 47% 9%)); box-shadow:0 4px 20px rgba(0,0,0,.18); overflow:hidden;">
+                <textarea placeholder="Reply to MiniMax M3…" style="width:100%; border:none; outline:none; resize:none; background:transparent; color:hsl(var(--fg,210 40% 98%)); font-family:'Inter',sans-serif; font-size:14px; padding:14px 16px 4px; min-height:48px;"></textarea>
+                <div style="display:flex; align-items:center; justify-content:space-between; padding:8px 10px 10px;">
+                  <div style="display:flex; align-items:center; gap:6px;">
+                    <button style="width:32px; height:32px; display:flex; align-items:center; justify-content:center; border-radius:8px; border:none; background:transparent; color:hsl(var(--mfg,215 20% 65%)); cursor:pointer;" style-hover="background:hsl(var(--sec,217 33% 17%)); color:hsl(var(--fg,210 40% 98%));"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg></button>
+                    <button style="display:flex; align-items:center; gap:6px; height:30px; padding:0 10px; border-radius:8px; border:1px solid hsl(var(--bd,217 33% 22%)); background:transparent; color:hsl(var(--fg,210 40% 98%)); cursor:pointer; font-size:12px; font-weight:500;">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--pri,217 91% 60%))" stroke-width="2"><path d="M12 3 4 9v6l8 6 8-6V9z"/></svg>{{ model }}
+                    </button>
+                    <button style="display:flex; align-items:center; gap:6px; height:30px; padding:0 10px; border-radius:8px; border:1px solid hsl(var(--pri,217 91% 60%) / .4); background:hsl(var(--pri,217 91% 60%) / .1); color:hsl(var(--pri,217 91% 60%)); cursor:pointer; font-size:12px; font-weight:500;">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44A2.5 2.5 0 0 1 2.5 17.5"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44A2.5 2.5 0 0 0 21.5 17.5"/></svg>Thinking
+                    </button>
+                  </div>
+                  <button style="width:34px; height:34px; display:flex; align-items:center; justify-content:center; border-radius:9px; border:none; background:hsl(var(--pri,217 91% 60%)); color:hsl(var(--pfg,0 0% 100%)); cursor:pointer;">
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- CODE WORKSPACE -->
+      <sc-if value="{{ isCode }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1; display:flex; min-height:0;">
+          <!-- file tree -->
+          <div style="width:230px; flex:none; display:flex; flex-direction:column; border-right:1px solid hsl(var(--bd,217 33% 22%)); background:hsl(var(--sur,217 33% 14%) / .5);">
+            <div style="height:38px; flex:none; display:flex; align-items:center; justify-content:space-between; padding:0 8px 0 14px; border-bottom:1px solid hsl(var(--bd,217 33% 22%));">
+              <span style="font-size:11px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:hsl(var(--mfg,215 20% 65%));">Explorer</span>
+              <div style="display:flex; gap:2px;">
+                <button style="width:24px; height:24px; display:flex; align-items:center; justify-content:center; border-radius:5px; border:none; background:transparent; color:hsl(var(--mfg,215 20% 65%)); cursor:pointer;" style-hover="background:hsl(var(--sec,217 33% 17%)); color:hsl(var(--fg,210 40% 98%));"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M12 18v-6M9 15h6"/></svg></button>
+              </div>
+            </div>
+            <div style="flex:1; overflow-y:auto; padding:8px 6px; font-size:12.5px;">
+              <sc-for list="{{ files }}" as="f" hint-placeholder-count="8">
+                <div style="{{ f.style }}">
+                  <span style="width:16px; display:flex; justify-content:center; color:hsl(var(--mfg,215 20% 65%));">{{ f.icon }}</span>
+                  <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ f.name }}</span>
+                  <sc-if value="{{ f.badge }}" hint-placeholder-val="{{ false }}"><span style="{{ f.badgeStyle }}">{{ f.badge }}</span></sc-if>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+
+          <!-- editor + terminal -->
+          <div style="flex:1; min-width:0; display:flex; flex-direction:column;">
+            <!-- tabs -->
+            <div style="height:38px; flex:none; display:flex; align-items:stretch; border-bottom:1px solid hsl(var(--bd,217 33% 22%)); background:hsl(var(--sur,217 33% 14%) / .5);">
+              <div style="display:flex; align-items:center; gap:8px; padding:0 14px; border-right:1px solid hsl(var(--bd,217 33% 22%)); background:hsl(var(--bg,222 47% 7%)); font-size:12.5px; font-family:'JetBrains Mono',monospace;">
+                <span style="width:6px; height:6px; border-radius:50%; background:hsl(var(--pri,217 91% 60%));"></span>auth.ts
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--mfg,215 20% 65%))" stroke-width="2" style="margin-left:4px;"><path d="M18 6 6 18M6 6l12 12"/></svg>
+              </div>
+              <div style="display:flex; align-items:center; gap:8px; padding:0 14px; border-right:1px solid hsl(var(--bd,217 33% 22%)); font-size:12.5px; font-family:'JetBrains Mono',monospace; color:hsl(var(--mfg,215 20% 65%));">routes.ts</div>
+            </div>
+            <!-- code -->
+            <div style="flex:1; min-height:0; overflow:auto; display:flex; font-family:'JetBrains Mono',monospace; font-size:12.5px; line-height:1.7; background:hsl(var(--bg,222 47% 7%));">
+              <div style="flex:none; padding:14px 0; text-align:right; color:hsl(var(--mfg,215 20% 65%) / .6); user-select:none; min-width:46px;">
+                <div style="padding:0 14px;">1</div><div style="padding:0 14px;">2</div><div style="padding:0 14px;">3</div><div style="padding:0 14px;">4</div><div style="padding:0 14px;">5</div><div style="padding:0 14px;">6</div><div style="padding:0 14px;">7</div><div style="padding:0 14px;">8</div><div style="padding:0 14px; background:hsl(var(--suc,142 71% 45%) / .12);">9</div><div style="padding:0 14px;">10</div><div style="padding:0 14px;">11</div>
+              </div>
+              <pre style="margin:0; padding:14px 18px; flex:1;"><span style="color:hsl(var(--mfg,215 20% 65%));">// JWT guard — decode once per request</span>
+<span style="color:hsl(var(--pri,217 91% 60%));">import</span> { verify } <span style="color:hsl(var(--pri,217 91% 60%));">from</span> <span style="color:hsl(var(--suc,142 71% 45%));">'./jwt'</span>;
+
+<span style="color:hsl(var(--pri,217 91% 60%));">export const</span> requireAuth = <span style="color:hsl(var(--pri,217 91% 60%));">async</span> (req, res, next) =&gt; {
+  <span style="color:hsl(var(--pri,217 91% 60%));">const</span> token = req.headers.authorization?.slice(<span style="color:hsl(var(--err,0 63% 51%));">7</span>);
+  <span style="color:hsl(var(--pri,217 91% 60%));">if</span> (!token) <span style="color:hsl(var(--pri,217 91% 60%));">return</span> res.status(<span style="color:hsl(var(--err,0 63% 51%));">401</span>).end();
+  <span style="color:hsl(var(--pri,217 91% 60%));">try</span> {
+<span style="display:block; background:hsl(var(--suc,142 71% 45%) / .12); margin:0 -18px; padding:0 18px;">    req.user = <span style="color:hsl(var(--pri,217 91% 60%));">await</span> verify(token);</span>
+    next();
+  } <span style="color:hsl(var(--pri,217 91% 60%));">catch</span> { res.status(<span style="color:hsl(var(--err,0 63% 51%));">401</span>).json({ error: <span style="color:hsl(var(--suc,142 71% 45%));">'Invalid token'</span> }); }
+};</pre>
+            </div>
+            <!-- terminal -->
+            <div style="height:160px; flex:none; display:flex; flex-direction:column; border-top:1px solid hsl(var(--bd,217 33% 22%)); background:hsl(var(--card,222 47% 9%));">
+              <div style="height:32px; flex:none; display:flex; align-items:center; gap:16px; padding:0 14px; border-bottom:1px solid hsl(var(--bd,217 33% 22%));">
+                <span style="font-size:11px; font-weight:600; color:hsl(var(--fg,210 40% 98%)); border-bottom:2px solid hsl(var(--pri,217 91% 60%)); height:32px; display:flex; align-items:center;">Terminal</span>
+                <span style="font-size:11px; color:hsl(var(--mfg,215 20% 65%));">Problems</span>
+                <span style="font-size:11px; color:hsl(var(--mfg,215 20% 65%));">Output</span>
+              </div>
+              <div style="flex:1; overflow-y:auto; padding:10px 14px; font-family:'JetBrains Mono',monospace; font-size:12px; line-height:1.7;">
+                <div><span style="color:hsl(var(--suc,142 71% 45%));">➜</span> <span style="color:hsl(var(--pri,217 91% 60%));">api</span> npm test auth</div>
+                <div style="color:hsl(var(--mfg,215 20% 65%));">PASS  middleware/auth.test.ts</div>
+                <div style="color:hsl(var(--suc,142 71% 45%));">  ✓ rejects missing token (12ms)</div>
+                <div style="color:hsl(var(--suc,142 71% 45%));">  ✓ caches decoded payload (4ms)</div>
+                <div><span style="color:hsl(var(--suc,142 71% 45%));">➜</span> <span style="color:hsl(var(--pri,217 91% 60%));">api</span> <span style="display:inline-block; width:8px; height:14px; vertical-align:text-bottom; background:hsl(var(--fg,210 40% 98%)); animation:mmblink 1s step-end infinite;"></span></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- agent panel -->
+          <div style="width:380px; flex:none; display:flex; flex-direction:column; border-left:1px solid hsl(var(--bd,217 33% 22%)); background:hsl(var(--card,222 47% 9%));">
+            <div style="height:44px; flex:none; display:flex; align-items:center; justify-content:space-between; padding:0 8px 0 16px; border-bottom:1px solid hsl(var(--bd,217 33% 22%));">
+              <span style="font-size:13px; font-weight:600;">Agent</span>
+              <div style="display:flex; padding:2px; border-radius:8px; background:hsl(var(--sec,217 33% 17%)); font-size:11px; font-weight:600;">
+                <button onClick="{{ setMode.agent }}" style="{{ modeBtn.agent }}">Agent</button>
+                <button onClick="{{ setMode.plan }}" style="{{ modeBtn.plan }}">Plan</button>
+                <button onClick="{{ setMode.yolo }}" style="{{ modeBtn.yolo }}">YOLO</button>
+              </div>
+            </div>
+            <div style="flex:1; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:14px;">
+              <div style="font-size:12.5px; line-height:1.6;">I'll refactor the auth middleware. Reading the current implementation first.</div>
+              <!-- tool call: read -->
+              <div style="border:1px solid hsl(var(--bd,217 33% 22%)); border-radius:9px; overflow:hidden;">
+                <div style="display:flex; align-items:center; gap:8px; padding:9px 11px; background:hsl(var(--sur,217 33% 14%));">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--mfg,215 20% 65%))" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                  <span style="font-size:11.5px; font-family:'JetBrains Mono',monospace; flex:1;">Read <span style="color:hsl(var(--mfg,215 20% 65%));">middleware/auth.ts</span></span>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--suc,142 71% 45%))" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg>
+                </div>
+              </div>
+              <!-- tool call: edit (diff) -->
+              <div style="border:1px solid hsl(var(--bd,217 33% 22%)); border-radius:9px; overflow:hidden;">
+                <div style="display:flex; align-items:center; gap:8px; padding:9px 11px; background:hsl(var(--sur,217 33% 14%)); border-bottom:1px solid hsl(var(--bd,217 33% 22%));">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--pri,217 91% 60%))" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z"/></svg>
+                  <span style="font-size:11.5px; font-family:'JetBrains Mono',monospace; flex:1;">Edit <span style="color:hsl(var(--mfg,215 20% 65%));">auth.ts</span></span>
+                  <span style="font-size:10.5px; font-family:'JetBrains Mono',monospace; color:hsl(var(--suc,142 71% 45%));">+8</span>
+                  <span style="font-size:10.5px; font-family:'JetBrains Mono',monospace; color:hsl(var(--err,0 63% 51%));">−5</span>
+                </div>
+                <div style="font-family:'JetBrains Mono',monospace; font-size:11px; line-height:1.6;">
+                  <div style="padding:1px 11px; background:hsl(var(--err,0 63% 51%) / .12); color:hsl(var(--err,0 63% 51%));">- jwt.verify(req.headers.auth)</div>
+                  <div style="padding:1px 11px; background:hsl(var(--suc,142 71% 45%) / .12); color:hsl(var(--suc,142 71% 45%));">+ req.user = await verify(token)</div>
+                </div>
+              </div>
+              <!-- approval card -->
+              <div style="border:1px solid hsl(var(--pri,217 91% 60%) / .4); border-radius:11px; background:hsl(var(--pri,217 91% 60%) / .07); padding:13px;">
+                <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--pri,217 91% 60%))" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/></svg>
+                  <span style="font-size:12.5px; font-weight:600;">Permission required</span>
+                </div>
+                <div style="font-size:12px; color:hsl(var(--mfg,215 20% 65%)); line-height:1.55; margin-bottom:11px;">Agent wants to run <span style="font-family:'JetBrains Mono',monospace; font-size:11px; padding:1px 5px; border-radius:4px; background:hsl(var(--sec,217 33% 17%)); color:hsl(var(--fg,210 40% 98%));">npm test auth</span> in the workspace shell.</div>
+                <div style="display:flex; gap:8px;">
+                  <button style="flex:1; height:32px; border-radius:8px; border:none; background:hsl(var(--pri,217 91% 60%)); color:hsl(var(--pfg,0 0% 100%)); font-size:12px; font-weight:600; cursor:pointer;">Approve &amp; Run</button>
+                  <button style="height:32px; padding:0 14px; border-radius:8px; border:1px solid hsl(var(--bd,217 33% 22%)); background:transparent; color:hsl(var(--mfg,215 20% 65%)); font-size:12px; font-weight:500; cursor:pointer;">Reject</button>
+                </div>
+              </div>
+            </div>
+            <!-- agent input -->
+            <div style="flex:none; padding:12px 14px 14px; border-top:1px solid hsl(var(--bd,217 33% 22%));">
+              <div style="border:1px solid hsl(var(--bd,217 33% 22%)); border-radius:11px; background:hsl(var(--bg,222 47% 7%)); padding:10px 12px; display:flex; align-items:flex-end; gap:8px;">
+                <textarea placeholder="Ask the agent to build, fix, or explain…" style="flex:1; border:none; outline:none; resize:none; background:transparent; color:hsl(var(--fg,210 40% 98%)); font-family:'Inter',sans-serif; font-size:13px; min-height:20px;"></textarea>
+                <button style="width:30px; height:30px; flex:none; display:flex; align-items:center; justify-content:center; border-radius:8px; border:none; background:hsl(var(--pri,217 91% 60%)); color:hsl(var(--pfg,0 0% 100%)); cursor:pointer;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- MEDIA -->
+      <sc-if value="{{ isImage }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1; display:flex; min-height:0;">
+          <!-- controls -->
+          <div style="width:360px; flex:none; display:flex; flex-direction:column; border-right:1px solid hsl(var(--bd,217 33% 22%)); overflow-y:auto; overflow-x:hidden;">
+            <div style="padding:22px 22px 0;">
+              <div style="display:flex; align-items:center; gap:10px; margin-bottom:4px;">
+                <div style="width:34px; height:34px; border-radius:9px; background:hsl(var(--pri,217 91% 60%) / .14); display:flex; align-items:center; justify-content:center; color:hsl(var(--pri,217 91% 60%));">{{ media.icon }}</div>
+                <div>
+                  <div style="font-size:15px; font-weight:600;">{{ media.title }}</div>
+                  <div style="font-size:11.5px; color:hsl(var(--mfg,215 20% 65%));">{{ media.subtitle }}</div>
+                </div>
+              </div>
+            </div>
+            <div style="padding:18px 22px; display:flex; flex-direction:column; gap:18px;">
+              <div>
+                <label style="font-size:11.5px; font-weight:600; color:hsl(var(--mfg,215 20% 65%)); display:block; margin-bottom:7px;">Prompt</label>
+                <textarea placeholder="{{ media.placeholder }}" style="width:100%; min-height:96px; border:1px solid hsl(var(--bd,217 33% 22%)); border-radius:10px; background:hsl(var(--card,222 47% 9%)); color:hsl(var(--fg,210 40% 98%)); font-family:'Inter',sans-serif; font-size:13px; padding:11px 13px; resize:none; outline:none;"></textarea>
+              </div>
+              <div style="position:relative;">
+                <label style="font-size:11.5px; font-weight:600; color:hsl(var(--mfg,215 20% 65%)); display:block; margin-bottom:7px;">Aspect ratio</label>
+                <button onClick="{{ toggleAspect }}" style="width:100%; height:46px; display:flex; align-items:center; gap:12px; padding:0 13px; border:1px solid hsl(var(--bd,217 33% 22%)); border-radius:10px; background:hsl(var(--card,222 47% 9%)); color:hsl(var(--fg,210 40% 98%)); cursor:pointer;">
+                  <span style="width:26px; height:26px; flex:none; display:flex; align-items:center; justify-content:center;"><span style="{{ aspect.shape }}"></span></span>
+                  <span style="flex:1; text-align:left; font-size:13px; font-weight:600;">{{ aspect.ratio }}</span>
+                  <span style="font-size:11.5px; color:hsl(var(--mfg,215 20% 65%)); font-variant-numeric:tabular-nums;">{{ aspect.res }}</span>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--mfg,215 20% 65%))" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+                </button>
+                <sc-if value="{{ aspectOpen }}" hint-placeholder-val="{{ false }}">
+                  <div style="position:absolute; top:74px; left:0; right:0; z-index:50; max-height:280px; overflow-y:auto; padding:6px; border-radius:11px; background:hsl(var(--card,222 47% 9%)); border:1px solid hsl(var(--bd,217 33% 22%)); box-shadow:0 16px 40px rgba(0,0,0,.45);">
+                    <sc-for list="{{ aspects }}" as="a" hint-placeholder-count="8">
+                      <button onClick="{{ a.pick }}" style="{{ a.row }}">
+                        <span style="width:30px; height:30px; flex:none; display:flex; align-items:center; justify-content:center;"><span style="{{ a.shape }}"></span></span>
+                        <div style="flex:1; text-align:left;">
+                          <div style="font-size:12.5px; font-weight:600;">{{ a.ratio }} <span style="font-weight:400; color:hsl(var(--mfg,215 20% 65%));">· {{ a.label }}</span></div>
+                          <div style="font-size:11px; color:hsl(var(--mfg,215 20% 65%)); font-variant-numeric:tabular-nums;">{{ a.res }}</div>
+                        </div>
+                        <sc-if value="{{ a.active }}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--pri,217 91% 60%))" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg></sc-if>
+                      </button>
+                    </sc-for>
+                  </div>
+                </sc-if>
+              </div>
+              <div style="display:flex; align-items:center; justify-content:space-between;">
+                <div>
+                  <div style="font-size:12.5px; font-weight:500;">Prompt optimizer</div>
+                  <div style="font-size:11px; color:hsl(var(--mfg,215 20% 65%));">Enhance prompt before generating</div>
+                </div>
+                <div style="width:40px; height:23px; border-radius:12px; background:hsl(var(--pri,217 91% 60%)); position:relative; cursor:pointer;"><span style="position:absolute; top:2px; right:2px; width:19px; height:19px; border-radius:50%; background:#fff;"></span></div>
+              </div>
+              <div>
+                <label style="font-size:11.5px; font-weight:600; color:hsl(var(--mfg,215 20% 65%)); display:block; margin-bottom:7px;">Batch size</label>
+                <div style="display:flex; gap:7px;">
+                  <button style="width:42px; height:34px; border-radius:8px; border:1px solid hsl(var(--bd,217 33% 22%)); background:transparent; color:hsl(var(--mfg,215 20% 65%)); font-size:12px; cursor:pointer;">1</button>
+                  <button style="width:42px; height:34px; border-radius:8px; border:1px solid hsl(var(--bd,217 33% 22%)); background:transparent; color:hsl(var(--mfg,215 20% 65%)); font-size:12px; cursor:pointer;">2</button>
+                  <button style="width:42px; height:34px; border-radius:8px; border:1px solid hsl(var(--pri,217 91% 60%)); background:hsl(var(--pri,217 91% 60%) / .1); color:hsl(var(--pri,217 91% 60%)); font-size:12px; font-weight:600; cursor:pointer;">4</button>
+                </div>
+              </div>
+            </div>
+            <div style="margin-top:auto; padding:16px 22px 22px;">
+              <button style="width:100%; height:42px; border-radius:11px; border:none; background:hsl(var(--pri,217 91% 60%)); color:hsl(var(--pfg,0 0% 100%)); font-size:13.5px; font-weight:600; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 3v4M3 5h4M6 17v4M4 19h4M13 3l2.5 6.5L22 12l-6.5 2.5L13 21l-2.5-6.5L4 12l6.5-2.5z"/></svg>
+                Generate {{ media.title }}
+              </button>
+            </div>
+          </div>
+          <!-- gallery -->
+          <div style="flex:1; min-width:0; display:flex; flex-direction:column;">
+            <div style="height:52px; flex:none; display:flex; align-items:center; justify-content:space-between; padding:0 24px; border-bottom:1px solid hsl(var(--bd,217 33% 22%));">
+              <span style="font-size:13px; font-weight:600;">Recent generations</span>
+              <span style="font-size:11.5px; color:hsl(var(--mfg,215 20% 65%));">Saved to workspace/generations/{{ media.folder }}</span>
+            </div>
+            <div style="flex:1; overflow-y:auto; padding:24px;">
+              <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:16px;">
+                <sc-for list="{{ tiles }}" as="t" hint-placeholder-count="6">
+                  <div style="aspect-ratio:1; border-radius:12px; border:1px solid hsl(var(--bd,217 33% 22%)); background:{{ t.bg }}; position:relative; overflow:hidden; display:flex; align-items:flex-end; padding:11px;">
+                    <span style="font-size:11px; color:#fff; background:rgba(0,0,0,.45); padding:3px 8px; border-radius:6px; backdrop-filter:blur(4px);">{{ t.label }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- VIDEO -->
+      <sc-if value="{{ isVideo }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1; display:flex; min-height:0;">
+          <!-- controls -->
+          <div style="width:380px; flex:none; display:flex; flex-direction:column; border-right:1px solid hsl(var(--bd,217 33% 22%)); overflow-y:auto; overflow-x:hidden;">
+            <div style="padding:22px 22px 0;">
+              <div style="display:flex; align-items:center; gap:10px; margin-bottom:2px;">
+                <div style="width:34px; height:34px; border-radius:9px; background:hsl(var(--pri,217 91% 60%) / .14); display:flex; align-items:center; justify-content:center; color:hsl(var(--pri,217 91% 60%));"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m22 8-6 4 6 4V8Z"/><rect x="2" y="6" width="14" height="12" rx="2"/></svg></div>
+                <div>
+                  <div style="font-size:15px; font-weight:600;">Video</div>
+                  <div style="font-size:11.5px; color:hsl(var(--mfg,215 20% 65%));">Hailuo 2.3 · up to 1080p</div>
+                </div>
+              </div>
+            </div>
+            <div style="padding:18px 22px; display:flex; flex-direction:column; gap:18px;">
+              <!-- mode toggle -->
+              <div style="display:flex; padding:3px; border-radius:9px; background:hsl(var(--sec,217 33% 17%));">
+                <button style="flex:1; height:30px; border-radius:6px; border:none; cursor:pointer; font-size:12px; font-weight:600; background:hsl(var(--card,222 47% 9%)); color:hsl(var(--fg,210 40% 98%)); box-shadow:0 1px 2px rgba(0,0,0,.2);">Text to Video</button>
+                <button style="flex:1; height:30px; border-radius:6px; border:none; cursor:pointer; font-size:12px; font-weight:500; background:transparent; color:hsl(var(--mfg,215 20% 65%));">Image to Video</button>
+              </div>
+              <!-- first frame upload -->
+              <div>
+                <label style="font-size:11.5px; font-weight:600; color:hsl(var(--mfg,215 20% 65%)); display:block; margin-bottom:7px;">Start frame <span style="font-weight:400;">· optional</span></label>
+                <div style="height:88px; border:1.5px dashed hsl(var(--bd,217 33% 22%)); border-radius:10px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px; cursor:pointer; color:hsl(var(--mfg,215 20% 65%));">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/></svg>
+                  <span style="font-size:11.5px;">Drop image or click to upload</span>
+                </div>
+              </div>
+              <div>
+                <label style="font-size:11.5px; font-weight:600; color:hsl(var(--mfg,215 20% 65%)); display:block; margin-bottom:7px;">Prompt</label>
+                <textarea placeholder="Drone shot flying over neon-lit streets at night, rain reflections, cinematic…" style="width:100%; min-height:84px; border:1px solid hsl(var(--bd,217 33% 22%)); border-radius:10px; background:hsl(var(--card,222 47% 9%)); color:hsl(var(--fg,210 40% 98%)); font-family:'Inter',sans-serif; font-size:13px; padding:11px 13px; resize:none; outline:none;"></textarea>
+              </div>
+              <!-- duration -->
+              <div>
+                <label style="font-size:11.5px; font-weight:600; color:hsl(var(--mfg,215 20% 65%)); display:block; margin-bottom:7px;">Duration</label>
+                <div style="display:flex; gap:7px;">
+                  <button style="flex:1; height:34px; border-radius:8px; border:1px solid hsl(var(--pri,217 91% 60%)); background:hsl(var(--pri,217 91% 60%) / .1); color:hsl(var(--pri,217 91% 60%)); font-size:12px; font-weight:600; cursor:pointer;">6s</button>
+                  <button style="flex:1; height:34px; border-radius:8px; border:1px solid hsl(var(--bd,217 33% 22%)); background:transparent; color:hsl(var(--mfg,215 20% 65%)); font-size:12px; font-weight:500; cursor:pointer;">10s</button>
+                </div>
+              </div>
+              <!-- resolution -->
+              <div>
+                <label style="font-size:11.5px; font-weight:600; color:hsl(var(--mfg,215 20% 65%)); display:block; margin-bottom:7px;">Resolution</label>
+                <div style="display:flex; gap:7px;">
+                  <button style="flex:1; height:34px; border-radius:8px; border:1px solid hsl(var(--bd,217 33% 22%)); background:transparent; color:hsl(var(--mfg,215 20% 65%)); font-size:12px; font-weight:500; cursor:pointer;">768P</button>
+                  <button style="flex:1; height:34px; border-radius:8px; border:1px solid hsl(var(--pri,217 91% 60%)); background:hsl(var(--pri,217 91% 60%) / .1); color:hsl(var(--pri,217 91% 60%)); font-size:12px; font-weight:600; cursor:pointer;">1080P</button>
+                </div>
+              </div>
+              <!-- camera movement -->
+              <div>
+                <label style="font-size:11.5px; font-weight:600; color:hsl(var(--mfg,215 20% 65%)); display:block; margin-bottom:7px;">Camera movement</label>
+                <div style="height:38px; display:flex; align-items:center; justify-content:space-between; padding:0 13px; border:1px solid hsl(var(--bd,217 33% 22%)); border-radius:9px; background:hsl(var(--card,222 47% 9%)); font-size:12.5px; cursor:pointer;">
+                  <span>Push in · slow</span>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--mfg,215 20% 65%))" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+                </div>
+              </div>
+            </div>
+            <div style="margin-top:auto; padding:16px 22px 22px;">
+              <button style="width:100%; height:42px; border-radius:11px; border:none; background:hsl(var(--pri,217 91% 60%)); color:hsl(var(--pfg,0 0% 100%)); font-size:13.5px; font-weight:600; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m22 8-6 4 6 4V8Z"/><rect x="2" y="6" width="14" height="12" rx="2"/></svg>
+                Generate Video
+              </button>
+            </div>
+          </div>
+          <!-- preview + queue -->
+          <div style="flex:1; min-width:0; display:flex; flex-direction:column;">
+            <div style="height:52px; flex:none; display:flex; align-items:center; justify-content:space-between; padding:0 24px; border-bottom:1px solid hsl(var(--bd,217 33% 22%));">
+              <span style="font-size:13px; font-weight:600;">Preview</span>
+              <span style="font-size:11.5px; color:hsl(var(--mfg,215 20% 65%));">Saved to workspace/generations/videos/</span>
+            </div>
+            <div style="flex:1; overflow-y:auto; padding:24px;">
+              <!-- player -->
+              <div style="max-width:720px; margin:0 auto;">
+                <div style="aspect-ratio:16/9; border-radius:14px; overflow:hidden; position:relative; background:linear-gradient(135deg,#0b1e3a,#1d4ed8 60%,#7c3aed); border:1px solid hsl(var(--bd,217 33% 22%)); display:flex; align-items:center; justify-content:center;">
+                  <button style="width:62px; height:62px; border-radius:50%; border:none; background:rgba(255,255,255,.9); display:flex; align-items:center; justify-content:center; cursor:pointer; box-shadow:0 4px 16px rgba(0,0,0,.3);">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="#111" style="margin-left:3px;"><path d="M8 5v14l11-7z"/></svg>
+                  </button>
+                  <span style="position:absolute; top:12px; left:14px; font-size:11px; font-weight:600; color:#fff; background:rgba(0,0,0,.45); padding:3px 9px; border-radius:6px; backdrop-filter:blur(4px);">1080P · 16:9 · 6s</span>
+                </div>
+                <!-- scrubber -->
+                <div style="display:flex; align-items:center; gap:12px; margin-top:14px;">
+                  <button style="width:34px; height:34px; flex:none; border-radius:9px; border:none; background:hsl(var(--pri,217 91% 60%)); color:hsl(var(--pfg,0 0% 100%)); display:flex; align-items:center; justify-content:center; cursor:pointer;"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" style="margin-left:1px;"><path d="M8 5v14l11-7z"/></svg></button>
+                  <span style="font-size:11.5px; font-variant-numeric:tabular-nums; color:hsl(var(--mfg,215 20% 65%));">0:02</span>
+                  <div style="flex:1; height:5px; border-radius:3px; background:hsl(var(--sec,217 33% 17%)); position:relative;">
+                    <div style="position:absolute; left:0; top:0; height:100%; width:34%; border-radius:3px; background:hsl(var(--pri,217 91% 60%));"></div>
+                    <div style="position:absolute; left:34%; top:50%; transform:translate(-50%,-50%); width:13px; height:13px; border-radius:50%; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.4);"></div>
+                  </div>
+                  <span style="font-size:11.5px; font-variant-numeric:tabular-nums; color:hsl(var(--mfg,215 20% 65%));">0:06</span>
+                  <button style="width:34px; height:34px; flex:none; border-radius:9px; border:1px solid hsl(var(--bd,217 33% 22%)); background:transparent; color:hsl(var(--fg,210 40% 98%)); display:flex; align-items:center; justify-content:center; cursor:pointer;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+                </div>
+              </div>
+              <!-- render queue -->
+              <div style="max-width:720px; margin:26px auto 0;">
+                <div style="font-size:12px; font-weight:600; color:hsl(var(--mfg,215 20% 65%)); margin-bottom:12px;">Render queue</div>
+                <!-- rendering job -->
+                <div style="display:flex; align-items:center; gap:13px; padding:12px; border:1px solid hsl(var(--pri,217 91% 60%) / .35); border-radius:11px; background:hsl(var(--pri,217 91% 60%) / .06); margin-bottom:10px;">
+                  <div style="width:64px; height:40px; flex:none; border-radius:7px; background:linear-gradient(135deg,#3b0764,#a855f7); display:flex; align-items:center; justify-content:center;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" style="animation:mmspin 1s linear infinite;"><path d="M21 12a9 9 0 1 1-6.2-8.5"/></svg></div>
+                  <div style="flex:1; min-width:0;">
+                    <div style="font-size:12.5px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Neon city flythrough, rain reflections</div>
+                    <div style="margin-top:7px; height:5px; border-radius:3px; background:hsl(var(--sec,217 33% 17%)); overflow:hidden;"><div style="width:64%; height:100%; background:hsl(var(--pri,217 91% 60%));"></div></div>
+                  </div>
+                  <span style="font-size:11px; font-variant-numeric:tabular-nums; color:hsl(var(--pri,217 91% 60%)); font-weight:600;">64%</span>
+                </div>
+                <!-- finished -->
+                <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:12px;">
+                  <sc-for list="{{ videoClips }}" as="t" hint-placeholder-count="3">
+                    <div style="aspect-ratio:16/9; border-radius:10px; border:1px solid hsl(var(--bd,217 33% 22%)); background:{{ t.bg }}; position:relative; overflow:hidden; display:flex; align-items:center; justify-content:center; cursor:pointer;">
+                      <svg width="26" height="26" viewBox="0 0 24 24" fill="rgba(255,255,255,.92)"><path d="M8 5v14l11-7z"/></svg>
+                      <span style="position:absolute; bottom:7px; right:8px; font-size:10px; color:#fff; background:rgba(0,0,0,.5); padding:1px 6px; border-radius:5px;">{{ t.dur }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- MUSIC -->
+      <sc-if value="{{ isMusic }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1; display:flex; min-height:0;">
+          <!-- controls -->
+          <div style="width:380px; flex:none; display:flex; flex-direction:column; border-right:1px solid hsl(var(--bd,217 33% 22%)); overflow-y:auto; overflow-x:hidden;">
+            <div style="padding:22px 22px 0;">
+              <div style="display:flex; align-items:center; gap:10px;">
+                <div style="width:34px; height:34px; border-radius:9px; background:hsl(var(--pri,217 91% 60%) / .14); display:flex; align-items:center; justify-content:center; color:hsl(var(--pri,217 91% 60%));"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></div>
+                <div>
+                  <div style="font-size:15px; font-weight:600;">Music</div>
+                  <div style="font-size:11.5px; color:hsl(var(--mfg,215 20% 65%));">Lyrics & prompt to song</div>
+                </div>
+              </div>
+            </div>
+            <div style="padding:18px 22px; display:flex; flex-direction:column; gap:18px;">
+              <div style="display:flex; padding:3px; border-radius:9px; background:hsl(var(--sec,217 33% 17%));">
+                <button style="flex:1; height:30px; border-radius:6px; border:none; cursor:pointer; font-size:12px; font-weight:600; background:hsl(var(--card,222 47% 9%)); color:hsl(var(--fg,210 40% 98%)); box-shadow:0 1px 2px rgba(0,0,0,.2);">Lyrics</button>
+                <button style="flex:1; height:30px; border-radius:6px; border:none; cursor:pointer; font-size:12px; font-weight:500; background:transparent; color:hsl(var(--mfg,215 20% 65%));">Instrumental</button>
+              </div>
+              <!-- lyrics -->
+              <div>
+                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:7px;">
+                  <label style="font-size:11.5px; font-weight:600; color:hsl(var(--mfg,215 20% 65%));">Lyrics</label>
+                  <button style="font-size:11px; color:hsl(var(--pri,217 91% 60%)); background:transparent; border:none; cursor:pointer; display:flex; align-items:center; gap:4px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44A2.5 2.5 0 0 1 2.5 17.5"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44A2.5 2.5 0 0 0 21.5 17.5"/></svg>Write for me</button>
+                </div>
+                <textarea style="width:100%; min-height:148px; border:1px solid hsl(var(--bd,217 33% 22%)); border-radius:10px; background:hsl(var(--card,222 47% 9%)); color:hsl(var(--fg,210 40% 98%)); font-family:'Inter',sans-serif; font-size:13px; line-height:1.6; padding:11px 13px; resize:none; outline:none;">[Verse]
+City lights are calling out my name
+[Chorus]
+We don't have to find our way back home</textarea>
+              </div>
+              <!-- style chips -->
+              <div>
+                <label style="font-size:11.5px; font-weight:600; color:hsl(var(--mfg,215 20% 65%)); display:block; margin-bottom:8px;">Style</label>
+                <div style="display:flex; flex-wrap:wrap; gap:7px;">
+                  <span style="font-size:11.5px; font-weight:500; padding:5px 11px; border-radius:8px; background:hsl(var(--pri,217 91% 60%) / .12); color:hsl(var(--pri,217 91% 60%)); display:inline-flex; align-items:center; gap:5px;">synth-pop <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg></span>
+                  <span style="font-size:11.5px; font-weight:500; padding:5px 11px; border-radius:8px; background:hsl(var(--pri,217 91% 60%) / .12); color:hsl(var(--pri,217 91% 60%)); display:inline-flex; align-items:center; gap:5px;">dreamy <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg></span>
+                  <span style="font-size:11.5px; font-weight:500; padding:5px 11px; border-radius:8px; background:hsl(var(--sec,217 33% 17%)); color:hsl(var(--mfg,215 20% 65%)); border:1px dashed hsl(var(--bd,217 33% 22%));">+ add</span>
+                </div>
+              </div>
+              <!-- duration -->
+              <div>
+                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+                  <label style="font-size:11.5px; font-weight:600; color:hsl(var(--mfg,215 20% 65%));">Duration</label>
+                  <span style="font-size:11.5px; font-variant-numeric:tabular-nums; color:hsl(var(--fg,210 40% 98%));">2:30</span>
+                </div>
+                <div style="height:5px; border-radius:3px; background:hsl(var(--sec,217 33% 17%)); position:relative;">
+                  <div style="position:absolute; left:0; top:0; height:100%; width:55%; border-radius:3px; background:hsl(var(--pri,217 91% 60%));"></div>
+                  <div style="position:absolute; left:55%; top:50%; transform:translate(-50%,-50%); width:14px; height:14px; border-radius:50%; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.4);"></div>
+                </div>
+              </div>
+            </div>
+            <div style="margin-top:auto; padding:16px 22px 22px;">
+              <button style="width:100%; height:42px; border-radius:11px; border:none; background:hsl(var(--pri,217 91% 60%)); color:hsl(var(--pfg,0 0% 100%)); font-size:13.5px; font-weight:600; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+                Compose
+              </button>
+            </div>
+          </div>
+          <!-- tracks -->
+          <div style="flex:1; min-width:0; display:flex; flex-direction:column;">
+            <div style="height:52px; flex:none; display:flex; align-items:center; justify-content:space-between; padding:0 24px; border-bottom:1px solid hsl(var(--bd,217 33% 22%));">
+              <span style="font-size:13px; font-weight:600;">Tracks</span>
+              <span style="font-size:11.5px; color:hsl(var(--mfg,215 20% 65%));">Saved to workspace/generations/music/</span>
+            </div>
+            <div style="flex:1; overflow-y:auto; padding:20px 24px; display:flex; flex-direction:column; gap:12px;">
+              <!-- generating -->
+              <div style="display:flex; align-items:center; gap:14px; padding:14px; border:1px solid hsl(var(--pri,217 91% 60%) / .35); border-radius:13px; background:hsl(var(--pri,217 91% 60%) / .06);">
+                <div style="width:46px; height:46px; flex:none; border-radius:10px; background:linear-gradient(135deg,#1e1b4b,#6366f1); display:flex; align-items:center; justify-content:center;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" style="animation:mmspin 1s linear infinite;"><path d="M21 12a9 9 0 1 1-6.2-8.5"/></svg></div>
+                <div style="flex:1; min-width:0;">
+                  <div style="font-size:13px; font-weight:600;">City Lights <span style="font-weight:400; color:hsl(var(--mfg,215 20% 65%));">· synth-pop</span></div>
+                  <div style="margin-top:8px; height:5px; border-radius:3px; background:hsl(var(--sec,217 33% 17%)); overflow:hidden;"><div style="width:38%; height:100%; background:hsl(var(--pri,217 91% 60%));"></div></div>
+                </div>
+                <span style="font-size:11px; color:hsl(var(--pri,217 91% 60%)); font-weight:600;">Composing…</span>
+              </div>
+              <!-- finished tracks -->
+              <sc-for list="{{ tracks }}" as="tr" hint-placeholder-count="3">
+                <div style="display:flex; align-items:center; gap:14px; padding:14px; border:1px solid hsl(var(--bd,217 33% 22%)); border-radius:13px; background:hsl(var(--card,222 47% 9%));">
+                  <button style="width:46px; height:46px; flex:none; border-radius:10px; border:none; background:{{ tr.bg }}; display:flex; align-items:center; justify-content:center; cursor:pointer;"><svg width="18" height="18" viewBox="0 0 24 24" fill="#fff" style="margin-left:2px;"><path d="M8 5v14l11-7z"/></svg></button>
+                  <div style="flex:1; min-width:0;">
+                    <div style="font-size:13px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ tr.title }} <span style="font-weight:400; color:hsl(var(--mfg,215 20% 65%));">· {{ tr.genre }}</span></div>
+                    <div style="display:flex; align-items:center; gap:2px; height:26px; margin-top:6px;">
+                      <sc-for list="{{ wave }}" as="b" hint-placeholder-count="40"><span style="{{ b.style }}"></span></sc-for>
+                    </div>
+                  </div>
+                  <span style="font-size:11.5px; font-variant-numeric:tabular-nums; color:hsl(var(--mfg,215 20% 65%));">{{ tr.dur }}</span>
+                  <button style="width:32px; height:32px; flex:none; border-radius:8px; border:1px solid hsl(var(--bd,217 33% 22%)); background:transparent; color:hsl(var(--mfg,215 20% 65%)); display:flex; align-items:center; justify-content:center; cursor:pointer;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- SPEECH / TTS -->
+      <sc-if value="{{ isTts }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1; display:flex; min-height:0;">
+          <!-- controls -->
+          <div style="width:400px; flex:none; display:flex; flex-direction:column; border-right:1px solid hsl(var(--bd,217 33% 22%)); overflow-y:auto; overflow-x:hidden;">
+            <div style="padding:22px 22px 0;">
+              <div style="display:flex; align-items:center; gap:10px;">
+                <div style="width:34px; height:34px; border-radius:9px; background:hsl(var(--pri,217 91% 60%) / .14); display:flex; align-items:center; justify-content:center; color:hsl(var(--pri,217 91% 60%));"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19.1 4.9a10 10 0 0 1 0 14.2"/></svg></div>
+                <div>
+                  <div style="font-size:15px; font-weight:600;">Speech</div>
+                  <div style="font-size:11.5px; color:hsl(var(--mfg,215 20% 65%));">Text to speech · 30+ voices</div>
+                </div>
+              </div>
+            </div>
+            <div style="padding:18px 22px; display:flex; flex-direction:column; gap:18px;">
+              <!-- text -->
+              <div>
+                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:7px;">
+                  <label style="font-size:11.5px; font-weight:600; color:hsl(var(--mfg,215 20% 65%));">Text</label>
+                  <span style="font-size:11px; color:hsl(var(--mfg,215 20% 65%)); font-variant-numeric:tabular-nums;">128 / 5000</span>
+                </div>
+                <textarea style="width:100%; min-height:120px; border:1px solid hsl(var(--bd,217 33% 22%)); border-radius:10px; background:hsl(var(--card,222 47% 9%)); color:hsl(var(--fg,210 40% 98%)); font-family:'Inter',sans-serif; font-size:13px; line-height:1.6; padding:11px 13px; resize:none; outline:none;">Welcome to MiniMax Studio. Everything you build, generate, and ship — now in one native workspace.</textarea>
+              </div>
+              <!-- voice -->
+              <div>
+                <label style="font-size:11.5px; font-weight:600; color:hsl(var(--mfg,215 20% 65%)); display:block; margin-bottom:8px;">Voice</label>
+                <div style="display:flex; flex-direction:column; gap:7px;">
+                  <sc-for list="{{ voices }}" as="v" hint-placeholder-count="4">
+                    <button onClick="{{ v.pick }}" style="{{ v.style }}">
+                      <span style="{{ v.avatar }}">{{ v.initials }}</span>
+                      <div style="flex:1; min-width:0; text-align:left;">
+                        <div style="font-size:12.5px; font-weight:600;">{{ v.name }}</div>
+                        <div style="font-size:11px; color:hsl(var(--mfg,215 20% 65%));">{{ v.tags }}</div>
+                      </div>
+                      <span style="width:28px; height:28px; flex:none; border-radius:7px; background:hsl(var(--sec,217 33% 17%)); display:flex; align-items:center; justify-content:center; color:hsl(var(--fg,210 40% 98%));"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style="margin-left:1px;"><path d="M8 5v14l11-7z"/></svg></span>
+                    </button>
+                  </sc-for>
+                </div>
+              </div>
+              <!-- speed -->
+              <div>
+                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+                  <label style="font-size:11.5px; font-weight:600; color:hsl(var(--mfg,215 20% 65%));">Speed</label>
+                  <span style="font-size:11.5px; font-variant-numeric:tabular-nums; color:hsl(var(--fg,210 40% 98%));">1.0×</span>
+                </div>
+                <div style="height:5px; border-radius:3px; background:hsl(var(--sec,217 33% 17%)); position:relative;">
+                  <div style="position:absolute; left:0; top:0; height:100%; width:50%; border-radius:3px; background:hsl(var(--pri,217 91% 60%));"></div>
+                  <div style="position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:14px; height:14px; border-radius:50%; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.4);"></div>
+                </div>
+              </div>
+              <!-- emotion -->
+              <div>
+                <label style="font-size:11.5px; font-weight:600; color:hsl(var(--mfg,215 20% 65%)); display:block; margin-bottom:7px;">Emotion</label>
+                <div style="display:flex; flex-wrap:wrap; gap:7px;">
+                  <button style="font-size:11.5px; font-weight:600; padding:6px 12px; border-radius:8px; border:1px solid hsl(var(--pri,217 91% 60%)); background:hsl(var(--pri,217 91% 60%) / .1); color:hsl(var(--pri,217 91% 60%)); cursor:pointer;">Neutral</button>
+                  <button style="font-size:11.5px; font-weight:500; padding:6px 12px; border-radius:8px; border:1px solid hsl(var(--bd,217 33% 22%)); background:transparent; color:hsl(var(--mfg,215 20% 65%)); cursor:pointer;">Happy</button>
+                  <button style="font-size:11.5px; font-weight:500; padding:6px 12px; border-radius:8px; border:1px solid hsl(var(--bd,217 33% 22%)); background:transparent; color:hsl(var(--mfg,215 20% 65%)); cursor:pointer;">Calm</button>
+                  <button style="font-size:11.5px; font-weight:500; padding:6px 12px; border-radius:8px; border:1px solid hsl(var(--bd,217 33% 22%)); background:transparent; color:hsl(var(--mfg,215 20% 65%)); cursor:pointer;">Serious</button>
+                </div>
+              </div>
+            </div>
+            <div style="margin-top:auto; padding:16px 22px 22px;">
+              <button style="width:100%; height:42px; border-radius:11px; border:none; background:hsl(var(--pri,217 91% 60%)); color:hsl(var(--pfg,0 0% 100%)); font-size:13.5px; font-weight:600; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg>
+                Generate Speech
+              </button>
+            </div>
+          </div>
+          <!-- clips -->
+          <div style="flex:1; min-width:0; display:flex; flex-direction:column;">
+            <div style="height:52px; flex:none; display:flex; align-items:center; justify-content:space-between; padding:0 24px; border-bottom:1px solid hsl(var(--bd,217 33% 22%));">
+              <span style="font-size:13px; font-weight:600;">History</span>
+              <span style="font-size:11.5px; color:hsl(var(--mfg,215 20% 65%));">Saved to workspace/generations/tts/</span>
+            </div>
+            <div style="flex:1; overflow-y:auto; padding:20px 24px; display:flex; flex-direction:column; gap:12px;">
+              <sc-for list="{{ clips }}" as="c" hint-placeholder-count="4">
+                <div style="border:1px solid hsl(var(--bd,217 33% 22%)); border-radius:13px; background:hsl(var(--card,222 47% 9%)); padding:14px 16px;">
+                  <div style="display:flex; align-items:center; gap:12px; margin-bottom:11px;">
+                    <span style="{{ c.avatar }}">{{ c.initials }}</span>
+                    <span style="font-size:12.5px; font-weight:600;">{{ c.voice }}</span>
+                    <span style="font-size:11px; color:hsl(var(--mfg,215 20% 65%));">{{ c.meta }}</span>
+                    <span style="flex:1;"></span>
+                    <span style="font-size:11.5px; font-variant-numeric:tabular-nums; color:hsl(var(--mfg,215 20% 65%));">{{ c.dur }}</span>
+                  </div>
+                  <div style="font-size:12.5px; color:hsl(var(--mfg,215 20% 65%)); line-height:1.5; margin-bottom:12px;">{{ c.text }}</div>
+                  <div style="display:flex; align-items:center; gap:12px;">
+                    <button style="width:34px; height:34px; flex:none; border-radius:9px; border:none; background:hsl(var(--pri,217 91% 60%)); color:hsl(var(--pfg,0 0% 100%)); display:flex; align-items:center; justify-content:center; cursor:pointer;"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" style="margin-left:1px;"><path d="M8 5v14l11-7z"/></svg></button>
+                    <div style="flex:1; display:flex; align-items:center; gap:2px; height:30px;">
+                      <sc-for list="{{ wave }}" as="b" hint-placeholder-count="40"><span style="{{ b.style }}"></span></sc-for>
+                    </div>
+                    <button style="width:32px; height:32px; flex:none; border-radius:8px; border:1px solid hsl(var(--bd,217 33% 22%)); background:transparent; color:hsl(var(--mfg,215 20% 65%)); display:flex; align-items:center; justify-content:center; cursor:pointer;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- TASKS -->
+      <sc-if value="{{ isTasks }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1; display:flex; flex-direction:column; min-height:0;">
+          <div style="height:52px; flex:none; display:flex; align-items:center; justify-content:space-between; padding:0 24px; border-bottom:1px solid hsl(var(--bd,217 33% 22%));">
+            <span style="font-size:15px; font-weight:600;">Task Board</span>
+            <button style="display:flex; align-items:center; gap:7px; height:32px; padding:0 12px; border-radius:8px; border:none; background:hsl(var(--pri,217 91% 60%)); color:hsl(var(--pfg,0 0% 100%)); cursor:pointer; font-size:12.5px; font-weight:600;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>New Task</button>
+          </div>
+          <div style="flex:1; overflow:auto; padding:24px; display:flex; gap:18px; align-items:flex-start;">
+            <sc-for list="{{ columns }}" as="col" hint-placeholder-count="3">
+              <div style="flex:1; min-width:280px; max-width:360px;">
+                <div style="display:flex; align-items:center; gap:8px; margin-bottom:13px; padding:0 4px;">
+                  <span style="width:9px; height:9px; border-radius:50%; background:{{ col.dot }};"></span>
+                  <span style="font-size:12.5px; font-weight:600;">{{ col.title }}</span>
+                  <span style="font-size:11px; color:hsl(var(--mfg,215 20% 65%)); background:hsl(var(--sec,217 33% 17%)); padding:1px 7px; border-radius:10px;">{{ col.count }}</span>
+                </div>
+                <div style="display:flex; flex-direction:column; gap:10px;">
+                  <sc-for list="{{ col.cards }}" as="card" hint-placeholder-count="3">
+                    <div style="border:1px solid hsl(var(--bd,217 33% 22%)); border-radius:11px; background:hsl(var(--card,222 47% 9%)); padding:13px;">
+                      <div style="font-size:13px; font-weight:500; margin-bottom:8px; line-height:1.4;">{{ card.title }}</div>
+                      <div style="display:flex; align-items:center; justify-content:space-between;">
+                        <span style="{{ card.tagStyle }}">{{ card.tag }}</span>
+                        <span style="font-size:11px; color:hsl(var(--mfg,215 20% 65%)); font-family:'JetBrains Mono',monospace;">{{ card.id }}</span>
+                      </div>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- SETTINGS -->
+      <sc-if value="{{ isSettings }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1; overflow-y:auto;">
+          <div style="max-width:780px; margin:0 auto; padding:36px 32px 60px;">
+            <div style="font-size:22px; font-weight:700; letter-spacing:-.02em; margin-bottom:4px;">Settings</div>
+            <div style="font-size:13px; color:hsl(var(--mfg,215 20% 65%)); margin-bottom:32px;">Personalize appearance, models, and API access.</div>
+
+            <!-- Appearance -->
+            <div style="font-size:13px; font-weight:600; margin-bottom:14px; display:flex; align-items:center; gap:8px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--pri,217 91% 60%))" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>Appearance</div>
+
+            <div style="border:1px solid hsl(var(--bd,217 33% 22%)); border-radius:14px; background:hsl(var(--card,222 47% 9%)); padding:20px; margin-bottom:24px;">
+              <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:18px;">
+                <div>
+                  <div style="font-size:13px; font-weight:500;">Mode</div>
+                  <div style="font-size:11.5px; color:hsl(var(--mfg,215 20% 65%));">Switch between light and dark</div>
+                </div>
+                <div style="display:flex; padding:3px; border-radius:9px; background:hsl(var(--sec,217 33% 17%));">
+                  <button onClick="{{ setLight }}" style="{{ modeToggle.light }}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>Light</button>
+                  <button onClick="{{ setDark }}" style="{{ modeToggle.dark }}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>Dark</button>
+                </div>
+              </div>
+              <div style="font-size:13px; font-weight:500; margin-bottom:4px;">Theme</div>
+              <div style="font-size:11.5px; color:hsl(var(--mfg,215 20% 65%)); margin-bottom:14px;">9 curated palettes — applied instantly across the app</div>
+              <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:10px;">
+                <sc-for list="{{ themeCards }}" as="th" hint-placeholder-count="9">
+                  <button onClick="{{ th.pick }}" style="{{ th.style }}">
+                    <div style="display:flex; gap:5px;">
+                      <span style="width:22px; height:22px; border-radius:6px; background:{{ th.swA }};"></span>
+                      <span style="width:22px; height:22px; border-radius:6px; background:{{ th.swB }};"></span>
+                      <span style="width:22px; height:22px; border-radius:6px; background:{{ th.swC }};"></span>
+                    </div>
+                    <span style="font-size:12px; font-weight:500;">{{ th.name }}</span>
+                    <sc-if value="{{ th.active }}" hint-placeholder-val="{{ false }}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--pri,217 91% 60%))" stroke-width="2.4" style="position:absolute; top:9px; right:9px;"><circle cx="12" cy="12" r="10" fill="hsl(var(--pri,217 91% 60%) / .14)"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg></sc-if>
+                  </button>
+                </sc-for>
+              </div>
+            </div>
+
+            <!-- Models -->
+            <div style="font-size:13px; font-weight:600; margin-bottom:14px; display:flex; align-items:center; gap:8px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--pri,217 91% 60%))" stroke-width="2"><path d="M12 3 4 9v6l8 6 8-6V9z"/></svg>Default model</div>
+            <div style="border:1px solid hsl(var(--bd,217 33% 22%)); border-radius:14px; background:hsl(var(--card,222 47% 9%)); padding:8px; margin-bottom:24px;">
+              <sc-for list="{{ models }}" as="m" hint-placeholder-count="3">
+                <button onClick="{{ m.pick }}" style="{{ m.rowStyle }}">
+                  <div style="display:flex; flex-direction:column; align-items:flex-start; gap:2px;">
+                    <span style="font-size:13px; font-weight:600;">{{ m.name }}</span>
+                    <span style="font-size:11.5px; color:hsl(var(--mfg,215 20% 65%));">{{ m.desc }}</span>
+                  </div>
+                  <span style="{{ m.radio }}"></span>
+                </button>
+              </sc-for>
+            </div>
+
+            <!-- API -->
+            <div style="font-size:13px; font-weight:600; margin-bottom:14px; display:flex; align-items:center; gap:8px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--pri,217 91% 60%))" stroke-width="2"><path d="M2 18v3c0 .6.4 1 1 1h4v-3h3v-3h2l1.4-1.4a6.5 6.5 0 1 0-4-4Z"/><circle cx="16.5" cy="7.5" r="1"/></svg>API key</div>
+            <div style="border:1px solid hsl(var(--bd,217 33% 22%)); border-radius:14px; background:hsl(var(--card,222 47% 9%)); padding:20px;">
+              <label style="font-size:11.5px; font-weight:600; color:hsl(var(--mfg,215 20% 65%)); display:block; margin-bottom:8px;">MiniMax API key</label>
+              <div style="display:flex; gap:9px;">
+                <div style="flex:1; height:40px; display:flex; align-items:center; padding:0 13px; border:1px solid hsl(var(--bd,217 33% 22%)); border-radius:9px; background:hsl(var(--bg,222 47% 7%)); font-family:'JetBrains Mono',monospace; font-size:12.5px; color:hsl(var(--mfg,215 20% 65%));">sk-mm-••••••••••••••••••••8f2a</div>
+                <button style="height:40px; padding:0 16px; border-radius:9px; border:1px solid hsl(var(--bd,217 33% 22%)); background:transparent; color:hsl(var(--fg,210 40% 98%)); font-size:12.5px; font-weight:500; cursor:pointer;">Update</button>
+              </div>
+              <div style="display:flex; align-items:center; gap:7px; margin-top:12px; font-size:11.5px; color:hsl(var(--suc,142 71% 45%));"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg>Connected · stored locally in config.yaml</div>
+            </div>
+
+            <!-- Language & region -->
+            <div style="font-size:13px; font-weight:600; margin:28px 0 14px; display:flex; align-items:center; gap:8px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--pri,217 91% 60%))" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20Z"/></svg>Language &amp; region</div>
+            <div style="border:1px solid hsl(var(--bd,217 33% 22%)); border-radius:14px; background:hsl(var(--card,222 47% 9%)); overflow:hidden; margin-bottom:24px;">
+              <div style="display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid hsl(var(--bd,217 33% 22%));">
+                <div><div style="font-size:13px; font-weight:500;">Interface language</div><div style="font-size:11.5px; color:hsl(var(--mfg,215 20% 65%));">Affects all menus and labels</div></div>
+                <div style="height:36px; display:flex; align-items:center; gap:9px; padding:0 13px; border:1px solid hsl(var(--bd,217 33% 22%)); border-radius:9px; background:hsl(var(--bg,222 47% 7%)); font-size:12.5px; cursor:pointer;">Português (BR)<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--mfg,215 20% 65%))" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></div>
+              </div>
+              <div style="display:flex; align-items:center; justify-content:space-between; padding:16px 20px;">
+                <div><div style="font-size:13px; font-weight:500;">API endpoint</div><div style="font-size:11.5px; color:hsl(var(--mfg,215 20% 65%));">Route requests to the nearest region</div></div>
+                <div style="height:36px; display:flex; align-items:center; gap:9px; padding:0 13px; border:1px solid hsl(var(--bd,217 33% 22%)); border-radius:9px; background:hsl(var(--bg,222 47% 7%)); font-size:12.5px; cursor:pointer;">Global · api.minimax.io<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--mfg,215 20% 65%))" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></div>
+              </div>
+            </div>
+
+            <!-- Generation defaults -->
+            <div style="font-size:13px; font-weight:600; margin-bottom:14px; display:flex; align-items:center; gap:8px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--pri,217 91% 60%))" stroke-width="2"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/><circle cx="12" cy="12" r="3"/></svg>Generation defaults</div>
+            <div style="border:1px solid hsl(var(--bd,217 33% 22%)); border-radius:14px; background:hsl(var(--card,222 47% 9%)); overflow:hidden; margin-bottom:24px;">
+              <div style="display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid hsl(var(--bd,217 33% 22%));">
+                <div><div style="font-size:13px; font-weight:500;">Output folder</div><div style="font-size:11.5px; color:hsl(var(--mfg,215 20% 65%)); font-family:'JetBrains Mono',monospace;">~/MiniMax/workspace/generations</div></div>
+                <button style="height:34px; padding:0 14px; border-radius:8px; border:1px solid hsl(var(--bd,217 33% 22%)); background:transparent; color:hsl(var(--fg,210 40% 98%)); font-size:12px; font-weight:500; cursor:pointer;">Change…</button>
+              </div>
+              <div style="display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid hsl(var(--bd,217 33% 22%));">
+                <div><div style="font-size:13px; font-weight:500;">Prompt optimizer</div><div style="font-size:11.5px; color:hsl(var(--mfg,215 20% 65%));">Enhance prompts before generating by default</div></div>
+                <div style="width:40px; height:23px; border-radius:12px; background:hsl(var(--pri,217 91% 60%)); position:relative; cursor:pointer;"><span style="position:absolute; top:2px; right:2px; width:19px; height:19px; border-radius:50%; background:#fff;"></span></div>
+              </div>
+              <div style="display:flex; align-items:center; justify-content:space-between; padding:16px 20px;">
+                <div><div style="font-size:13px; font-weight:500;">Auto-save generations</div><div style="font-size:11.5px; color:hsl(var(--mfg,215 20% 65%));">Keep every render in the workspace history</div></div>
+                <div style="width:40px; height:23px; border-radius:12px; background:hsl(var(--pri,217 91% 60%)); position:relative; cursor:pointer;"><span style="position:absolute; top:2px; right:2px; width:19px; height:19px; border-radius:50%; background:#fff;"></span></div>
+              </div>
+            </div>
+
+            <!-- MCP servers -->
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
+              <div style="font-size:13px; font-weight:600; display:flex; align-items:center; gap:8px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--pri,217 91% 60%))" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><path d="M6 6h.01M6 18h.01"/></svg>MCP servers</div>
+              <button style="display:flex; align-items:center; gap:6px; height:30px; padding:0 11px; border-radius:8px; border:1px solid hsl(var(--bd,217 33% 22%)); background:transparent; color:hsl(var(--fg,210 40% 98%)); font-size:12px; font-weight:500; cursor:pointer;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>Add server</button>
+            </div>
+            <div style="border:1px solid hsl(var(--bd,217 33% 22%)); border-radius:14px; background:hsl(var(--card,222 47% 9%)); overflow:hidden; margin-bottom:24px;">
+              <sc-for list="{{ mcpServers }}" as="mc" hint-placeholder-count="3">
+                <div style="{{ mc.row }}">
+                  <span style="width:34px; height:34px; flex:none; border-radius:9px; background:hsl(var(--sec,217 33% 17%)); display:flex; align-items:center; justify-content:center; font-family:'JetBrains Mono',monospace; font-size:12px; font-weight:700; color:hsl(var(--pri,217 91% 60%));">{{ mc.glyph }}</span>
+                  <div style="flex:1; min-width:0;"><div style="font-size:13px; font-weight:500;">{{ mc.name }}</div><div style="font-size:11.5px; color:hsl(var(--mfg,215 20% 65%)); font-family:'JetBrains Mono',monospace; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ mc.cmd }}</div></div>
+                  <span style="{{ mc.badge }}">{{ mc.status }}</span>
+                  <div style="width:38px; height:22px; border-radius:11px; flex:none; background:{{ mc.toggleBg }}; position:relative; cursor:pointer;"><span style="{{ mc.knob }}"></span></div>
+                </div>
+              </sc-for>
+            </div>
+
+            <!-- About -->
+            <div style="font-size:13px; font-weight:600; margin-bottom:14px; display:flex; align-items:center; gap:8px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--pri,217 91% 60%))" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>About</div>
+            <div style="border:1px solid hsl(var(--bd,217 33% 22%)); border-radius:14px; background:hsl(var(--card,222 47% 9%)); padding:18px 20px; display:flex; align-items:center; gap:14px;">
+              <div style="width:40px; height:40px; flex:none; border-radius:10px; background:linear-gradient(135deg, hsl(var(--pri,217 91% 60%)), hsl(var(--pri,217 91% 60%) / .55)); display:flex; align-items:center; justify-content:center;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--pfg,0 0% 100%))" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V7l5 5 3-4 3 4 5-5v12"/></svg></div>
+              <div style="flex:1;"><div style="font-size:13px; font-weight:600;">MiniMax Studio</div><div style="font-size:11.5px; color:hsl(var(--mfg,215 20% 65%));">Version 1.0.0 · up to date</div></div>
+              <button style="height:34px; padding:0 14px; border-radius:8px; border:1px solid hsl(var(--bd,217 33% 22%)); background:transparent; color:hsl(var(--fg,210 40% 98%)); font-size:12px; font-weight:500; cursor:pointer;">Check for updates</button>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+    </main>
+  </div>
+
+  <!-- ============ COMMAND PALETTE ============ -->
+  <sc-if value="{{ paletteOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closePalette }}" style="position:absolute; inset:0; z-index:80; background:rgba(0,0,0,.5); backdrop-filter:blur(3px); display:flex; align-items:flex-start; justify-content:center; padding-top:90px; animation:mmfade .12s ease;">
+      <div onClick="{{ stop }}" style="width:560px; max-width:92%; border-radius:16px; border:1px solid hsl(var(--bd,217 33% 22%)); background:hsl(var(--card,222 47% 9%)); box-shadow:0 24px 64px rgba(0,0,0,.5); overflow:hidden;">
+        <div style="display:flex; align-items:center; gap:12px; padding:15px 18px; border-bottom:1px solid hsl(var(--bd,217 33% 22%));">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--mfg,215 20% 65%))" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          <input autofocus placeholder="Search panels, actions, conversations…" style="flex:1; border:none; outline:none; background:transparent; color:hsl(var(--fg,210 40% 98%)); font-family:'Inter',sans-serif; font-size:14.5px;"/>
+          <kbd style="font-size:10.5px; font-weight:600; padding:2px 6px; border-radius:5px; background:hsl(var(--sec,217 33% 17%)); border:1px solid hsl(var(--bd,217 33% 22%)); color:hsl(var(--mfg,215 20% 65%));">ESC</kbd>
+        </div>
+        <div style="padding:8px; max-height:340px; overflow-y:auto;">
+          <div style="font-size:10.5px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:hsl(var(--mfg,215 20% 65%)); padding:8px 12px 5px;">Navigate</div>
+          <sc-for list="{{ paletteItems }}" as="p" hint-placeholder-count="5">
+            <button onClick="{{ p.run }}" style="width:100%; display:flex; align-items:center; gap:12px; padding:9px 12px; border-radius:9px; border:none; background:transparent; color:hsl(var(--fg,210 40% 98%)); cursor:pointer; text-align:left; font-size:13px;" style-hover="background:hsl(var(--sec,217 33% 17%));">
+              <span style="width:30px; height:30px; flex:none; border-radius:8px; background:hsl(var(--sec,217 33% 17%)); display:flex; align-items:center; justify-content:center; color:hsl(var(--pri,217 91% 60%));">{{ p.icon }}</span>
+              <span style="flex:1;">{{ p.label }}</span>
+              <span style="font-size:11px; color:hsl(var(--mfg,215 20% 65%));">{{ p.hint }}</span>
+            </button>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1280,&quot;height&quot;:820}}">
+class Component extends DCLogic {
+  state = { tab: 'chat', themeId: 'default', dark: true, model: 'M3', modelOpen: false, paletteOpen: false, codeMode: 'agent' };
+
+  THEMES = {
+    default: { name: 'Default',
+      light: { bg:'210 40% 96%', fg:'222 47% 11%', card:'0 0% 100%', pri:'217 91% 60%', pfg:'0 0% 100%', sec:'210 40% 94%', mfg:'215 16% 47%', bd:'214 32% 86%', sur:'210 40% 92%', suc:'142 76% 36%', err:'0 84% 60%' },
+      dark:  { bg:'222 47% 7%', fg:'210 40% 98%', card:'222 47% 9%', pri:'217 91% 60%', pfg:'0 0% 100%', sec:'217 33% 17%', mfg:'215 20% 65%', bd:'217 33% 22%', sur:'217 33% 14%', suc:'142 71% 45%', err:'0 63% 51%' } },
+    ocean: { name: 'Ocean',
+      light: { bg:'195 60% 96%', fg:'210 50% 12%', card:'195 50% 98%', pri:'190 85% 45%', pfg:'0 0% 100%', sec:'195 50% 92%', mfg:'200 20% 45%', bd:'195 40% 84%', sur:'195 50% 90%', suc:'160 70% 38%', err:'0 72% 51%' },
+      dark:  { bg:'220 50% 6%', fg:'195 50% 97%', card:'220 45% 8%', pri:'190 90% 55%', pfg:'220 50% 6%', sec:'220 40% 14%', mfg:'200 20% 60%', bd:'220 35% 18%', sur:'220 40% 11%', suc:'160 65% 45%', err:'0 62% 48%' } },
+    forest: { name: 'Forest',
+      light: { bg:'140 15% 96%', fg:'140 20% 12%', card:'140 12% 98%', pri:'145 30% 32%', pfg:'0 0% 100%', sec:'140 12% 92%', mfg:'140 12% 40%', bd:'140 10% 84%', sur:'140 12% 90%', suc:'145 30% 32%', err:'0 65% 48%' },
+      dark:  { bg:'140 20% 6%', fg:'140 15% 92%', card:'140 15% 8%', pri:'145 25% 48%', pfg:'140 20% 6%', sec:'140 12% 14%', mfg:'140 10% 50%', bd:'140 10% 16%', sur:'140 12% 11%', suc:'145 25% 48%', err:'0 55% 48%' } },
+    rose: { name: 'Rose',
+      light: { bg:'350 30% 97%', fg:'340 40% 12%', card:'350 25% 98%', pri:'345 75% 55%', pfg:'0 0% 100%', sec:'350 25% 93%', mfg:'340 20% 45%', bd:'350 20% 86%', sur:'350 25% 91%', suc:'145 65% 38%', err:'0 72% 51%' },
+      dark:  { bg:'340 35% 7%', fg:'350 30% 95%', card:'340 30% 9%', pri:'345 80% 60%', pfg:'340 35% 7%', sec:'340 25% 15%', mfg:'340 20% 55%', bd:'340 22% 18%', sur:'340 25% 12%', suc:'145 65% 45%', err:'0 62% 48%' } },
+    sunset: { name: 'Sunset',
+      light: { bg:'30 40% 96%', fg:'25 50% 10%', card:'30 35% 98%', pri:'25 90% 52%', pfg:'0 0% 100%', sec:'30 35% 92%', mfg:'25 20% 42%', bd:'30 30% 84%', sur:'30 35% 90%', suc:'145 65% 38%', err:'0 72% 51%' },
+      dark:  { bg:'25 35% 6%', fg:'30 35% 95%', card:'25 30% 8%', pri:'25 95% 58%', pfg:'25 35% 6%', sec:'25 28% 14%', mfg:'25 20% 55%', bd:'25 25% 17%', sur:'25 28% 11%', suc:'145 65% 45%', err:'0 62% 48%' } },
+    berry: { name: 'Berry',
+      light: { bg:'270 30% 97%', fg:'270 40% 12%', card:'270 25% 98%', pri:'270 70% 55%', pfg:'0 0% 100%', sec:'270 25% 93%', mfg:'270 20% 45%', bd:'270 20% 86%', sur:'270 25% 91%', suc:'160 65% 38%', err:'0 72% 51%' },
+      dark:  { bg:'270 35% 7%', fg:'270 30% 95%', card:'270 30% 9%', pri:'270 75% 65%', pfg:'270 35% 7%', sec:'270 25% 15%', mfg:'270 20% 55%', bd:'270 22% 18%', sur:'270 25% 12%', suc:'160 65% 45%', err:'0 62% 48%' } },
+    midnight: { name: 'Midnight',
+      light: { bg:'220 20% 96%', fg:'220 40% 10%', card:'220 15% 98%', pri:'220 60% 45%', pfg:'0 0% 100%', sec:'220 15% 92%', mfg:'220 15% 40%', bd:'220 12% 84%', sur:'220 15% 90%', suc:'145 65% 38%', err:'0 72% 51%' },
+      dark:  { bg:'230 25% 4%', fg:'220 30% 95%', card:'230 20% 6%', pri:'210 90% 60%', pfg:'230 25% 4%', sec:'230 18% 12%', mfg:'220 15% 55%', bd:'230 15% 16%', sur:'230 18% 9%', suc:'145 65% 45%', err:'0 62% 48%' } },
+    minimax: { name: 'MiniMax',
+      light: { bg:'0 30% 97%', fg:'0 40% 10%', card:'0 25% 98%', pri:'0 80% 50%', pfg:'0 0% 100%', sec:'0 25% 93%', mfg:'0 20% 42%', bd:'0 20% 86%', sur:'0 25% 91%', suc:'145 65% 38%', err:'0 72% 51%' },
+      dark:  { bg:'0 30% 5%', fg:'0 30% 95%', card:'0 25% 7%', pri:'0 85% 55%', pfg:'0 30% 5%', sec:'0 20% 14%', mfg:'0 15% 55%', bd:'0 18% 18%', sur:'0 20% 10%', suc:'145 65% 45%', err:'0 62% 48%' } },
+    matrix: { name: 'Matrix',
+      light: { bg:'135 15% 96%', fg:'135 35% 10%', card:'135 10% 98%', pri:'135 60% 28%', pfg:'0 0% 100%', sec:'135 12% 92%', mfg:'135 15% 38%', bd:'135 10% 84%', sur:'135 12% 90%', suc:'135 60% 28%', err:'0 65% 48%' },
+      dark:  { bg:'135 30% 4%', fg:'135 50% 72%', card:'135 25% 6%', pri:'135 65% 42%', pfg:'135 40% 3%', sec:'135 25% 12%', mfg:'135 25% 50%', bd:'135 20% 15%', sur:'135 25% 9%', suc:'135 65% 42%', err:'0 55% 48%' } },
+  };
+
+  applyTheme() {
+    const el = this.rootEl;
+    if (!el) return;
+    const t = this.THEMES[this.state.themeId] || this.THEMES.default;
+    const m = this.state.dark ? t.dark : t.light;
+    const S = (k, v) => el.style.setProperty(k, v);
+    Object.keys(m).forEach(k => S('--' + k, m[k]));
+  }
+  componentDidMount() { this.applyTheme(); }
+  componentDidUpdate() { this.applyTheme(); }
+
+  navStyle(id) {
+    const active = this.state.tab === id;
+    const base = 'display:flex; align-items:center; gap:11px; width:100%; padding:9px 12px; border-radius:9px; border:none; cursor:pointer; font-size:13px; font-weight:500; transition:background .12s,color .12s; text-align:left;';
+    return active
+      ? base + 'background:hsl(var(--pri) / .13); color:hsl(var(--pri)); box-shadow:inset 2px 0 0 hsl(var(--pri));'
+      : base + 'background:transparent; color:hsl(var(--mfg));';
+  }
+
+  renderVals() {
+    const s = this.state;
+    const isMedia = ['image','video','music','tts'].includes(s.tab);
+    const set = (patch) => this.setState(patch);
+
+    // nav
+    const navIds = ['chat','code','image','video','music','tts','tasks','settings'];
+    const nav = {}, navTo = {};
+    navIds.forEach(id => { nav[id] = this.navStyle(id); navTo[id] = () => set({ tab: id }); });
+
+    // models
+    const modelDefs = [
+      { id:'M3', name:'MiniMax M3', desc:'1M context · agentic · multimodal' },
+      { id:'M2.7', name:'MiniMax M2.7', desc:'Balanced reasoning' },
+      { id:'M2.7-highspeed', name:'M2.7 Highspeed', desc:'Lowest latency' },
+    ];
+    const models = modelDefs.map(d => {
+      const active = s.model === d.id;
+      return {
+        ...d,
+        pick: () => set({ model: d.id, modelOpen: false }),
+        style: 'display:flex; align-items:center; justify-content:space-between; width:100%; padding:9px 11px; border-radius:8px; border:none; cursor:pointer; text-align:left; background:' + (active ? 'hsl(var(--pri) / .1)' : 'transparent') + ';',
+        dot: 'width:8px; height:8px; border-radius:50%; background:' + (active ? 'hsl(var(--pri))' : 'transparent') + '; border:1.5px solid ' + (active ? 'hsl(var(--pri))' : 'hsl(var(--bd))') + ';',
+        rowStyle: 'display:flex; align-items:center; justify-content:space-between; width:100%; padding:13px 14px; border-radius:10px; border:none; cursor:pointer; text-align:left; color:hsl(var(--fg)); background:' + (active ? 'hsl(var(--pri) / .08)' : 'transparent') + ';',
+        radio: 'width:18px; height:18px; border-radius:50%; flex:none; background:' + (active ? 'radial-gradient(circle at center, hsl(var(--pri)) 0 5px, transparent 6px)' : 'transparent') + '; border:2px solid ' + (active ? 'hsl(var(--pri))' : 'hsl(var(--bd))') + ';',
+      };
+    });
+
+    // code mode toggle
+    const modeBtn = {}, setMode = {};
+    ['agent','plan','yolo'].forEach(mk => {
+      const active = s.codeMode === mk;
+      modeBtn[mk] = 'padding:5px 12px; border-radius:6px; border:none; cursor:pointer; font-size:11px; font-weight:600; text-transform:capitalize; background:' + (active ? 'hsl(var(--card))' : 'transparent') + '; color:' + (active ? 'hsl(var(--fg))' : 'hsl(var(--mfg))') + '; box-shadow:' + (active ? '0 1px 2px rgba(0,0,0,.2)' : 'none') + ';';
+      setMode[mk] = () => set({ codeMode: mk });
+    });
+
+    // files
+    const fileRow = (depth, sel) => 'display:flex; align-items:center; gap:7px; padding:5px ' + (8 + depth*14) + 'px; border-radius:6px; cursor:pointer; ' + (sel ? 'background:hsl(var(--pri) / .12); color:hsl(var(--pri));' : 'color:hsl(var(--fg));');
+    const folder = '\uD83D\uDCC1', tsIcon = 'TS', jsonIcon = '{}';
+    const files = [
+      { name:'src', icon:'\uD83D\uDCC2', style: fileRow(0) },
+      { name:'middleware', icon:'\uD83D\uDCC2', style: fileRow(1) },
+      { name:'auth.ts', icon:'\u25CF', style: fileRow(2, true), badge:'M', badgeStyle:'font-size:9px; font-weight:700; color:hsl(var(--pri)); width:14px; text-align:center;' },
+      { name:'jwt.ts', icon:'\u25CB', style: fileRow(2) },
+      { name:'routes.ts', icon:'\u25CB', style: fileRow(1) },
+      { name:'server.ts', icon:'\u25CB', style: fileRow(1) },
+      { name:'package.json', icon:'{}', style: fileRow(0) },
+      { name:'tsconfig.json', icon:'{}', style: fileRow(0) },
+      { name:'README.md', icon:'\u2756', style: fileRow(0) },
+    ];
+
+    // media config
+    const mediaMap = {
+      image: { title:'Image', subtitle:'Text-to-image · Hailuo', folder:'images/', placeholder:'A futuristic city at golden hour, cinematic lighting…', icon:'\uD83D\uDDBC' },
+      video: { title:'Video', subtitle:'Hailuo-2.3 · text & image to video', folder:'videos/', placeholder:'Drone shot flying over neon-lit streets at night…', icon:'\uD83C\uDFAC' },
+      music: { title:'Music', subtitle:'Prompt or lyrics to song', folder:'music/', placeholder:'Lo-fi hip hop, mellow piano, 90 BPM, rainy mood…', icon:'\uD83C\uDFB5' },
+      tts:   { title:'Speech', subtitle:'30+ voices · streaming TTS', folder:'tts/', placeholder:'Type the text you want spoken aloud…', icon:'\uD83D\uDD0A' },
+    };
+    const mediaIcons = {
+      image:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/></svg>',
+    };
+    const media = { ...(mediaMap[s.tab] || mediaMap.image) };
+    media.icon = React.createElement('span', { style:{ fontSize:'17px' }, dangerouslySetInnerHTML:{ __html: '' } });
+
+    const tileBgs = ['linear-gradient(135deg,#1e3a8a,#3b82f6)','linear-gradient(135deg,#7c2d12,#f97316)','linear-gradient(135deg,#134e4a,#2dd4bf)','linear-gradient(135deg,#4c1d95,#a855f7)','linear-gradient(135deg,#831843,#ec4899)','linear-gradient(135deg,#1e293b,#64748b)'];
+    const tiles = tileBgs.map((bg,i) => ({ bg, label: (s.tab==='video'?'Clip ':'Render ') + (i+1) }));
+
+    // aspect ratios (image) — full list with shape drawing + resolution
+    const aspectDefs = [
+      { id:'1:1', ratio:'1:1', label:'Square', res:'1024 × 1024', w:22, h:22 },
+      { id:'16:9', ratio:'16:9', label:'Widescreen', res:'1344 × 768', w:26, h:15 },
+      { id:'9:16', ratio:'9:16', label:'Vertical', res:'768 × 1344', w:15, h:26 },
+      { id:'4:3', ratio:'4:3', label:'Standard', res:'1152 × 896', w:24, h:18 },
+      { id:'3:4', ratio:'3:4', label:'Portrait', res:'896 × 1152', w:18, h:24 },
+      { id:'3:2', ratio:'3:2', label:'Photo', res:'1216 × 832', w:26, h:17 },
+      { id:'2:3', ratio:'2:3', label:'Photo tall', res:'832 × 1216', w:17, h:26 },
+      { id:'21:9', ratio:'21:9', label:'Cinematic', res:'1536 × 640', w:28, h:12 },
+    ];
+    const mkShape = (w, h, active) => 'display:block; width:' + w + 'px; height:' + h + 'px; border-radius:3px; border:2px solid ' + (active ? 'hsl(var(--pri))' : 'hsl(var(--mfg))') + '; background:' + (active ? 'hsl(var(--pri) / .2)' : 'transparent') + ';';
+    const curAspect = s.aspect || '1:1';
+    const aspects = aspectDefs.map(a => {
+      const active = curAspect === a.id;
+      return {
+        ...a, active,
+        shape: mkShape(a.w, a.h, active),
+        pick: () => set({ aspect: a.id, aspectOpen: false }),
+        row: 'display:flex; align-items:center; gap:12px; width:100%; padding:9px 11px; border-radius:9px; border:none; cursor:pointer; color:hsl(var(--fg)); background:' + (active ? 'hsl(var(--pri) / .1)' : 'transparent') + ';',
+      };
+    });
+    const curA = aspectDefs.find(a => a.id === curAspect) || aspectDefs[0];
+    const aspect = { ratio: curA.ratio, res: curA.res, shape: mkShape(curA.w, Math.round(curA.h * 0.9), true) };
+
+    // video clips
+    const videoClips = [
+      { bg:'linear-gradient(135deg,#0c4a6e,#0ea5e9)', dur:'0:06' },
+      { bg:'linear-gradient(135deg,#7c2d12,#f97316)', dur:'0:10' },
+      { bg:'linear-gradient(135deg,#312e81,#8b5cf6)', dur:'0:06' },
+    ];
+
+    // waveform bars (reused by music + tts players)
+    const wave = Array.from({ length: 44 }, (_, i) => {
+      const h = 4 + Math.round((Math.abs(Math.sin(i * 0.7)) * 0.7 + Math.abs(Math.sin(i * 1.9)) * 0.3) * 20);
+      const on = i / 44 < 0.42;
+      return { style: 'flex:1; min-width:2px; max-width:4px; border-radius:2px; height:' + h + 'px; background:' + (on ? 'hsl(var(--pri))' : 'hsl(var(--mfg) / .35)') + ';' };
+    });
+
+    // music tracks
+    const tracks = [
+      { title:'Midnight Drive', genre:'synth-pop', dur:'2:48', bg:'linear-gradient(135deg,#1e1b4b,#6366f1)' },
+      { title:'Paper Planes', genre:'lo-fi', dur:'1:54', bg:'linear-gradient(135deg,#134e4a,#14b8a6)' },
+      { title:'Golden Hour', genre:'acoustic', dur:'3:12', bg:'linear-gradient(135deg,#7c2d12,#f59e0b)' },
+    ];
+
+    // tts voices
+    const voiceAvatar = (c) => 'width:34px; height:34px; flex:none; border-radius:9px; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; color:#fff; background:' + c + ';';
+    const voiceDefs = [
+      { id:'aria', name:'Aria', tags:'Female · warm · EN', initials:'AR', c:'linear-gradient(135deg,#be185d,#ec4899)' },
+      { id:'leo', name:'Leo', tags:'Male · deep · EN', initials:'LE', c:'linear-gradient(135deg,#1d4ed8,#3b82f6)' },
+      { id:'mei', name:'Mei', tags:'Female · bright · ZH', initials:'ME', c:'linear-gradient(135deg,#0f766e,#14b8a6)' },
+      { id:'sol', name:'Sol', tags:'Neutral · calm · ES', initials:'SO', c:'linear-gradient(135deg,#b45309,#f59e0b)' },
+    ];
+    const voices = voiceDefs.map((v, i) => {
+      const active = (s.voice || 'aria') === v.id;
+      return {
+        ...v,
+        pick: () => set({ voice: v.id }),
+        avatar: voiceAvatar(v.c),
+        style: 'display:flex; align-items:center; gap:11px; width:100%; padding:8px 10px; border-radius:11px; cursor:pointer; color:hsl(var(--fg)); border:1.5px solid ' + (active ? 'hsl(var(--pri))' : 'hsl(var(--bd))') + '; background:' + (active ? 'hsl(var(--pri) / .08)' : 'transparent') + ';',
+      };
+    });
+
+    // tts history clips
+    const clips = [
+      { voice:'Aria', initials:'AR', avatar:voiceAvatar('linear-gradient(135deg,#be185d,#ec4899)'), meta:'Neutral · 1.0×', dur:'0:09', text:'Welcome to MiniMax Studio. Everything you build, generate, and ship — now in one native workspace.' },
+      { voice:'Leo', initials:'LE', avatar:voiceAvatar('linear-gradient(135deg,#1d4ed8,#3b82f6)'), meta:'Serious · 0.9×', dur:'0:06', text:'Your render is complete and saved to the workspace folder.' },
+      { voice:'Mei', initials:'ME', avatar:voiceAvatar('linear-gradient(135deg,#0f766e,#14b8a6)'), meta:'Happy · 1.1×', dur:'0:05', text:'你好，欢迎使用 MiniMax 智能体。' },
+    ];
+
+    // tasks
+    const cardTag = (c) => 'font-size:10px; font-weight:600; padding:2px 8px; border-radius:6px; background:' + c + ' / .15); color:' + c + ');';
+    const columns = [
+      { title:'To Do', dot:'hsl(var(--mfg))', count:3, cards:[
+        { title:'Add rate limiting to public API', tag:'backend', tagStyle:'font-size:10px;font-weight:600;padding:2px 8px;border-radius:6px;background:hsl(var(--pri) / .15);color:hsl(var(--pri));', id:'#142' },
+        { title:'Design onboarding empty states', tag:'design', tagStyle:'font-size:10px;font-weight:600;padding:2px 8px;border-radius:6px;background:hsl(280 70% 60% / .15);color:hsl(280 70% 65%);', id:'#138' },
+        { title:'Write MCP server docs', tag:'docs', tagStyle:'font-size:10px;font-weight:600;padding:2px 8px;border-radius:6px;background:hsl(var(--sec));color:hsl(var(--mfg));', id:'#131' },
+      ]},
+      { title:'In Progress', dot:'hsl(var(--pri))', count:2, cards:[
+        { title:'Refactor auth middleware caching', tag:'backend', tagStyle:'font-size:10px;font-weight:600;padding:2px 8px;border-radius:6px;background:hsl(var(--pri) / .15);color:hsl(var(--pri));', id:'#145' },
+        { title:'Streaming token UI polish', tag:'frontend', tagStyle:'font-size:10px;font-weight:600;padding:2px 8px;border-radius:6px;background:hsl(190 80% 50% / .15);color:hsl(190 80% 55%);', id:'#140' },
+      ]},
+      { title:'Done', dot:'hsl(var(--suc))', count:2, cards:[
+        { title:'Wire Token Plan quota endpoint', tag:'backend', tagStyle:'font-size:10px;font-weight:600;padding:2px 8px;border-radius:6px;background:hsl(var(--suc) / .15);color:hsl(var(--suc));', id:'#129' },
+        { title:'Ship command palette', tag:'frontend', tagStyle:'font-size:10px;font-weight:600;padding:2px 8px;border-radius:6px;background:hsl(var(--suc) / .15);color:hsl(var(--suc));', id:'#118' },
+      ]},
+    ];
+
+    // mcp servers (settings)
+    const mcpDefs = [
+      { glyph:'FS', name:'Filesystem', cmd:'npx @modelcontextprotocol/server-filesystem', on:true },
+      { glyph:'GH', name:'GitHub', cmd:'npx @modelcontextprotocol/server-github', on:true },
+      { glyph:'PG', name:'Postgres', cmd:'uvx mcp-server-postgres', on:false },
+    ];
+    const mcpServers = mcpDefs.map((m, i) => ({
+      ...m,
+      status: m.on ? 'running' : 'stopped',
+      row: 'display:flex; align-items:center; gap:13px; padding:14px 20px;' + (i < mcpDefs.length - 1 ? ' border-bottom:1px solid hsl(var(--bd,217 33% 22%));' : ''),
+      badge: 'font-size:10.5px; font-weight:600; padding:2px 9px; border-radius:6px; ' + (m.on ? 'background:hsl(var(--suc) / .15); color:hsl(var(--suc));' : 'background:hsl(var(--sec)); color:hsl(var(--mfg));'),
+      toggleBg: m.on ? 'hsl(var(--pri))' : 'hsl(var(--sec))',
+      knob: 'position:absolute; top:2px; ' + (m.on ? 'right:2px;' : 'left:2px;') + ' width:18px; height:18px; border-radius:50%; background:#fff;',
+    }));
+
+    // theme cards
+    const themeCards = Object.keys(this.THEMES).map(id => {
+      const t = this.THEMES[id];
+      const m = s.dark ? t.dark : t.light;
+      const active = s.themeId === id;
+      return {
+        id, name: t.name, active,
+        pick: () => set({ themeId: id }),
+        swA: 'hsl(' + m.pri + ')', swB: 'hsl(' + m.bg + ')', swC: 'hsl(' + m.sur + ')',
+        style: 'position:relative; display:flex; flex-direction:column; gap:9px; padding:13px; border-radius:11px; cursor:pointer; text-align:left; color:hsl(var(--fg)); background:hsl(var(--bg)); border:1.5px solid ' + (active ? 'hsl(var(--pri))' : 'hsl(var(--bd))') + ';',
+      };
+    });
+
+    // mode toggle (settings)
+    const mt = (on) => 'display:flex; align-items:center; gap:6px; padding:6px 13px; border-radius:7px; border:none; cursor:pointer; font-size:12px; font-weight:600; background:' + (on ? 'hsl(var(--card))' : 'transparent') + '; color:' + (on ? 'hsl(var(--fg))' : 'hsl(var(--mfg))') + '; box-shadow:' + (on ? '0 1px 2px rgba(0,0,0,.2)' : 'none') + ';';
+    const modeToggle = { light: mt(!s.dark), dark: mt(s.dark) };
+
+    // palette
+    const pi = (label, hint, icon, fn) => ({ label, hint, run: () => { fn(); set({ paletteOpen:false }); }, icon: React.createElement('span',{dangerouslySetInnerHTML:{__html:icon}}) });
+    const paletteItems = [
+      pi('Open Chat','', '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>', ()=>set({tab:'chat'})),
+      pi('Open Code Workspace','', '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m18 16 4-4-4-4"/><path d="m6 8-4 4 4 4"/><path d="m14.5 4-5 16"/></svg>', ()=>set({tab:'code'})),
+      pi('Generate Image','', '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/></svg>', ()=>set({tab:'image'})),
+      pi('Open Task Board','', '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>', ()=>set({tab:'tasks'})),
+      pi('Theme & Appearance','Settings', '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2"/></svg>', ()=>set({tab:'settings'})),
+    ];
+
+    // media panel icon (real svg via createElement to allow html)
+    const mediaIconHtml = (mediaMap[s.tab]||mediaMap.image);
+    media.icon = React.createElement('span', { style:{display:'flex'}, dangerouslySetInnerHTML:{ __html:
+      s.tab==='video' ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m22 8-6 4 6 4V8Z"/><rect x="2" y="6" width="14" height="12" rx="2"/></svg>'
+      : s.tab==='music' ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>'
+      : s.tab==='tts' ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg>'
+      : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/></svg>'
+    } });
+
+    return {
+      rootRef: (el) => { this.rootEl = el; if (el) this.applyTheme(); },
+      isChat: s.tab === 'chat', isCode: s.tab === 'code', isImage: s.tab === 'image', isVideo: s.tab === 'video', isMusic: s.tab === 'music', isTts: s.tab === 'tts', isTasks: s.tab === 'tasks', isSettings: s.tab === 'settings',
+      nav, navTo, model: s.model, models, modelOpen: s.modelOpen,
+      toggleModel: () => set({ modelOpen: !s.modelOpen }),
+      paletteOpen: s.paletteOpen, openPalette: () => set({ paletteOpen: true }), closePalette: () => set({ paletteOpen: false }), stop: (e) => e.stopPropagation(),
+      modeBtn, setMode, files, media, tiles, aspect, aspects, aspectOpen: s.aspectOpen, toggleAspect: () => set({ aspectOpen: !s.aspectOpen }), videoClips, wave, tracks, voices, clips, columns, themeCards, mcpServers, modeToggle, paletteItems,
+      setLight: () => set({ dark: false }), setDark: () => set({ dark: true }),
+    };
+  }
+}
+</script>
+</body>
+</html>

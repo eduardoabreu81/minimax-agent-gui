@@ -1,6 +1,6 @@
 [project]
 name = "minimax-agent-gui"
-version = "0.3.0"
+version = "0.4.0"
 description = "MiniMax Agent GUI — all-in-one web platform for the MiniMax Token Plan (M3 chat, image/video/music/TTS generation, MCP tools, agent workflows, and skills)"
 readme = "README.md"
 requires-python = ">=3.10"

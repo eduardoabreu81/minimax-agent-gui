@@ -1,0 +1,45 @@
+[package]
+name = "minimax-agent-desktop"
+version = "0.1.0"
+description = "MiniMax Agent Desktop - Tauri shell"
+authors = ["Eduardo"]
+edition = "2021"
+rust-version = "1.77"
+
+[lib]
+name = "minimax_agent_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.0", features = [] }
+
+[dependencies]
+tauri = { version = "2.1", features = [] }
+tauri-plugin-shell = "2.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Pin to avoid cookie 0.18.1 + time conflict on Rust 1.96
+time = { version = "=0.3.36", features = ["formatting", "parsing"] }
+
+# Windows-only: Job Object with JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE.
+# Ensures the spawned backend.exe dies if the Tauri process dies
+# unexpectedly (e.g. Stop-Process -Force, crash, power loss).
+#
+# `Win32_Security` is needed because `CreateJobObjectW` takes a
+# `SECURITY_ATTRIBUTES*` as its first arg; even when we pass None the
+# symbol is feature-gated in the `windows` crate.
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.58", features = [
+    "Win32_System_JobObjects",
+    "Win32_Foundation",
+    "Win32_System_Threading",
+    "Win32_Security",
+] }
+
+[profile.release]
+panic = "abort"
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true

@@ -1,0 +1,74 @@
+@import './themes.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html, body, #root {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* ─── Semantic design tokens ───
+     Late-bound aliases over the HSL theme tokens defined in
+     themes.css. Components MUST consume these (--app-*) and never
+     the raw --background/--primary/etc., and MUST NEVER hardcode
+     hex values. Switching [data-theme="..."] automatically re-derives
+     every --app-* because var() resolution happens at compute time.
+  */
+  :root {
+    --app-bg:           hsl(var(--background));
+    --app-surface:      hsl(var(--surface));
+    --app-surface-2:    hsl(var(--card));
+    --app-border:       hsl(var(--border) / 0.5);
+    --app-border-2:     hsl(var(--border));
+    --app-text:         hsl(var(--foreground));
+    --app-text-2:       hsl(var(--muted-foreground));
+    --app-text-3:       hsl(var(--muted-foreground) / 0.7);
+    --app-accent:       hsl(var(--primary));
+    --app-accent-soft:  hsl(var(--primary) / 0.14);
+    --app-success:      hsl(var(--success));
+    --app-error:        hsl(var(--destructive));
+
+    --app-radius-md:    8px;
+    --app-radius-lg:    12px;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 4px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground) / 0.5);
+  }
+
+  /* Selection */
+  ::selection {
+    background-color: hsl(var(--primary) / 0.3);
+    color: hsl(var(--primary-foreground));
+  }
+}
+
+@layer base {
+  * {
+    border-color: hsl(var(--border));
+  }
+}

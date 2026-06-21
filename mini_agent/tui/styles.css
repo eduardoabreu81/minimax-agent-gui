@@ -1,0 +1,284 @@
+/* MiniMax Agent TUI - CSS Styles */
+
+Screen {
+    background: $surface;
+    layout: horizontal;
+}
+
+#sidebar {
+    width: 24;
+    height: 100%;
+    background: $surface;
+    border-right: solid $primary;
+    padding: 1;
+    overflow-y: auto;
+}
+
+#sidebar.collapsed {
+    width: 6;
+}
+
+#sidebar-header {
+    height: 3;
+    margin-bottom: 1;
+    padding: 0 1;
+}
+
+#sidebar-title {
+    text-style: bold;
+    color: $primary;
+    width: 100%;
+    text-align: center;
+}
+
+#sidebar-subtitle {
+    color: $text-muted;
+    text-align: center;
+    width: 100%;
+}
+
+#nav-list {
+    height: 1fr;
+}
+
+.nav-item {
+    height: 3;
+    margin: 0 0 1 0;
+    padding: 0 1;
+    background: $surface;
+    border: solid $surface-lighten-1;
+    border-title-color: $primary;
+}
+
+.nav-item:hover {
+    background: $primary 10%;
+    border: solid $primary;
+}
+
+.nav-item.-active {
+    background: $primary 15%;
+    border: solid $primary;
+    border-title-color: $primary;
+}
+
+.nav-item .nav-icon {
+    width: 3;
+    color: $text-muted;
+    text-align: center;
+}
+
+.nav-item.-active .nav-icon,
+.nav-item:hover .nav-icon {
+    color: $primary;
+}
+
+.nav-item .nav-label {
+    width: 1fr;
+    color: $text;
+    padding-left: 1;
+}
+
+.nav-item.-active .nav-label {
+    color: $primary;
+    text-style: bold;
+}
+
+#sidebar-footer {
+    height: 3;
+    margin-top: 1;
+    padding: 0 1;
+}
+
+#main-area {
+    width: 1fr;
+    height: 100%;
+    layout: vertical;
+}
+
+#chat-panel {
+    width: 100%;
+    height: 1fr;
+    background: $surface;
+    border: solid $surface-lighten-1;
+    padding: 1;
+    overflow-y: auto;
+}
+
+#chat-messages {
+    height: 1fr;
+    overflow-y: auto;
+}
+
+.message {
+    margin-bottom: 1;
+    padding: 1;
+    border: round $surface-lighten-1;
+}
+
+.message-user {
+    background: $primary 10%;
+    border-left: solid $primary;
+}
+
+.message-assistant {
+    background: $surface-lighten-1;
+    border-left: solid $success;
+}
+
+.message-thinking {
+    background: $warning 10%;
+    border-left: solid $warning;
+    color: $text-muted;
+    text-style: italic;
+}
+
+.message-system {
+    background: $error 10%;
+    border-left: solid $error;
+    color: $text-muted;
+    text-align: center;
+}
+
+.message-tool {
+    background: $surface-lighten-2;
+    border-left: solid $surface-lighten-1;
+    color: $text-muted;
+}
+
+.message-header {
+    height: 1;
+    margin-bottom: 0;
+}
+
+.message-role {
+    text-style: bold;
+    color: $primary;
+}
+
+.message-model {
+    color: $text-muted;
+    margin-left: 1;
+}
+
+.message-time {
+    color: $text-muted;
+    margin-left: 2;
+}
+
+#composer {
+    height: auto;
+    min-height: 5;
+    max-height: 15;
+    background: $surface;
+    border: solid $primary;
+    padding: 1;
+    margin-top: 1;
+    layout: vertical;
+}
+
+#composer-header {
+    height: 1;
+    margin-bottom: 1;
+    layout: horizontal;
+}
+
+#model-selector {
+    width: 20;
+    margin-right: 1;
+}
+
+#thinking-toggle {
+    width: 14;
+    margin-right: 1;
+}
+
+#composer-input {
+    width: 1fr;
+    height: 3;
+    border: solid $surface-lighten-1;
+    padding: 0 1;
+}
+
+#composer-input:focus {
+    border: solid $primary;
+}
+
+#activity-panel {
+    height: 20;
+    background: $surface;
+    border: solid $surface-lighten-1;
+    padding: 1;
+    margin-top: 1;
+    overflow-y: auto;
+}
+
+#activity-panel.collapsed {
+    height: 0;
+    padding: 0;
+    margin: 0;
+    border: none;
+}
+
+.activity-entry {
+    margin-bottom: 0;
+    padding: 0 1;
+    color: $text-muted;
+}
+
+.activity-tool {
+    color: $primary;
+}
+
+.activity-thinking {
+    color: $warning;
+}
+
+.activity-result {
+    color: $success;
+}
+
+.activity-error {
+    color: $error;
+}
+
+#status-bar {
+    height: 1;
+    background: $surface-darken-1;
+    color: $text-muted;
+    padding: 0 1;
+    layout: horizontal;
+}
+
+#status-left {
+    width: 1fr;
+}
+
+#status-right {
+    width: auto;
+}
+
+.plan-badge {
+    background: $primary 20%;
+    color: $primary;
+    padding: 0 1;
+    border: solid $primary;
+    margin-right: 1;
+}
+
+.key-hint {
+    color: $text-muted;
+    margin-left: 2;
+}
+
+/* Scrollbar styling */
+ScrollableContainer > .scrollbar {
+    background: $surface-darken-1;
+}
+
+ScrollableContainer > .scrollbar .slider {
+    background: $primary 50%;
+}
+
+ScrollableContainer > .scrollbar .slider:hover {
+    background: $primary;
+}

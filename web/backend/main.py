@@ -11,6 +11,15 @@ from contextlib import asynccontextmanager
 
 # Add project root to path so we can import mini_agent and mini_max_mcp
 PROJECT_ROOT = Path(__file__).parent.parent.parent
+# Allow frozen / packaged executables (PyInstaller onedir, Tauri sidecar)
+# to redirect data + import root via env var. When bundled, __file__ points
+# inside _internal/ which is not a writable project root.
+# MINIMAX_PROJECT_ROOT is set by the Tauri shell wrapper
+# (desktop/src-tauri/src/lib.rs:82) and by ops who run the exe outside the
+# source tree.
+_env_root = os.environ.get("MINIMAX_PROJECT_ROOT")
+if _env_root:
+    PROJECT_ROOT = Path(_env_root)
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, BackgroundTasks, UploadFile, File
@@ -18,8 +27,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
-from pydantic import BaseModel
-from typing import Optional
+from pydantic import BaseModel, Field, model_validator
+from typing import Optional, Literal
 import httpx
 
 # Import our existing Python modules
@@ -75,6 +84,181 @@ class ImageRequest(BaseModel):
     watermark: bool = False
     seed: int = None
     reference_image: str = ""  # For I2I: path or URL
+
+
+# --- Music Generation ---------------------------------------------------------
+#
+# Phase 1 of the Music API migration: text-to-music only. Cover generation
+# (music-cover / music-cover-free) and lyrics generation come in later
+# phases; their request fields are present in the schema (so we can
+# 400 cleanly if anyone tries to mix them up) but the endpoint logic
+# only handles the music-2.6 / music-2.6-free flow.
+#
+# audio_setting values come from the Music 2.6 spec — only the four
+# sample_rates / four bitrates / three formats MiniMax publishes are
+# valid. Anything else is rejected with a clear 400 instead of the
+# cryptic 2013 from the API.
+
+AUDIO_SAMPLE_RATES = (16000, 24000, 32000, 44100)
+AUDIO_BITRATES = (32000, 64000, 128000, 256000)
+AUDIO_FORMATS = ("mp3", "wav", "pcm")
+
+MUSIC_GENERATION_MODELS = ("music-2.6", "music-2.6-free")
+MUSIC_COVER_MODELS = ("music-cover", "music-cover-free")
+# Reference audio constraints for the music-cover flow. The Token Plan API
+# itself enforces these but we surface clean errors before the round-trip.
+COVER_AUDIO_MAX_BYTES = 50 * 1024 * 1024          # 50 MB
+COVER_AUDIO_MIN_SECONDS = 6
+COVER_AUDIO_MAX_SECONDS = 6 * 60                  # 6 minutes
+COVER_AUDIO_FORMATS = ("mp3", "wav", "flac", "m4a", "ogg", "aac")
+COVER_PROMPT_MIN_CHARS = 10
+COVER_PROMPT_MAX_CHARS = 300
+COVER_LYRICS_WITH_FEATURE_MIN = 10
+COVER_LYRICS_WITH_FEATURE_MAX = 1000
+
+
+class AudioSetting(BaseModel):
+    """Audio output configuration — mirrors the music generation API."""
+    sample_rate: Literal[16000, 24000, 32000, 44100] = 44100
+    bitrate: Literal[32000, 64000, 128000, 256000] = 256000
+    format: Literal["mp3", "wav", "pcm"] = "mp3"
+
+
+class MusicRequest(BaseModel):
+    """Music generation / cover request.
+
+    Phase 1 (text-to-music) accepts ``music-2.6`` and ``music-2.6-free``
+    with prompt + lyrics + is_instrumental + lyrics_optimizer.
+
+    Phase 2 (music cover) accepts ``music-cover`` and ``music-cover-free``
+    with one of three audio-source combinations:
+      - ``audio_url`` (HTTP/HTTPS URL to reference audio)
+      - ``audio_base64`` (inline base64-encoded audio, ≤50MB raw)
+      - ``cover_feature_id`` (from a prior ``/api/minimax/music/preprocess``
+        call, valid 24h, MD5-dedup)
+    These three are mutually exclusive.
+    """
+    model: Literal[
+        "music-2.6", "music-2.6-free",
+        "music-cover", "music-cover-free",
+    ]
+    prompt: str = ""
+    lyrics: str = ""
+    is_instrumental: bool = False
+    lyrics_optimizer: bool = False
+    filename: str = ""
+    audio_setting: Optional[AudioSetting] = None
+    # Phase 2 cover fields — validated only when model ∈ MUSIC_COVER_MODELS.
+    audio_url: str = ""
+    audio_base64: str = ""
+    cover_feature_id: str = ""
+
+    @model_validator(mode="after")
+    def _check_required_fields(self):
+        # Phase 1: cover-related params are not allowed with generation models.
+        if self.model in MUSIC_GENERATION_MODELS:
+            if self.audio_url or self.audio_base64 or self.cover_feature_id:
+                raise ValueError(
+                    "audio_url / audio_base64 / cover_feature_id are only "
+                    "valid with music-cover or music-cover-free (Phase 2). "
+                    "Phase 1 (music-2.6 / music-2.6-free) accepts prompt + "
+                    "lyrics + is_instrumental + lyrics_optimizer + "
+                    "audio_setting only."
+                )
+
+        # Phase 1 prompt requirements per MiniMax spec.
+        if self.model in MUSIC_GENERATION_MODELS:
+            if self.is_instrumental:
+                # prompt required, 1-2000 chars; lyrics optional.
+                if not self.prompt or len(self.prompt) > 2000:
+                    raise ValueError(
+                        "When is_instrumental=True, prompt is required "
+                        "(1-2000 chars) to describe the music style."
+                    )
+            else:
+                # Non-instrumental: lyrics required unless lyrics_optimizer=True.
+                if not self.lyrics_optimizer:
+                    if not self.lyrics or len(self.lyrics) > 3500:
+                        raise ValueError(
+                            "lyrics is required (1-3500 chars) when "
+                            "is_instrumental=False and lyrics_optimizer=False. "
+                            "Set lyrics_optimizer=true to auto-generate "
+                            "lyrics from the prompt instead."
+                        )
+                # prompt is optional for non-instrumental, max 2000 chars.
+                if len(self.prompt) > 2000:
+                    raise ValueError("prompt exceeds 2000 char limit.")
+
+        # Phase 2 cover flow.
+        if self.model in MUSIC_COVER_MODELS:
+            # Instrumental + lyrics_optimizer are not valid for cover models.
+            if self.is_instrumental:
+                raise ValueError(
+                    "is_instrumental is not supported with music-cover "
+                    "models. Cover always uses vocals from the reference "
+                    "audio (or your custom lyrics)."
+                )
+            if self.lyrics_optimizer:
+                raise ValueError(
+                    "lyrics_optimizer is not supported with music-cover "
+                    "models. Pass lyrics directly or let the API extract "
+                    "them via ASR when using audio_url/audio_base64."
+                )
+            # Exactly one audio source must be provided.
+            sources = sum(bool(x) for x in (self.audio_url, self.audio_base64, self.cover_feature_id))
+            if sources == 0:
+                raise ValueError(
+                    "music-cover requires exactly one of audio_url, "
+                    "audio_base64, or cover_feature_id."
+                )
+            if sources > 1:
+                raise ValueError(
+                    "audio_url, audio_base64, and cover_feature_id are "
+                    "mutually exclusive — pass exactly one for music-cover."
+                )
+            # Prompt is always required for cover models.
+            if not self.prompt or len(self.prompt) < COVER_PROMPT_MIN_CHARS:
+                raise ValueError(
+                    f"prompt is required for music-cover "
+                    f"({COVER_PROMPT_MIN_CHARS}-{COVER_PROMPT_MAX_CHARS} chars) "
+                    f"to describe the target cover style."
+                )
+            if len(self.prompt) > COVER_PROMPT_MAX_CHARS:
+                raise ValueError(
+                    f"prompt exceeds {COVER_PROMPT_MAX_CHARS} char limit for "
+                    f"music-cover."
+                )
+            # Lyrics rules depend on which source was used.
+            if self.cover_feature_id:
+                # Two-step path: lyrics required (10-1000).
+                if not self.lyrics or len(self.lyrics) < COVER_LYRICS_WITH_FEATURE_MIN:
+                    raise ValueError(
+                        f"lyrics is required ({COVER_LYRICS_WITH_FEATURE_MIN}"
+                        f"-{COVER_LYRICS_WITH_FEATURE_MAX} chars) when using "
+                        f"cover_feature_id — extract them first via "
+                        f"/api/minimax/music/preprocess."
+                    )
+                if len(self.lyrics) > COVER_LYRICS_WITH_FEATURE_MAX:
+                    raise ValueError(
+                        f"lyrics exceeds {COVER_LYRICS_WITH_FEATURE_MAX} char "
+                        f"limit when using cover_feature_id."
+                    )
+            else:
+                # One-step path (audio_url / audio_base64): lyrics optional,
+                # auto-extracted via ASR if missing. If provided, must fit
+                # within the same 10-1000 range per the API spec.
+                if self.lyrics and len(self.lyrics) < COVER_LYRICS_WITH_FEATURE_MIN:
+                    raise ValueError(
+                        f"When provided, lyrics must be at least "
+                        f"{COVER_LYRICS_WITH_FEATURE_MIN} chars for music-cover."
+                    )
+                if self.lyrics and len(self.lyrics) > COVER_LYRICS_WITH_FEATURE_MAX:
+                    raise ValueError(
+                        f"lyrics exceeds {COVER_LYRICS_WITH_FEATURE_MAX} char "
+                        f"limit for music-cover."
+                    )
+
+        return self
 
 
 class CLIRequest(BaseModel):
@@ -1192,12 +1376,26 @@ async def chat_websocket(websocket: WebSocket, session_id: str):
                 # Resolve which model actually ran (override or default)
                 effective_model = model_override or getattr(agent.llm, "model", None)
                 full_thinking = "\n\n".join(s for s in accumulated_thinking if s) or None
+                last_usage = getattr(agent, "last_usage", None)
+
+                # Forward per-turn token usage to the StatusBar BEFORE the
+                # assistant event, so the context chip can update immediately
+                # when the agent finishes a turn. The frontend also accepts
+                # `usage` inside the assistant event as a fallback for older
+                # proxies that drop the standalone event.
+                if last_usage:
+                    await websocket.send_json({
+                        "type": "usage",
+                        "usage": last_usage,
+                        "model": effective_model,
+                    })
 
                 await websocket.send_json({
                     "type": "assistant",
                     "content": result,
                     "thinking": full_thinking,
                     "model": effective_model,
+                    "usage": last_usage,
                 })
 
                 # Auto-save: append assistant message (with thinking + model)
@@ -1387,9 +1585,67 @@ async def image_i2i_generate(req: ImageRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/api/music")
-async def music_generate(req: GenerateRequest):
-    """Generate music."""
+class MusicCoverPreprocessRequest(BaseModel):
+    """Body for the cover preprocess endpoint.
+
+    Accepts one of:
+      - ``audio_url`` — typically the workspace URL returned by
+        ``/api/upload`` after the frontend uploads the file.
+      - ``audio_base64`` — inline base64-encoded audio (≤50MB raw; only
+        practical for short samples — prefer ``audio_url`` in normal use).
+
+    The two are mutually exclusive.
+    """
+    audio_url: str = ""
+    audio_base64: str = ""
+
+
+def _resolve_local_audio_url(url: str) -> Optional[Path]:
+    """Map a workspace-relative ``/api/files/download?path=...`` URL back
+    to its on-disk path under PROJECT_ROOT, for pre-flight validation.
+
+    Returns ``None`` for external URLs (the API will validate those).
+    Returns ``None`` if the resolved path escapes PROJECT_ROOT or doesn't
+    exist on disk.
+    """
+    if not url or "/api/files/download" not in url:
+        return None
+    try:
+        from urllib.parse import urlparse, parse_qs
+        q = parse_qs(urlparse(url).query)
+        raw_path = (q.get("path") or [""])[0]
+        if not raw_path:
+            return None
+        candidate = (PROJECT_ROOT / raw_path).resolve()
+        proj_root = PROJECT_ROOT.resolve()
+        if proj_root not in candidate.parents and candidate != proj_root:
+            return None
+        if not candidate.exists() or not candidate.is_file():
+            return None
+        return candidate
+    except Exception:
+        return None
+
+
+@app.post("/api/minimax/music/preprocess")
+async def music_cover_preprocess(req: MusicCoverPreprocessRequest):
+    """Two-step cover flow — step 1: extract features + lyrics.
+
+    Reference audio must be 6s-6min and ≤50MB. Provide either an
+    ``audio_url`` (typically the URL returned by ``/api/upload`` after
+    the frontend uploads the file) or ``audio_base64`` for inline data.
+
+    Response shape:
+        ``{"success": True, "cover_feature_id": str,
+           "formatted_lyrics": str, "structure_result": str,
+           "audio_duration": float, "trace_id": str,
+           "feature_expires_at": str (ISO 8601, +24h)}``
+
+    The returned ``cover_feature_id`` is valid for 24 hours and is
+    MD5-deduped by the API — same audio content yields the same id.
+    Pass it to ``/api/music`` (model=music-cover|music-cover-free,
+    cover_feature_id=...) to generate the cover in step 2.
+    """
     try:
         minimax_config = get_minimax_config()
         api_key = minimax_config["api_key"]
@@ -1398,33 +1654,973 @@ async def music_generate(req: GenerateRequest):
         if not api_key:
             raise HTTPException(status_code=400, detail="API key not configured")
 
+        sources = sum(bool(x) for x in (req.audio_url, req.audio_base64))
+        if sources == 0:
+            raise HTTPException(
+                status_code=400,
+                detail="audio_url or audio_base64 is required.",
+            )
+        if sources > 1:
+            raise HTTPException(
+                status_code=400,
+                detail="audio_url and audio_base64 are mutually exclusive.",
+            )
+
+        # Pre-flight: if the URL points to a local upload, validate size
+        # and format on disk before sending — the API rejects 50MB+ with
+        # a less actionable error.
+        local_path = _resolve_local_audio_url(req.audio_url) if req.audio_url else None
+        if local_path is not None:
+            size = local_path.stat().st_size
+            if size > COVER_AUDIO_MAX_BYTES:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        f"Reference audio is {size / 1024 / 1024:.1f} MB; "
+                        f"max is {COVER_AUDIO_MAX_BYTES // 1024 // 1024} MB."
+                    ),
+                )
+            ext = local_path.suffix.lower().lstrip(".")
+            if ext and ext not in COVER_AUDIO_FORMATS:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        f"Unsupported audio format: .{ext}. "
+                        f"Supported: {COVER_AUDIO_FORMATS}."
+                    ),
+                )
+
         client = MiniMaxSyncClient(api_key, api_base)
-        output_path = PROJECT_ROOT / "workspace" / f"music_web_{asyncio.get_event_loop().time()}.mp3"
-        output_path.parent.mkdir(exist_ok=True)
+        try:
+            success, result = client.music_cover_preprocess(
+                audio_url=req.audio_url,
+                audio_base64=req.audio_base64,
+            )
+        finally:
+            client.close()
 
-        lyrics = req.settings.get("lyrics", "") or ""
-        music_model = req.settings.get("model", "music-2.6")
+        if not success:
+            err_msg = (
+                result.get("error", "Preprocess failed")
+                if isinstance(result, dict)
+                else str(result)
+            )
+            sc = result.get("status_code") if isinstance(result, dict) else None
+            if sc in (2013, 1004, 2049):
+                raise HTTPException(status_code=400, detail=err_msg)
+            if sc == 1008:
+                raise HTTPException(status_code=402, detail=err_msg)
+            if sc == 1002:
+                raise HTTPException(status_code=429, detail=err_msg)
+            if sc == 1026:
+                raise HTTPException(status_code=422, detail=err_msg)
+            raise HTTPException(status_code=502, detail=err_msg)
 
-        success, result = client.music_generate(
-            prompt=req.prompt,
-            lyrics=lyrics,
-            model=music_model,
-            output_path=str(output_path),
-            output_format="hex"
-        )
-        client.close()
+        from datetime import datetime, timedelta, timezone
+        feature_expires_at = (
+            datetime.now(timezone.utc) + timedelta(hours=24)
+        ).isoformat()
+        return {
+            "success": True,
+            "cover_feature_id": result.get("cover_feature_id", ""),
+            "formatted_lyrics": result.get("formatted_lyrics", ""),
+            "structure_result": result.get("structure_result", ""),
+            "audio_duration": result.get("audio_duration", 0.0),
+            "trace_id": result.get("trace_id", ""),
+            "feature_expires_at": feature_expires_at,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        _logger.exception("Music cover preprocess failed")
+        raise HTTPException(status_code=500, detail=str(e))
 
-        if success:
-            cost = calculate_music_cost(include_lyrics=bool(lyrics.strip()))
-            return {
-                "success": True,
-                "file_path": str(result),
-                "model": music_model,
-                "include_lyrics": bool(lyrics.strip()),
-                **cost,
+
+class LyricsRequest(BaseModel):
+    """Body for the lyrics generation endpoint.
+
+    ``mode`` selects between generating lyrics from a theme
+    (``write_full_song``) and refining existing lyrics (``edit``).
+    In ``edit`` mode, ``lyrics`` must be present and is the source
+    material; in ``write_full_song`` mode it's ignored.
+    """
+    mode: Literal["write_full_song", "edit"] = "write_full_song"
+    prompt: str = ""
+    lyrics: str = ""
+    title: str = ""
+
+
+@app.post("/api/minimax/music/lyrics")
+async def music_lyrics_generate(req: LyricsRequest):
+    """Generate or refine song lyrics.
+
+    Body: ``LyricsRequest`` — see the Pydantic model for validation.
+
+    Response shape mirrors the MiniMax API:
+        ``{"success": True, "song_title": str, "style_tags": str,
+           "lyrics": str, "trace_id": str}``
+
+    In ``write_full_song`` mode, ``prompt`` describes the theme/genre/mood
+    (≤2000 chars) and ``lyrics`` (if present) is ignored.
+    In ``edit`` mode, ``prompt`` is the editing instructions and ``lyrics``
+    is the source material (≤3500 chars).
+    """
+    try:
+        minimax_config = get_minimax_config()
+        api_key = minimax_config["api_key"]
+        api_base = minimax_config["api_base"]
+
+        if not api_key:
+            raise HTTPException(status_code=400, detail="API key not configured")
+
+        # Per-mode validation in addition to Pydantic Literal.
+        if len(req.prompt) > 2000:
+            raise HTTPException(
+                status_code=400,
+                detail="prompt exceeds 2000 char limit.",
+            )
+        if req.mode == "edit":
+            if not req.lyrics.strip():
+                raise HTTPException(
+                    status_code=400,
+                    detail="lyrics is required in edit mode.",
+                )
+            if len(req.lyrics) > 3500:
+                raise HTTPException(
+                    status_code=400,
+                    detail="lyrics exceeds 3500 char limit in edit mode.",
+                )
+        else:
+            # write_full_song: prompt is required per the spec.
+            if not req.prompt.strip():
+                raise HTTPException(
+                    status_code=400,
+                    detail="prompt is required in write_full_song mode.",
+                )
+
+        client = MiniMaxSyncClient(api_key, api_base)
+        try:
+            success, result = client.lyrics_generate(
+                mode=req.mode,
+                prompt=req.prompt,
+                lyrics=req.lyrics,
+                title=req.title,
+            )
+        finally:
+            client.close()
+
+        if not success:
+            err_msg = (
+                result.get("error", "Lyrics generation failed")
+                if isinstance(result, dict)
+                else str(result)
+            )
+            sc = result.get("status_code") if isinstance(result, dict) else None
+            if sc in (2013, 1004, 2049):
+                raise HTTPException(status_code=400, detail=err_msg)
+            if sc == 1008:
+                raise HTTPException(status_code=402, detail=err_msg)
+            if sc == 1002:
+                raise HTTPException(status_code=429, detail=err_msg)
+            if sc == 1026:
+                raise HTTPException(status_code=422, detail=err_msg)
+            raise HTTPException(status_code=502, detail=err_msg)
+
+        # The API returns song_title, style_tags (csv string), lyrics,
+        # trace_id, base_resp.
+        return {
+            "success": True,
+            "song_title": result.get("song_title", ""),
+            "style_tags": result.get("style_tags", ""),
+            "lyrics": result.get("lyrics", ""),
+            "trace_id": result.get("trace_id", ""),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        _logger.exception("Lyrics generation failed")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# Speech endpoints — replaces the legacy /api/tts (mmx-based) and adds the
+# four MiniMax speech APIs from TAURI_SPEC.md §6b:
+#   Synthesize (sync + async) / Clone / Design / Voices (list + delete).
+# ============================================================================
+
+class SpeechSynthesizeRequest(BaseModel):
+    """Body for /api/minimax/speech/synthesize — single-shot T2A."""
+    text: str = Field(..., min_length=1, max_length=10000)
+    model: str = "speech-2.8-hd"
+    voice_id: str = "English_Graceful_Lady"
+    speed: float = 1.0
+    vol: float = 1.0
+    pitch: int = 0
+    emotion: str = ""  # happy|sad|angry|fearful|disgusted|surprised|calm|fluent|whisper
+    language_boost: str = "auto"
+    voice_modify_pitch: int = 0
+    voice_modify_intensity: int = 0
+    voice_modify_timbre: int = 0
+    voice_modify_sound_effects: str = ""
+    audio_setting: Optional[AudioSetting] = None
+    filename: str = ""
+
+
+class SpeechAsyncCreateRequest(BaseModel):
+    """Body for /api/minimax/speech/synthesize-async — kick off long-text T2A."""
+    text: str
+    model: str = "speech-2.8-hd"
+    voice_id: str = "English_Graceful_Lady"
+    speed: float = 1.0
+    vol: float = 1.0
+    pitch: int = 0
+    language_boost: str = "auto"
+    voice_modify_pitch: int = 0
+    voice_modify_intensity: int = 0
+    voice_modify_timbre: int = 0
+    voice_modify_sound_effects: str = ""
+    audio_setting: Optional[AudioSetting] = None
+
+
+class SpeechVoiceCloneRequest(BaseModel):
+    """Body for /api/minimax/speech/clone — file_id from /clone/upload."""
+    file_id: int
+    voice_id: str
+    clone_prompt_file_id: int = 0
+    clone_prompt_text: str = ""
+    text: str = ""           # optional preview text
+    model: str = ""          # required if text is set
+    language_boost: str = ""
+    need_noise_reduction: bool = False
+    need_volume_normalization: bool = False
+    text_validation: str = ""
+    accuracy: float = 0.0
+
+
+class SpeechVoiceDesignRequest(BaseModel):
+    """Body for /api/minimax/speech/design — voice from text description."""
+    prompt: str = Field(..., min_length=1)
+    preview_text: str = Field(..., min_length=1, max_length=500)
+    voice_id: str = ""
+
+
+# Resolve the audio_setting the user wants for a Speech call. Order:
+#   1) Request body
+#   2) config.yaml defaults.audio (single source of truth, TAURI_SPEC §7)
+#   3) Hardcoded fallback (legacy Phase 1 default)
+def _resolve_speech_audio_setting(cfg: dict) -> dict:
+    default = cfg.get("audio") if isinstance(cfg.get("audio"), dict) else {}
+    if not default:
+        default = {"sample_rate": 32000, "bitrate": 128000, "format": "mp3", "channel": 1}
+    return {
+        "sample_rate": int(default.get("sample_rate", 32000)),
+        "bitrate": int(default.get("bitrate", 128000)),
+        "format": str(default.get("format", "mp3")),
+        "channel": int(default.get("channel", 1)),
+    }
+
+
+def _save_audio_hex(hex_str: str, audio_setting: dict, filename: str = "") -> str:
+    """Decode a hex-encoded audio payload and save to workspace/tts/.
+    Returns the relative path (for /api/files/raw + /api/files/download)."""
+    import re
+    from pathlib import Path as _P
+    safe = re.sub(r"[^A-Za-z0-9._-]+", "-", (filename or "").strip()).strip("-")
+    if safe and "." in safe:
+        stem = safe.rsplit(".", 1)[0]
+    elif safe:
+        stem = safe
+    else:
+        stem = f"tts_{int(asyncio.get_event_loop().time())}"
+    ext = audio_setting.get("format", "mp3")
+    out_dir = PROJECT_ROOT / "workspace" / "tts"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = out_dir / f"{stem}.{ext}"
+    if out_path.exists():
+        counter = 2
+        while (out_dir / f"{stem}_{counter}.{ext}").exists():
+            counter += 1
+        out_path = out_dir / f"{stem}_{counter}.{ext}"
+    out_path.write_bytes(bytes.fromhex(hex_str))
+    return str(out_path.relative_to(PROJECT_ROOT)).replace("\\", "/")
+
+
+@app.post("/api/minimax/speech/synthesize")
+async def speech_synthesize(req: SpeechSynthesizeRequest):
+    """Single-shot T2A via /v1/t2a_v2. Saves the audio to workspace/tts/."""
+    try:
+        minimax_config = get_minimax_config()
+        api_key = minimax_config["api_key"]
+        api_base = minimax_config["api_base"]
+        if not api_key:
+            raise HTTPException(status_code=400, detail="API key not configured")
+
+        cfg = _load_config_dict()
+        # Prefer the explicit request body; fall back to the shared
+        # "defaults.audio" block (TAURI_SPEC §7).
+        if req.audio_setting is not None:
+            audio_setting = {
+                "sample_rate": req.audio_setting.sample_rate,
+                "bitrate": req.audio_setting.bitrate,
+                "format": req.audio_setting.format,
+                "channel": 1,
             }
         else:
-            return {"success": False, "error": result}
+            audio_setting = _resolve_speech_audio_setting(cfg)
+
+        voice_modify = None
+        if any([req.voice_modify_pitch, req.voice_modify_intensity,
+                req.voice_modify_timbre, req.voice_modify_sound_effects]):
+            voice_modify = {
+                "pitch": req.voice_modify_pitch,
+                "intensity": req.voice_modify_intensity,
+                "timbre": req.voice_modify_timbre,
+            }
+            if req.voice_modify_sound_effects:
+                voice_modify["sound_effects"] = req.voice_modify_sound_effects
+
+        client = MiniMaxSyncClient(api_key, api_base)
+        try:
+            success, result = client.speech_synthesize_v2(
+                text=req.text,
+                model=req.model,
+                voice_id=req.voice_id,
+                speed=req.speed,
+                vol=req.vol,
+                pitch=req.pitch,
+                emotion=req.emotion,
+                audio_setting=audio_setting,
+                voice_modify=voice_modify,
+                language_boost=req.language_boost,
+                output_format="hex",
+            )
+        finally:
+            client.close()
+
+        if not success:
+            _raise_speech_http_error(result, "T2A failed")
+
+        data = (result.get("data") or {})
+        hex_audio = data.get("audio") or ""
+        if not hex_audio:
+            raise HTTPException(status_code=502, detail="T2A response missing audio data")
+        rel_path = _save_audio_hex(hex_audio, audio_setting, req.filename)
+        return {
+            "success": True,
+            "file_path": rel_path,
+            "filename": Path(rel_path).name,
+            "extra_info": result.get("extra_info") or {},
+            "trace_id": result.get("trace_id", ""),
+            "model": req.model,
+            "voice_id": req.voice_id,
+            "audio_setting": audio_setting,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        _logger.exception("T2A synthesize failed")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+def _raise_speech_http_error(result: dict, default_msg: str):
+    """Map MiniMax status_code → HTTP status, matching the music endpoints."""
+    sc = result.get("status_code") if isinstance(result, dict) else None
+    err = (result.get("error") or default_msg) if isinstance(result, dict) else str(result)
+    if sc in (2013, 1004, 2049, 1043):
+        raise HTTPException(status_code=400, detail=err)
+    if sc == 1008:
+        raise HTTPException(status_code=402, detail=err)
+    if sc == 1002:
+        raise HTTPException(status_code=429, detail=err)
+    if sc == 1042:
+        raise HTTPException(status_code=422, detail=err)
+    if sc == 2038:
+        raise HTTPException(status_code=403, detail=err)
+    if sc == 1026:
+        raise HTTPException(status_code=422, detail=err)
+    raise HTTPException(status_code=502, detail=err)
+
+
+@app.post("/api/minimax/speech/synthesize-async")
+async def speech_synthesize_async_create(req: SpeechAsyncCreateRequest):
+    """Kick off a long-text async T2A task. Poll the query endpoint
+    to know when it's done (file_id is returned on success)."""
+    try:
+        minimax_config = get_minimax_config()
+        api_key = minimax_config["api_key"]
+        api_base = minimax_config["api_base"]
+        if not api_key:
+            raise HTTPException(status_code=400, detail="API key not configured")
+
+        cfg = _load_config_dict()
+        if req.audio_setting is not None:
+            audio_setting = {
+                "sample_rate": req.audio_setting.sample_rate,
+                "bitrate": req.audio_setting.bitrate,
+                "format": req.audio_setting.format,
+                "channel": 1,
+            }
+        else:
+            audio_setting = _resolve_speech_audio_setting(cfg)
+
+        voice_modify = None
+        if any([req.voice_modify_pitch, req.voice_modify_intensity,
+                req.voice_modify_timbre, req.voice_modify_sound_effects]):
+            voice_modify = {
+                "pitch": req.voice_modify_pitch,
+                "intensity": req.voice_modify_intensity,
+                "timbre": req.voice_modify_timbre,
+            }
+            if req.voice_modify_sound_effects:
+                voice_modify["sound_effects"] = req.voice_modify_sound_effects
+
+        client = MiniMaxSyncClient(api_key, api_base)
+        try:
+            success, result = client.speech_synthesize_async_create(
+                text=req.text,
+                model=req.model,
+                voice_id=req.voice_id,
+                speed=req.speed,
+                vol=req.vol,
+                pitch=req.pitch,
+                audio_setting=audio_setting,
+                voice_modify=voice_modify,
+                language_boost=req.language_boost,
+            )
+        finally:
+            client.close()
+
+        if not success:
+            _raise_speech_http_error(result, "Async T2A failed")
+        return {
+            "success": True,
+            "task_id": result.get("task_id", ""),
+            "file_id": result.get("file_id"),
+            "usage_characters": result.get("usage_characters"),
+            "task_token": result.get("task_token", ""),
+            "trace_id": result.get("trace_id", ""),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        _logger.exception("Async T2A create failed")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/minimax/speech/synthesize-async/{task_id}")
+async def speech_synthesize_async_query(task_id: int):
+    """Poll an async T2A task. Returns status (processing|success|failed|expired)
+    and file_id when complete."""
+    try:
+        minimax_config = get_minimax_config()
+        api_key = minimax_config["api_key"]
+        api_base = minimax_config["api_base"]
+        if not api_key:
+            raise HTTPException(status_code=400, detail="API key not configured")
+        client = MiniMaxSyncClient(api_key, api_base)
+        try:
+            success, result = client.speech_synthesize_async_query(task_id)
+        finally:
+            client.close()
+        if not success:
+            _raise_speech_http_error(result, "Async T2A query failed")
+        return {
+            "success": True,
+            "task_id": result.get("task_id"),
+            "status": (result.get("status") or "").lower(),
+            "file_id": result.get("file_id"),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        _logger.exception("Async T2A query failed")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/minimax/speech/voices")
+async def speech_voices(voice_type: str = "all"):
+    """List available voices (system + cloned + generated)."""
+    try:
+        minimax_config = get_minimax_config()
+        api_key = minimax_config["api_key"]
+        api_base = minimax_config["api_base"]
+        if not api_key:
+            raise HTTPException(status_code=400, detail="API key not configured")
+        client = MiniMaxSyncClient(api_key, api_base)
+        try:
+            success, result = client.speech_voices_list(voice_type)
+        finally:
+            client.close()
+        if not success:
+            _raise_speech_http_error(result, "List voices failed")
+        return {
+            "success": True,
+            "system_voice": result.get("system_voice", []),
+            "voice_cloning": result.get("voice_cloning", []),
+            "voice_generation": result.get("voice_generation", []),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        _logger.exception("List voices failed")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/minimax/speech/clone/upload")
+async def speech_clone_upload(file: UploadFile = File(...)):
+    """Upload a voice-clone sample (10s-5min, mp3/m4a/wav, ≤20MB).
+    Returns a ``file_id`` consumed by /api/minimax/speech/clone."""
+    try:
+        minimax_config = get_minimax_config()
+        api_key = minimax_config["api_key"]
+        api_base = minimax_config["api_base"]
+        if not api_key:
+            raise HTTPException(status_code=400, detail="API key not configured")
+
+        # Save to a temp path so the multipart upload helper can stream it.
+        import tempfile
+        with tempfile.NamedTemporaryFile(delete=False, suffix=Path(file.filename or "").suffix) as tmp:
+            tmp.write(await file.read())
+            tmp_path = tmp.name
+
+        try:
+            client = MiniMaxSyncClient(api_key, api_base)
+            try:
+                success, result = client.speech_file_upload(tmp_path, purpose="voice_clone")
+            finally:
+                client.close()
+        finally:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+
+        if not success:
+            _raise_speech_http_error(result, "Sample upload failed")
+
+        file_obj = result.get("file") or {}
+        return {
+            "success": True,
+            "file_id": file_obj.get("file_id"),
+            "bytes": file_obj.get("bytes"),
+            "filename": file_obj.get("filename", file.filename),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        _logger.exception("Voice clone upload failed")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/minimax/speech/clone")
+async def speech_clone(req: SpeechVoiceCloneRequest):
+    """Register a cloned voice. Returns ``demo_audio`` URL when ``text`` is set."""
+    try:
+        minimax_config = get_minimax_config()
+        api_key = minimax_config["api_key"]
+        api_base = minimax_config["api_base"]
+        if not api_key:
+            raise HTTPException(status_code=400, detail="API key not configured")
+
+        # Voice ID validation (8-256 chars, starts with letter, no trailing -/_).
+        v = (req.voice_id or "").strip()
+        if not (8 <= len(v) <= 256):
+            raise HTTPException(status_code=400, detail="voice_id must be 8–256 characters.")
+        if not v[0].isalpha():
+            raise HTTPException(status_code=400, detail="voice_id must start with a letter.")
+        if not all(c.isalnum() or c in "-_" for c in v):
+            raise HTTPException(status_code=400, detail="voice_id may only contain letters, digits, '-' and '_'.")
+        if v.endswith("-") or v.endswith("_"):
+            raise HTTPException(status_code=400, detail="voice_id must not end with '-' or '_'.")
+
+        clone_prompt = None
+        if req.clone_prompt_file_id and req.clone_prompt_text:
+            clone_prompt = {
+                "prompt_audio": req.clone_prompt_file_id,
+                "prompt_text": req.clone_prompt_text,
+            }
+
+        client = MiniMaxSyncClient(api_key, api_base)
+        try:
+            success, result = client.speech_voice_clone(
+                file_id=req.file_id,
+                voice_id=v,
+                clone_prompt=clone_prompt,
+                text=req.text,
+                model=req.model,
+                language_boost=req.language_boost,
+                need_noise_reduction=req.need_noise_reduction,
+                need_volume_normalization=req.need_volume_normalization,
+                text_validation=req.text_validation,
+                accuracy=req.accuracy,
+            )
+        finally:
+            client.close()
+
+        if not success:
+            _raise_speech_http_error(result, "Voice clone failed")
+        return {
+            "success": True,
+            "demo_audio": result.get("demo_audio", ""),
+            "extra_info": result.get("extra_info") or {},
+            "trace_id": result.get("trace_id", ""),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        _logger.exception("Voice clone failed")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/minimax/speech/design")
+async def speech_design(req: SpeechVoiceDesignRequest):
+    """Design a custom voice from a text description. Returns ``voice_id`` +
+    trial audio saved as hex-decoded mp3."""
+    try:
+        minimax_config = get_minimax_config()
+        api_key = minimax_config["api_key"]
+        api_base = minimax_config["api_base"]
+        if not api_key:
+            raise HTTPException(status_code=400, detail="API key not configured")
+
+        client = MiniMaxSyncClient(api_key, api_base)
+        try:
+            success, result = client.speech_voice_design(
+                prompt=req.prompt,
+                preview_text=req.preview_text,
+                voice_id=req.voice_id,
+            )
+        finally:
+            client.close()
+
+        if not success:
+            _raise_speech_http_error(result, "Voice design failed")
+
+        # Decode trial audio (hex) and save to disk for immediate playback.
+        trial = result.get("trial_audio", "")
+        trial_path = ""
+        if trial:
+            cfg = _load_config_dict()
+            audio_setting = _resolve_speech_audio_setting(cfg)
+            trial_path = _save_audio_hex(trial, audio_setting, f"design_{result.get('voice_id','voice')}")
+        return {
+            "success": True,
+            "voice_id": result.get("voice_id", ""),
+            "trial_audio_path": trial_path,
+            "trace_id": result.get("trace_id", ""),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        _logger.exception("Voice design failed")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/minimax/speech/voices/{voice_type}/{voice_id}")
+async def speech_voice_delete(voice_type: str, voice_id: str):
+    """Delete a cloned or generated voice. System voices are rejected by the API."""
+    if voice_type not in ("voice_cloning", "voice_generation"):
+        raise HTTPException(
+            status_code=400,
+            detail="voice_type must be 'voice_cloning' or 'voice_generation' (system voices are not deletable).",
+        )
+    try:
+        minimax_config = get_minimax_config()
+        api_key = minimax_config["api_key"]
+        api_base = minimax_config["api_base"]
+        if not api_key:
+            raise HTTPException(status_code=400, detail="API key not configured")
+        client = MiniMaxSyncClient(api_key, api_base)
+        try:
+            success, result = client.speech_voice_delete(voice_type, voice_id)
+        finally:
+            client.close()
+        if not success:
+            _raise_speech_http_error(result, "Voice delete failed")
+        return {
+            "success": True,
+            "voice_id": result.get("voice_id", voice_id),
+            "created_time": result.get("created_time", ""),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        _logger.exception("Voice delete failed")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# Generation defaults (audio_setting shared by Music + Speech)
+# TAURI_SPEC.md §7 — read/write the ``defaults.audio`` block in config.yaml.
+# ============================================================================
+
+class GenerationDefaultsAudio(BaseModel):
+    """Single source of truth for Music + Speech audio output."""
+    sample_rate: int = 32000
+    bitrate: int = 128000
+    format: str = "mp3"  # mp3 | pcm | flac | wav
+    channel: int = 1
+
+
+@app.get("/api/config/defaults/audio")
+async def get_generation_defaults_audio():
+    cfg = _load_config_dict()
+    block = cfg.get("defaults", {}).get("audio") if isinstance(cfg.get("defaults"), dict) else None
+    if not isinstance(block, dict):
+        return {"sample_rate": 32000, "bitrate": 128000, "format": "mp3", "channel": 1}
+    return {
+        "sample_rate": int(block.get("sample_rate", 32000)),
+        "bitrate": int(block.get("bitrate", 128000)),
+        "format": str(block.get("format", "mp3")),
+        "channel": int(block.get("channel", 1)),
+    }
+
+
+@app.put("/api/config/defaults/audio")
+async def put_generation_defaults_audio(req: GenerationDefaultsAudio):
+    """Persist the audio defaults. Validates against the same enums the
+    MiniMax API accepts."""
+    allowed_formats = {"mp3", "pcm", "flac", "wav"}
+    allowed_rates = {8000, 16000, 22050, 24000, 32000, 44100}
+    allowed_bitrates = {32000, 64000, 128000, 256000}
+    if req.format not in allowed_formats:
+        raise HTTPException(
+            status_code=400,
+            detail=f"format must be one of {sorted(allowed_formats)}.",
+        )
+    if req.sample_rate not in allowed_rates:
+        raise HTTPException(
+            status_code=400,
+            detail=f"sample_rate must be one of {sorted(allowed_rates)}.",
+        )
+    if req.bitrate not in allowed_bitrates:
+        raise HTTPException(
+            status_code=400,
+            detail=f"bitrate must be one of {sorted(allowed_bitrates)}.",
+        )
+    if req.channel not in (1, 2):
+        raise HTTPException(status_code=400, detail="channel must be 1 or 2.")
+    try:
+        cfg = _load_config_dict()
+        defaults = cfg.get("defaults") if isinstance(cfg.get("defaults"), dict) else {}
+        defaults["audio"] = {
+            "sample_rate": req.sample_rate,
+            "bitrate": req.bitrate,
+            "format": req.format,
+            "channel": req.channel,
+        }
+        cfg["defaults"] = defaults
+
+        import yaml
+        with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+            yaml.dump(cfg, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+
+        global config
+        config = cfg
+        return {"success": True, "defaults": {"audio": defaults["audio"]}}
+    except HTTPException:
+        raise
+    except Exception as e:
+        _logger.exception("Failed to persist audio defaults")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/music")
+async def music_generate(req: MusicRequest):
+    """Generate music (Phase 1: text-to-music only).
+
+    Body: ``MusicRequest`` — see the Pydantic model for validation.
+    Pydantic enforces model / prompt / lyrics / cover-param rules; any
+    422 from the framework already maps to a clear client-side error.
+
+    Output: ``output_format="hex"`` so we get the audio bytes directly
+    (no 24h-expiring CDN URL). The file is saved to
+    ``workspace/music/`` under either the user-provided ``filename`` or
+    a timestamp fallback, with the extension taken from
+    ``audio_setting.format``.
+
+    Response shape:
+        ``{"success": True, "file_path": str, "filename": str,
+           "model": str, "include_lyrics": bool, "extra_info": {...},
+           "trace_id": str, cost_credits, cost_usd}``
+    """
+    try:
+        minimax_config = get_minimax_config()
+        api_key = minimax_config["api_key"]
+        api_base = minimax_config["api_base"]
+
+        if not api_key:
+            raise HTTPException(status_code=400, detail="API key not configured")
+
+        # Resolve audio_setting: request > config.yaml > hardcoded defaults.
+        # The frontend normally sends audio_setting (read from Settings),
+        # but we keep a config.yaml fallback so manual curl / scripted
+        # callers don't need to.
+        cfg = _load_config_dict()
+        music_cfg = cfg.get("music") if isinstance(cfg.get("music"), dict) else {}
+        audio_cfg = music_cfg.get("audio_setting") if isinstance(music_cfg.get("audio_setting"), dict) else {}
+
+        if req.audio_setting is not None:
+            audio_setting = {
+                "sample_rate": req.audio_setting.sample_rate,
+                "bitrate": req.audio_setting.bitrate,
+                "format": req.audio_setting.format,
+            }
+        else:
+            audio_setting = {
+                "sample_rate": int(audio_cfg.get("sample_rate", 44100)),
+                "bitrate": int(audio_cfg.get("bitrate", 256000)),
+                "format": str(audio_cfg.get("format", "mp3")),
+            }
+        # Defensive validation (in case config.yaml got a stray value).
+        if audio_setting["sample_rate"] not in AUDIO_SAMPLE_RATES:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Invalid audio_setting.sample_rate={audio_setting['sample_rate']}. "
+                    f"Must be one of {AUDIO_SAMPLE_RATES}."
+                ),
+            )
+        if audio_setting["bitrate"] not in AUDIO_BITRATES:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Invalid audio_setting.bitrate={audio_setting['bitrate']}. "
+                    f"Must be one of {AUDIO_BITRATES}."
+                ),
+            )
+        if audio_setting["format"] not in AUDIO_FORMATS:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Invalid audio_setting.format={audio_setting['format']}. "
+                    f"Must be one of {AUDIO_FORMATS}."
+                ),
+            )
+
+        # Build the output path. Filename is sanitised; extension is taken
+        # from the audio_setting (which the API honours) so the file on
+        # disk matches what the API actually returned.
+        import re
+        safe_name = re.sub(r"[^A-Za-z0-9._-]+", "-", (req.filename or "").strip()).strip("-")
+        if safe_name and "." in safe_name:
+            stem = safe_name.rsplit(".", 1)[0]
+        elif safe_name:
+            stem = safe_name
+        else:
+            stem = f"music_{int(asyncio.get_event_loop().time())}"
+
+        ext = audio_setting["format"]
+        music_dir = PROJECT_ROOT / "workspace" / "music"
+        music_dir.mkdir(parents=True, exist_ok=True)
+        # Avoid clobbering existing files — append a counter on collision.
+        output_path = music_dir / f"{stem}.{ext}"
+        if output_path.exists():
+            counter = 2
+            while (music_dir / f"{stem}_{counter}.{ext}").exists():
+                counter += 1
+            output_path = music_dir / f"{stem}_{counter}.{ext}"
+
+        client = MiniMaxSyncClient(api_key, api_base)
+        try:
+            success, result = client.music_generate(
+                prompt=req.prompt,
+                lyrics=req.lyrics,
+                model=req.model,
+                output_path=str(output_path),
+                audio_setting=audio_setting,
+                lyrics_optimizer=req.lyrics_optimizer,
+                is_instrumental=req.is_instrumental,
+                audio_url=req.audio_url,
+                audio_base64=req.audio_base64,
+                cover_feature_id=req.cover_feature_id,
+                output_format="hex",
+            )
+        finally:
+            client.close()
+
+        if not success:
+            # The client returns a dict with ``error`` / ``status_code``.
+            err_msg = result.get("error", "Music generation failed") if isinstance(result, dict) else str(result)
+            # Surface as 400 for validation-style failures, 502 for upstream
+            # API errors so the frontend can distinguish "fix your request"
+            # from "MiniMax API is having a bad day".
+            sc = result.get("status_code") if isinstance(result, dict) else None
+            if sc in (2013, 1004, 2049):
+                raise HTTPException(status_code=400, detail=err_msg)
+            if sc == 1008:
+                raise HTTPException(status_code=402, detail=err_msg)
+            if sc == 1002:
+                raise HTTPException(status_code=429, detail=err_msg)
+            if sc == 1026:
+                raise HTTPException(status_code=422, detail=err_msg)
+            raise HTTPException(status_code=502, detail=err_msg)
+
+        # success → dict with output_path / extra_info / trace_id
+        actual_path = result.get("output_path", str(output_path)) if isinstance(result, dict) else result
+        extra_info = (result.get("extra_info") or {}) if isinstance(result, dict) else {}
+        trace_id = (result.get("trace_id") or "") if isinstance(result, dict) else ""
+
+        rel_path = str(Path(actual_path).relative_to(PROJECT_ROOT)).replace("\\", "/")
+        cost = calculate_music_cost(include_lyrics=bool(req.lyrics.strip()))
+        return {
+            "success": True,
+            "file_path": rel_path,
+            "filename": Path(actual_path).name,
+            "model": req.model,
+            "include_lyrics": bool(req.lyrics.strip()),
+            "audio_setting": audio_setting,
+            "extra_info": extra_info,
+            "trace_id": trace_id,
+            **cost,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        _logger.exception("Music generation failed")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class MusicConfigUpdate(BaseModel):
+    """Update the ``music`` section of config.yaml.
+
+    Phase 1 only persists ``audio_setting``; cover-related fields will
+    be added in Phase 2. We keep the Pydantic model focused to avoid
+    storing unknown keys.
+    """
+    audio_setting: Optional[AudioSetting] = None
+
+
+@app.put("/api/config/music")
+async def update_music_config(req: MusicConfigUpdate):
+    """Persist music generation defaults (currently ``audio_setting``).
+
+    The frontend SettingsModal writes here when the user changes the
+    Audio tab. The /api/music handler reads from the same key as a
+    fallback when the request body omits ``audio_setting``.
+    """
+    global config
+    try:
+        cfg = _load_config_dict()
+        music_block = cfg.get("music")
+        if not isinstance(music_block, dict):
+            music_block = {}
+
+        if req.audio_setting is not None:
+            music_block["audio_setting"] = {
+                "sample_rate": req.audio_setting.sample_rate,
+                "bitrate": req.audio_setting.bitrate,
+                "format": req.audio_setting.format,
+            }
+
+        cfg["music"] = music_block
+
+        import yaml
+        with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+            yaml.dump(cfg, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+
+        config = cfg
+        return {"success": True, "music": music_block}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -1790,7 +2986,7 @@ async def shell_websocket(websocket: WebSocket):
             del shell_sessions[session_id]
 
 
-# ============ MiniMax CLI Integration ============
+# ============ MiniMax Token Plan (quota + plan tier detection) ============
 
 # Canonical plan identifiers for the current MiniMax Token Plan.
 # There is no "starter" tier — Token Plan starts at Plus. All three paid
@@ -1810,10 +3006,11 @@ _PLAN_LOOKUP: dict = {alias: canonical for alias, canonical in _PLAN_ALIASES}
 
 
 def _normalise_plan(raw: object) -> str:
-    """Map a free-form plan name from the mmx CLI to a canonical identifier.
+    """Map a free-form plan name to a canonical identifier.
 
-    Returns ``"unknown"`` for empty / unrecognised values so the frontend
-    can always render a stable enum-like value.
+    Accepts strings coming from config.yaml (``minimax.plan``) or older
+    API responses. Returns ``"unknown"`` for empty / unrecognised values
+    so the frontend can always render a stable enum-like value.
     """
     if not raw:
         return "unknown"
@@ -1836,11 +3033,11 @@ def _get_user_configured_plan() -> str:
     """Fallback plan source: read ``minimax.plan`` from config.yaml.
 
     This is a **fallback** — the primary plan source is auto-detection
-    from mmx ``model_remains[]`` access flags (see ``_detect_plan_from_mmx``).
-    We keep this for two reasons:
-      1) Users whose mmx response is empty (fresh key, transient network
+    from the Token Plan API ``model_remains[]`` access flags (see
+    ``_detect_plan_from_api``). We keep this for two reasons:
+      1) Users whose API response is empty (fresh key, transient network
          blip) still see the right tier in the UI.
-      2) Future mmx versions might add Ultra-specific signals that we
+      2) Future API versions might add Ultra-specific signals that we
          can't auto-detect yet — config.yaml gives the user a manual
          override.
     The cost of a wrong value is bounded — a user lying about their tier
@@ -1857,12 +3054,13 @@ def _get_user_configured_plan() -> str:
     return "unknown"
 
 
-def _detect_plan_from_mmx(model_remains: list) -> str:
-    """Auto-detect the user's plan from mmx ``model_remains[]`` access flags.
+def _detect_plan_from_api(model_remains: list) -> str:
+    """Auto-detect the user's plan from the Token Plan API ``model_remains[]``
+    access flags.
 
-    mmx 1.0.16+ no longer returns the plan name directly, but every model
-    entry carries ``current_interval_status`` (1 = active, 3 = inactive
-    for this plan). The set of models the user has access to uniquely
+    The Token Plan API returns each model entry with a
+    ``current_interval_status`` field (1 = active for this plan, 3 =
+    inactive). The set of models the user has access to uniquely
     identifies the plan:
 
         + video gen active          → max (or ultra; ultra is a superset)
@@ -1870,12 +3068,12 @@ def _detect_plan_from_mmx(model_remains: list) -> str:
         + only text (general) active → plus (lowest paid tier; no
                                          "starter" tier in current
                                          Token Plan)
-        + nothing                   → unknown (mmx error / fresh key)
+        + nothing                   → unknown (API error / fresh key)
 
-    This is the **primary** plan source — every other user with a working
-    mmx quota endpoint gets the right tier automatically, with no need
-    to hand-edit ``config.yaml``. Config.yaml is only consulted as a
-    fallback when mmx returns nothing usable.
+    This is the **primary** plan source — every user with a working
+    Token Plan API endpoint gets the right tier automatically, with no
+    need to hand-edit ``config.yaml``. Config.yaml is only consulted as
+    a fallback when the API returns nothing usable.
     """
     if not model_remains:
         return "unknown"
@@ -1885,7 +3083,7 @@ def _detect_plan_from_mmx(model_remains: list) -> str:
         m = by_name.get(name)
         if not m:
             return False
-        # 1 = active, 3 = inactive. Some mmx versions report 0 for
+        # 1 = active, 3 = inactive. Some API versions report 0 for
         # "no access for this plan" — treat anything other than 1 as
         # inactive. Prefer the 5h interval status, fall back to weekly.
         status = _coerce_number(m.get("current_interval_status"))
@@ -1909,7 +3107,11 @@ def _detect_plan_from_mmx(model_remains: list) -> str:
 
 
 def _coerce_number(value: object) -> Optional[float]:
-    """Coerce a value coming from the mmx CLI into ``float`` (or ``None``)."""
+    """Coerce a numeric-looking value into ``float`` (or ``None``).
+
+    Used to read fields that the API may return as strings or numbers
+    depending on the version (credit balances, percentages, etc.).
+    """
     if value is None:
         return None
     if isinstance(value, bool):
@@ -1923,24 +3125,25 @@ def _coerce_number(value: object) -> Optional[float]:
 
 
 def _enrich_quota(data: object) -> dict:
-    """Build the enriched quota payload from raw mmx output.
+    """Build the enriched quota payload from the raw Token Plan API response.
 
-    The mmx CLI returns the plan and credit fields under a few different
-    keys depending on the version; we probe them all and fall back to
-    safe defaults so the frontend always receives a stable shape.
+    The API returns the plan and credit fields under a few different keys
+    depending on the version; we probe them all and fall back to safe
+    defaults so the frontend always receives a stable shape.
     """
     payload: dict = data if isinstance(data, dict) else {}
-    # `data` may itself be wrapped — mmx often returns {"data": {...}}.
+    # `data` may itself be wrapped — the Token Plan API often returns
+    # {"data": {...}}.
     inner = payload.get("data") if isinstance(payload.get("data"), dict) else payload
 
     # Plan resolution order:
-    #   1) Auto-detect from mmx model_remains[] access flags (works for
+    #   1) Auto-detect from API model_remains[] access flags (works for
     #      any user, no config required)
-    #   2) Explicit plan field in the mmx response (older versions)
+    #   2) Explicit plan field in the API response (older versions)
     #   3) User-declared ``minimax.plan`` in config.yaml (manual override)
-    #   4) Default to ``starter`` (lowest tier) as a safe last resort
+    #   4) Default to ``plus`` (lowest paid tier) as a safe last resort
     model_remains = inner.get("model_remains") if isinstance(inner.get("model_remains"), list) else []
-    plan = _detect_plan_from_mmx(model_remains)
+    plan = _detect_plan_from_api(model_remains)
     if plan == "unknown":
         plan_raw = (
             inner.get("plan")
@@ -1959,11 +3162,11 @@ def _enrich_quota(data: object) -> dict:
         # the user as a legacy free user.
         plan = "plus"
 
-    # mmx 1.0.16+ removed credit_balance/total fields. Instead, the response
-    # carries ``model_remains[]`` with per-model remaining *percentages*.
-    # We surface the chat ("general") quota as credit_balance so the existing
-    # CreditBalanceWidget has something numeric to render. credit_total is
-    # fixed at 100 since the new format is percentage-based.
+    # The Token Plan API returns remaining *percentages* per model via
+    # ``model_remains[]``. We surface the chat ("general") quota as
+    # credit_balance so the existing CreditBalanceWidget has something
+    # numeric to render. credit_total is fixed at 100 since the format
+    # is percentage-based.
     # ``model_remains`` was already loaded above for plan auto-detection.
     general_model = next(
         (m for m in model_remains if (m.get("model_name") or "").lower() == "general"),
@@ -2068,10 +3271,8 @@ def _enrich_quota(data: object) -> dict:
 async def get_quota():
     """Get Token Plan quota and auto-detect the user's plan tier.
 
-    Tries the direct HTTP call to the Token Plan ``remains`` endpoint
-    first (no external dependency), and falls back to the ``mmx`` CLI
-    subprocess if the user happens to have it installed and the direct
-    call fails for any reason.
+    Direct HTTP call to the Token Plan ``remains`` endpoint — no
+    external CLI dependency.
 
     The response is enriched at the root level with canonical fields
     (plan, credit_balance, credit_total, window_reset_at, video_daily_*)
@@ -2085,20 +3286,15 @@ async def get_quota():
         if not api_key:
             raise HTTPException(status_code=400, detail="API key not configured")
 
-        # 1) Direct HTTP call (preferred — works without mmx installed).
         data = await _fetch_quota_via_api(api_key, region)
-
-        # 2) Fallback: mmx CLI subprocess (for users who happen to have it
-        #    installed and want the CLI's exact output format).
-        if data is None:
-            data = _fetch_quota_via_mmx(api_key, region)
 
         if data is None:
             return {
                 "success": False,
                 "error": (
-                    "Could not fetch quota via direct API or mmx CLI. "
-                    "Set minimax.plan: plus|max|ultra in config/config.yaml "
+                    "Could not fetch quota from the Token Plan API. "
+                    "Verify network connectivity and API key, or set "
+                    "minimax.plan: plus|max|ultra in config/config.yaml "
                     "as a fallback."
                 ),
             }
@@ -2112,11 +3308,10 @@ async def get_quota():
 async def _fetch_quota_via_api(api_key: str, region: str) -> Optional[dict]:
     """Direct HTTP call to the Token Plan ``remains`` endpoint.
 
-    Equivalent to ``mmx quota --output json`` but without requiring the
-    mmx CLI to be installed. Returns the parsed JSON payload, or ``None``
-    on any failure (network error, non-2xx response, malformed JSON).
+    Returns the parsed JSON payload, or ``None`` on any failure
+    (network error, non-2xx response, malformed JSON, API-level error).
 
-    Endpoint (mirrors what mmx-cli does internally):
+    Endpoint:
         GET https://api.minimax.io/v1/api/openplatform/coding_plan/remains
         GET https://api.minimaxi.com/v1/api/openplatform/coding_plan/remains  (CN)
         Authorization: Bearer <api_key>
@@ -2137,8 +3332,8 @@ async def _fetch_quota_via_api(api_key: str, region: str) -> Optional[dict]:
             data = r.json()
             # The Token Plan API returns HTTP 200 even for credential
             # errors; the real status lives in `base_resp.status_code`
-            # (0 = success, anything else = API-level error). Mirror
-            # the behavior of the mmx CLI: treat non-zero as failure.
+            # (0 = success, anything else = API-level error). Treat
+            # non-zero as failure.
             base_resp = data.get("base_resp") or {}
             if base_resp.get("status_code", 0) != 0:
                 _logger.debug(
@@ -2149,32 +3344,6 @@ async def _fetch_quota_via_api(api_key: str, region: str) -> Optional[dict]:
             return data
     except Exception as e:
         _logger.debug(f"Direct quota fetch failed: {e}")
-        return None
-
-
-def _fetch_quota_via_mmx(api_key: str, region: str) -> Optional[dict]:
-    """Subprocess call to ``mmx quota``. Returns parsed JSON or ``None``.
-
-    Used only as a fallback if the direct API call fails. Returns
-    ``None`` if mmx is not installed, the subprocess fails, or the
-    output is not valid JSON.
-    """
-    import subprocess
-    import shutil
-
-    mmx_cmd = shutil.which("mmx")
-    if not mmx_cmd:
-        return None
-    try:
-        cmd_str = f'"{mmx_cmd}" quota --api-key {api_key} --region {region} --output json'
-        result = subprocess.run(
-            cmd_str, capture_output=True, text=True, timeout=30, shell=True
-        )
-        if result.returncode != 0:
-            return None
-        return json.loads(result.stdout)
-    except Exception as e:
-        _logger.debug(f"mmx quota subprocess failed: {e}")
         return None
 
 
@@ -2191,8 +3360,12 @@ async def run_cli_command(req: CLIRequest):
 
         import subprocess
         # Build command: mmx <command> [args] --api-key <key> --region <region>
+        # ``speech`` was removed when we migrated T2A to direct HTTP (the
+        # /api/minimax/speech/* endpoints replace it). ``video`` and ``music``
+        # are still allowed because their direct-HTTP migrations are pending
+        # (covered in the mmx → API migration roadmap).
         allowed_commands = {
-            "text", "speech", "image", "video", "music",
+            "text", "image", "video", "music",
             "vision", "search", "quota", "config"
         }
 
@@ -2232,72 +3405,8 @@ async def run_cli_command(req: CLIRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/api/minimax/voices")
-async def get_voices(language: str = ""):
-    """Get available TTS voices using mmx CLI."""
-    try:
-        minimax_config = get_minimax_config()
-        api_key = minimax_config["api_key"]
-        region = minimax_config["region"]
-
-        if not api_key:
-            raise HTTPException(status_code=400, detail="API key not configured")
-
-        import subprocess
-        import shutil
-        mmx_cmd = shutil.which("mmx") or "mmx"
-        cmd_str = f'"{mmx_cmd}" speech voices --api-key {api_key} --region {region} --output json'
-        if language:
-            cmd_str += f' --language {language}'
-        result = subprocess.run(cmd_str, capture_output=True, text=True, timeout=30, shell=True)
-
-        if result.returncode != 0:
-            return {"success": False, "error": result.stderr or "CLI error"}
-
-        try:
-            data = json.loads(result.stdout)
-            # CLI returns a flat list of strings; enrich into objects
-            if isinstance(data, list):
-                voices = []
-                for v in data:
-                    if isinstance(v, str):
-                        voice_id = v
-                        # Detect language from prefix
-                        if voice_id.startswith("Chinese (Mandarin)_"):
-                            lang = "Chinese"
-                        elif voice_id.startswith("Cantonese_"):
-                            lang = "Cantonese"
-                        elif "_" in voice_id:
-                            # Extract language from prefix before first underscore
-                            # e.g. "English_expressive" -> "English", "German_Calm" -> "German"
-                            lang = voice_id.split("_")[0]
-                        else:
-                            lang = "Unknown"
-                        # Build friendly name
-                        name_part = voice_id.split("_", 1)[1] if "_" in voice_id else voice_id
-                        friendly = name_part.replace("_", " ").replace("-", " ")
-                        # Guess gender
-                        gender = "General"
-                        lowered = voice_id.lower()
-                        if any(x in lowered for x in ["man", "male", "boy", "gentleman", "guy", "dude", "bloke", "knight", "butler", "commander"]):
-                            gender = "Male"
-                        elif any(x in lowered for x in ["woman", "female", "girl", "lady", "maiden", "queen", "princess", "auntie", "bestie"]):
-                            gender = "Female"
-                        voices.append({
-                            "id": voice_id,
-                            "name": friendly,
-                            "language": lang,
-                            "gender": gender,
-                        })
-                    elif isinstance(v, dict):
-                        voices.append(v)
-                return {"success": True, "data": {"voices": voices}}
-            return {"success": True, "data": data}
-        except json.JSONDecodeError:
-            return {"success": True, "raw": result.stdout}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
+# NOTE: ``/api/minimax/voices`` (mmx-based, deleted 2026-06-21) was replaced by
+# ``/api/minimax/speech/voices`` (direct HTTP, see speech section above).
 
 # Serve frontend static files (for production)
 FRONTEND_BUILD = PROJECT_ROOT / "web" / "frontend" / "dist"
@@ -2315,4 +3424,17 @@ if FRONTEND_BUILD.exists():
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8000))
-    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)
+    # ``reload=True`` requires the Python interpreter on PATH to spawn
+    # the reloader child. That is incompatible with a frozen exe in
+    # production (and with stripped PATHs in the smoke test). Default
+    # to off; dev can opt back in with MINIMAX_RELOAD=1.
+    reload = os.environ.get("MINIMAX_RELOAD", "0") == "1"
+    if reload:
+        # Dev only: hot-reload via StatReload. The "main:app" string
+        # form is fine here because dev runs the raw .py from source.
+        uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)
+    else:
+        # Production / frozen exe: pass the app object directly so we
+        # don't need importlib to find a "main" module (which is
+        # renamed/embedded under _internal/ inside a PyInstaller bundle).
+        uvicorn.run(app, host="0.0.0.0", port=port)

@@ -1,0 +1,52 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "MiniMax Agent",
+  "version": "0.1.0",
+  "identifier": "com.minimax.agent.desktop",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:1420",
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "MiniMax Agent",
+        "width": 1320,
+        "height": 860,
+        "minWidth": 1040,
+        "minHeight": 640,
+        "resizable": true,
+        "fullscreen": false,
+        "decorations": false,
+        "transparent": false,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": null
+    },
+    "withGlobalTauri": true
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["msi", "nsis", "dmg", "appimage", "deb"],
+    "resources": {
+      "../../dist/backend/backend.exe": "backend/backend.exe",
+      "../../dist/backend/_internal": "backend/_internal"
+    },
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "category": "DeveloperTool",
+    "shortDescription": "MiniMax Agent - AI-powered desktop assistant",
+    "longDescription": "Professional desktop app for the MiniMax Agent platform with multi-expert support, code workspace, and persistent memory.",
+    "publisher": "MiniMax",
+    "copyright": "Copyright (c) 2026 MiniMax"
+  }
+}
