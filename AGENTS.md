@@ -295,6 +295,23 @@ in `_detect_plan_from_api()` (`web/backend/main.py`):
 - Some tests require live API key in `config/config.yaml`
 - Unit tests for tools can run without API key
 
+## Repository layout (post v0.4.0)
+
+Starting with v0.4.0, this repo ships **only the Tauri desktop app** as
+the installable interface. The legacy web frontend is being moved to a
+separate fork (`eduardoabreu81/minimax-agent-gui-web`).
+
+| Path | Repo | Notes |
+|---|---|---|
+| `desktop/` | this | Tauri 2 desktop app (primary, installable) |
+| `web/backend/` | this | FastAPI — also bundled by Tauri sidecar, shared |
+| `mini_agent/`, `mini_max_mcp/`, `tests/` | this | Core + tests |
+| `web/frontend/` | fork `minimax-agent-gui-web` | Legacy React web app — preserved on a `web-archive` branch before the split, then moved to the fork |
+
+When working in this repo, **do not edit `web/frontend/*`** — it's
+frozen and the active development target is `desktop/`. If you need to
+mirror a feature back to the web app, do it in the fork.
+
 ## Code Style Guidelines
 
 - **PEP 8** with Python 3.10+ union syntax (`str | None`)
