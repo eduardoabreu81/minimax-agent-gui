@@ -5,6 +5,7 @@ import { AgentActivityProvider } from './context/AgentActivityContext'
 import { SessionTokensProvider } from './context/SessionTokensContext'
 import { hasAnyRisk } from './hooks/useSessionProtection'
 import { useBackendReady } from './hooks/useBackendReady'
+import { useAgentContext } from './hooks/useAgentContext'
 import Sidebar from './components/Sidebar'
 import Titlebar from './components/shell/Titlebar'
 import BackendLoader from './components/shell/BackendLoader'
@@ -19,6 +20,8 @@ import TaskBoard from './components/taskboard/TaskBoard'
 import SettingsPanel from './components/settings/SettingsPanel'
 import QuickSettings from './components/settings/QuickSettings'
 import Onboarding from './components/onboarding/Onboarding'
+import OnboardingWizard, { WIZARD_SEEN_KEY } from './components/agent-context/OnboardingWizard.jsx'
+import IncompleteContextBanner from './components/agent-context/IncompleteContextBanner.jsx'
 import CommandPalette from './components/command-palette/CommandPalette'
 import StatusBar from './components/shared/StatusBar'
 
@@ -104,6 +107,38 @@ function AppShell() {
   // Extended thinking is M3-only (today). Other chat models in the Token
   // Plan do not support the Anthropic `thinking` param.
   const supportsThinking = activeModel === 'MiniMax-M3'
+
+  // Agent Context system — banner + wizard mount state. The hook
+  // owns the .agent/ status, the localStorage flag controls whether
+  // the wizard is shown on first launch. The wizard can be re-opened
+  // any time via the banner's "Set up now" button.
+  const agentContext = useAgentContext()
+  const [wizardOpen, setWizardOpen] = useState(false)
+  // Auto-open the wizard on first launch if the user hasn't seen it
+  // AND the .agent/ files are not yet filled. Runs once.
+  useEffect(() => {
+    let seen = false
+    try { seen = !!localStorage.getItem(WIZARD_SEEN_KEY) } catch {}
+    if (!seen && !agentContext.loading && agentContext.status?.banner_visible) {
+      setWizardOpen(true)
+    }
+  }, [agentContext.loading, agentContext.status?.banner_visible])
+
+  const openAgentContextSettings = useCallback(() => {
+    setActiveTab('settings')
+    // The Settings panel uses scroll-spy; the agent-context section
+    // has id="settings-agent-context" so we scroll it into view after
+    // a tick (let the panel mount first).
+    setTimeout(() => {
+      const el = document.getElementById('settings-agent-context')
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 60)
+  }, [])
+
+  const openAgentContextWizard = useCallback(() => {
+    setActiveTab('settings')
+    setWizardOpen(true)
+  }, [])
 
   const panels = {
     chat: <ChatPanel key={chatKey}
@@ -228,6 +263,15 @@ function AppShell() {
             supportsThinking={supportsThinking}
           />
           <Onboarding />
+          <IncompleteContextBanner
+            status={agentContext.status}
+            onOpenSettings={openAgentContextSettings}
+            onOpenWizard={openAgentContextWizard}
+          />
+          <OnboardingWizard
+            open={wizardOpen}
+            onClose={() => setWizardOpen(false)}
+          />
           <QuickSettings
             isOpen={false}
             onClose={() => {}}

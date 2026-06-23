@@ -4,11 +4,12 @@ import {
   Globe, Moon, Sun, Key, Cpu, Shield, Keyboard,
   Info, Check, AlertCircle, Save, RotateCcw, Eye, EyeOff,
   MapPin, BarChart3, Lock, Unlock, Search, Monitor, Palette, User, Trash2, Pencil, Activity, Server,
-  Boxes, Sparkles, Github, Sliders, Loader2
+  Boxes, Sparkles, Github, Sliders, Loader2, Brain
 } from 'lucide-react'
 import { useTheme } from '../../context/ThemeContext'
 import { apiFetch } from '../../lib/api.js'
 import SkillsTab from './SkillsTab.jsx'
+import AgentContextTab from '../agent-context/AgentContextTab.jsx'
 
 // Models available in the Token Plan. Chat models are the ones the user
 // can pick as their default — media models (image / video / speech / music)
@@ -495,7 +496,8 @@ export default function SettingsPanel() {
     { id: 'api-key',             label: t('settings.apiKey'),              icon: Key },
     { id: 'lang-region',         label: t('settings.langRegion'),          icon: Globe },
     { id: 'generation-defaults', label: t('settings.generationDefaults'),  icon: Sliders },
-    { id: 'skills',               label: t('settings.skills') || 'Skills',   icon: Sparkles },
+    { id: 'agent-context',       label: t('agentContext.title') || 'Agent context', icon: Brain },
+    { id: 'skills',              label: t('settings.skills') || 'Skills',  icon: Sparkles },
     { id: 'tools',               label: t('settings.tools'),               icon: Boxes },
     { id: 'mcp',                 label: t('settings.mcpServers'),          icon: Server },
     { id: 'shortcuts',           label: t('settings.shortcuts'),           icon: Keyboard },
@@ -904,7 +906,17 @@ export default function SettingsPanel() {
           </div>
         </Card>
 
-        {/* ─── 8. Skills ─────────────────────────────────────────────────── */}
+        {/* ─── 8. Agent context ───────────────────────────────────────────── */}
+        <SectionHeader
+          id="settings-agent-context"
+          icon={Brain}
+          title={t('agentContext.title') || 'Agent context'}
+        />
+        <Card>
+          <AgentContextTab />
+        </Card>
+
+        {/* ─── 9. Skills ─────────────────────────────────────────────────── */}
         <SectionHeader id="settings-skills" icon={Sparkles} title={t('settings.skills') || 'Skills'} />
         <Card>
           <SkillsTab />

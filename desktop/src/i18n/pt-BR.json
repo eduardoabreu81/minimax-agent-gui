@@ -329,5 +329,115 @@
   },
   "common": {
     "statusSummary": "Pendentes: {pending} · Em andamento: {progress} · Em revisão: {review} · Concluídas: {done}"
+  },
+  "agentContext": {
+    "title": "Contexto do agente",
+    "subtitle": "5 arquivos definem como o agente se comporta neste workspace.",
+    "userOnly": "Somente você",
+    "youAndAgent": "Você + agente",
+    "agentAppends": "Agente anexa automaticamente",
+    "slot1": "slot #1",
+    "charCount": "{used} / {limit} caracteres",
+    "percent": "{pct}% usado",
+    "gracefulDegradation": "Qualquer combinação de arquivos vazios funciona — o agente degrada com elegância e o banner avisa quando algo essencial está faltando.",
+
+    "banner": {
+      "incomplete": "Contexto do agente incompleto",
+      "missingFile": "{file} ausente — o agente tem conhecimento limitado sobre você.",
+      "setUpNow": "Configurar agora",
+      "openSettings": "Abrir Settings",
+      "dismiss": "Descartar"
+    },
+
+    "wizard": {
+      "title": "Vamos configurar seu MiniMax Studio",
+      "subtitle": "4 passos rápidos. Você pode pular e configurar depois.",
+      "step": {
+        "about": "Sobre você",
+        "personality": "Personalidade",
+        "identity": "Papel",
+        "review": "Revisar"
+      },
+      "skip": "Pular",
+      "back": "Voltar",
+      "next": "Próximo",
+      "create": "Criar {n} arquivos",
+      "name": "Como você quer ser chamado?",
+      "namePh": "ex.: Eduardo",
+      "timezone": "Fuso horário",
+      "level": "Nível técnico",
+      "personalityQ": "Como você quer que eu soe?",
+      "identityQ": "Qual meu papel padrão neste workspace?",
+      "reviewQ": "Confirme os arquivos que serão criados",
+      "levelBeginner": "Iniciante",
+      "levelMid": "Intermediário",
+      "levelSenior": "Avançado"
+    },
+
+    "personality": {
+      "preset": "Preset",
+      "reset": "Restaurar padrão",
+      "customPlaceholder": "Personalidade customizada…"
+    },
+
+    "identity": {
+      "quickSwitch": "Trocar papel",
+      "customPlaceholder": "Descrição do papel customizado…"
+    },
+
+    "memory": {
+      "view": "Ver",
+      "edit": "Editar",
+      "revert": "Restaurar template"
+    },
+
+    "daily": {
+      "empty": "Nenhum registro ainda.",
+      "today": "Hoje",
+      "yesterday": "Ontem",
+      "turns": "{n} turnos"
+    },
+
+    "viewer": {
+      "memory": {
+        "title": "Memória do agente",
+        "usageHeader": "MEMORY (anotações do agente) · {pct}% — {used}/{limit} caracteres",
+        "empty": "Vazio. O agente vai popular conforme você trabalha.",
+        "appendOnly": "Append-only · atualizado pelo agente"
+      },
+      "daily": {
+        "title": "Registros de {date}",
+        "appendOnly": "Append-only · gerado pelo agente a cada turno"
+      }
+    },
+
+    "common": {
+      "save": "Salvar",
+      "cancel": "Cancelar",
+      "delete": "Excluir"
+    },
+
+    "presets": {
+      "concise": "Conciso",
+      "friendly": "Amigável",
+      "mentor": "Mentor",
+      "expert": "Especialista",
+      "creative": "Criativo"
+    },
+
+    "roles": {
+      "eng": "Engineering partner",
+      "reviewer": "Code reviewer",
+      "pm": "Project manager",
+      "custom": "Customizado"
+    },
+
+    "file": {
+      "soul": "Personalidade",
+      "identity": "Papel atual",
+      "user": "Seu perfil",
+      "memory": "Memória do projeto",
+      "daily": "Registros do dia"
+    }
   }
 }
