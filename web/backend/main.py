@@ -40,6 +40,18 @@ from mini_agent.tools import ReadTool, WriteTool, BashTool
 from mini_agent.schema import Message
 from mini_agent.tools.skill_loader import SkillLoader
 
+# Agent context system (SOUL/IDENTITY/USER/MEMORY/daily).
+# See web/backend/agent_context.py + web/backend/i18n.py.
+from agent_context import (
+    load_agent_context,
+    render_memory_prompt,
+    render_simple_prompt,
+    AgentContext,
+    CHAR_LIMITS,
+    append_daily_turn,
+    list_recent_dailies,
+)
+
 from mini_max_mcp.client import MiniMaxSyncClient, MiniMaxClient
 from mini_max_mcp.pricing import (
     calculate_image_cost,
@@ -357,6 +369,18 @@ def _conv_path(conv_id: str) -> Path:
     return CONVERSATIONS_DIR / f"{conv_id}.json"
 
 
+# --- Conversation persistence layer ---
+#
+# All conversation storage goes through ``conversation_store``
+# (Protocol + JSONConversationStore in conv_store.py). When scale
+# demands (>500 conversations, >1k messages each, or full-text search /
+# multi-user / cloud sync in the roadmap), swap the factory below to a
+# SQLiteConversationStore implementing the same Protocol — no caller
+# changes needed.
+from conv_store import JSONConversationStore, ConversationStore
+conversation_store: ConversationStore = JSONConversationStore(CONVERSATIONS_DIR)
+
+
 # --- App workspace + coding workspace management (v0.5 redesign) ---
 #
 # Two distinct concepts now:
@@ -566,12 +590,13 @@ def save_conversation_raw(conv: dict) -> None:
 
     Used by helpers that already loaded the conversation and just want
     to persist mutated metadata (e.g. ``workspace_dir``) without
-    touching the title/updated_at bookkeeping.
+    touching the title/updated_at bookkeeping. Bypasses the store's
+    timestamp logic on purpose.
     """
     conv_id = conv.get("id")
     if not conv_id:
         return
-    path = _conv_path(conv_id)
+    path = conversation_store.dir / f"{conv_id}.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(conv, f, ensure_ascii=False, indent=2)
@@ -640,74 +665,77 @@ def _serialize_task(task: dict) -> dict:
 def list_conversations() -> list:
     """List all saved conversations, newest first.
 
-    Each entry includes ``workspace_dir`` so the CodingPanel can render
-    a VSCode-style recent-folders label under each conversation title
-    ("📁 /path/to/project"). Conversations without a workspace (chat
-    sessions, or pre-v0.5 coding sessions) get ``workspace_dir=None``.
+    Thin wrapper around ``conversation_store.list_all`` to keep
+    existing callers working. See ``conv_store.ConversationStore``.
     """
-    conversations = []
-    for p in CONVERSATIONS_DIR.glob("*.json"):
-        try:
-            with open(p, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            ws = data.get("workspace_dir")
-            conversations.append({
-                "id": data.get("id", p.stem),
-                "title": data.get("title", "Untitled"),
-                "created_at": data.get("created_at", ""),
-                "updated_at": data.get("updated_at", ""),
-                "message_count": len(data.get("messages", [])),
-                "workspace_dir": ws if isinstance(ws, str) and ws else None,
-                "type": "coding" if (data.get("id", p.stem) or "").startswith("coding-") else "chat",
-            })
-        except Exception:
-            pass
-    conversations.sort(key=lambda x: x.get("updated_at", ""), reverse=True)
-    return conversations
+    return conversation_store.list_all("")
 
 
 def load_conversation(conv_id: str) -> dict:
-    """Load a conversation by ID."""
-    path = _conv_path(conv_id)
-    if not path.exists():
-        return {"id": conv_id, "title": "New Chat", "messages": []}
-    with open(path, "r", encoding="utf-8") as f:
-        return json.load(f)
+    """Load a conversation by ID. Thin wrapper around the store."""
+    return conversation_store.load(conv_id)
+
+
+def _hydrate_agent_messages(agent, session_id: str) -> int:
+    """Populate ``agent.messages`` from the persisted conversation JSON.
+
+    Called when a fresh Agent is created (e.g. after server restart, or
+    for a session we haven't seen yet) so the API has full context of
+    what was previously discussed. Without this, a reloaded chat shows
+    the old messages visually (frontend receives them via the
+    ``history`` WebSocket event) but the agent loop starts with an
+    empty conversation and answers without remembering anything.
+
+    Tool/system messages are skipped — only user + assistant turns are
+    loaded, plus the assistant's stored thinking block so the agent
+    can recall its own prior reasoning.
+
+    Returns:
+        Number of messages hydrated (for logging).
+    """
+    conv = load_conversation(session_id)
+    if not conv or not conv.get("messages"):
+        return 0
+
+    hydrated = 0
+    for msg in conv["messages"]:
+        msg_type = msg.get("type", "user")
+        content = msg.get("content", msg.get("text", ""))
+        if msg_type == "user":
+            agent.messages.append(Message(role="user", content=content))
+            hydrated += 1
+        elif msg_type == "assistant":
+            assistant_msg = Message(role="assistant", content=content)
+            if msg.get("thinking"):
+                assistant_msg.thinking = msg["thinking"]
+            agent.messages.append(assistant_msg)
+            hydrated += 1
+        # Skip system (handled by system_prompt) and tool turns (would
+        # need tool_call_id re-association to be useful; safe to drop
+        # because the assistant text already conveys the outcome).
+
+    if hydrated:
+        _logger.info(
+            f"Hydrated session '{session_id}' with {hydrated} message(s) "
+            f"from persisted conversation (agent.messages now {len(agent.messages)} total)."
+        )
+    return hydrated
 
 
 def save_conversation(conv_id: str, title: str, messages: list):
-    """Save a conversation to disk."""
-    now = asyncio.get_event_loop().time()
-    # Use ISO format string
-    from datetime import datetime
-    iso_now = datetime.now().isoformat()
-    
-    path = _conv_path(conv_id)
-    data = {"id": conv_id, "title": title, "messages": messages}
-    
-    if path.exists():
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                existing = json.load(f)
-            data["created_at"] = existing.get("created_at", iso_now)
-        except Exception:
-            data["created_at"] = iso_now
-    else:
-        data["created_at"] = iso_now
-    
-    data["updated_at"] = iso_now
-    
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+    """Save a conversation to disk.
+
+    Thin wrapper around ``conversation_store.save``. Existing callers
+    don't pass ``workspace_dir`` (chat sessions only); coding sessions
+    use ``save_conversation_raw`` to update metadata without touching
+    the title/messages bookkeeping.
+    """
+    conversation_store.save(conv_id, title, messages)
 
 
 def delete_conversation(conv_id: str) -> bool:
-    """Delete a conversation by ID."""
-    path = _conv_path(conv_id)
-    if path.exists():
-        path.unlink()
-        return True
-    return False
+    """Delete a conversation by ID. Thin wrapper around the store."""
+    return conversation_store.delete(conv_id)
 
 
 def get_conversation_title(messages: list) -> str:
@@ -720,92 +748,12 @@ def get_conversation_title(messages: list) -> str:
     return "New Chat"
 
 
-def _make_snippet(text: str, query_lower: str, context: int = 60) -> str:
-    """Extract a short snippet around the first match of query in text."""
-    if not text:
-        return ""
-    idx = text.lower().find(query_lower)
-    if idx == -1:
-        return text[:100] + ("..." if len(text) > 100 else "")
-    start = max(0, idx - context)
-    end = min(len(text), idx + len(query_lower) + context)
-    snippet = text[start:end]
-    if start > 0:
-        snippet = "..." + snippet
-    if end < len(text):
-        snippet = snippet + "..."
-    return snippet
-
-
 def search_conversations(query: str, type_filter: str = "") -> list:
     """Search conversations by title, message content, or attachment.
 
-    Returns a list of result dicts ordered by updated_at desc.
+    Thin wrapper around ``conversation_store.search``.
     """
-    if not query or not query.strip():
-        return []
-
-    q = query.strip().lower()
-    results = []
-
-    for p in CONVERSATIONS_DIR.glob("*.json"):
-        try:
-            with open(p, "r", encoding="utf-8") as f:
-                data = json.load(f)
-        except Exception:
-            continue
-
-        conv_id = data.get("id", p.stem)
-
-        # Type filter
-        is_coding = conv_id.startswith("coding-")
-        if type_filter == "coding" and not is_coding:
-            continue
-        if type_filter == "chat" and is_coding:
-            continue
-
-        matches = []
-
-        # Search title
-        title = data.get("title", "")
-        if q in title.lower():
-            matches.append({
-                "field": "title",
-                "snippet": _make_snippet(title, q, 40),
-            })
-
-        # Search messages
-        messages = data.get("messages", [])
-        for i, msg in enumerate(messages):
-            content = msg.get("content", msg.get("text", ""))
-            if q in content.lower():
-                matches.append({
-                    "field": "message",
-                    "snippet": _make_snippet(content, q, 60),
-                    "message_index": i,
-                })
-
-            # Search attachment
-            attachment = msg.get("attachment", "")
-            if attachment and q in attachment.lower():
-                matches.append({
-                    "field": "attachment",
-                    "snippet": _make_snippet(attachment, q, 40),
-                    "message_index": i,
-                })
-
-        if matches:
-            results.append({
-                "id": conv_id,
-                "title": title or "Untitled",
-                "type": "coding" if is_coding else "chat",
-                "updated_at": data.get("updated_at", ""),
-                "message_count": len(messages),
-                "matches": matches,
-            })
-
-    results.sort(key=lambda x: x.get("updated_at", ""), reverse=True)
-    return results
+    return conversation_store.search(query, type_filter=type_filter)
 
 
 class SessionManager:
@@ -822,6 +770,12 @@ class SessionManager:
     Tools (Read/Write/Edit/Bash + media) are constructed against that
     resolved path, so the agent reads/writes in the right place without
     needing to know which kind of session it is.
+
+    Per Agent Context spec §2.2: when the user edits an .agent/*.md file
+    via PUT /api/agent-context/{file}, the in-memory agent cache must
+    be invalidated so the next session reloads from disk. Use
+    ``invalidate(session_id)`` for one or ``invalidate_all()`` after
+    a global edit (e.g. onboarding wizard writing 4 files).
     """
 
     def __init__(self):
@@ -829,10 +783,28 @@ class SessionManager:
         self.config = config
 
     def evict(self, session_id: str) -> None:
-        """Drop a cached agent — used when the coding workspace changes
-        before the session is locked (the agent was built against the
-        old workspace and would point at the wrong files)."""
+        """Drop a cached agent — used when:
+
+        - the coding workspace changes before the session is locked
+          (the agent was built against the old workspace and would
+          point at the wrong files); or
+        - the user edits an ``.agent/*.md`` file via
+          ``PUT /api/agent-context/{file}`` (the agent was built
+          against the old snapshot and would carry the stale system
+          prompt — per Agent Context spec §2.2 the next session must
+          reload from disk).
+        """
         self.sessions.pop(session_id, None)
+
+    def invalidate_all(self) -> int:
+        """Drop all cached agents — used after a global edit (e.g. the
+        onboarding wizard writes all 4 ``.agent/*.md`` files in one
+        batch). Returns the number of sessions dropped, mainly for
+        observability / debug logging.
+        """
+        count = len(self.sessions)
+        self.sessions.clear()
+        return count
 
     async def get_or_create_agent(self, session_id: str) -> Agent:
         if session_id in self.sessions:
@@ -965,12 +937,44 @@ Always be concise but thorough."""
 You help users with daily tasks, questions, brainstorming, writing, analysis, and general problem-solving.
 You have access to file system tools, web search, and image understanding.
 
+You are working in: `{workspace_path}`
+This is the workspace the MiniMax Studio backend resolved for this session. When the user refers to "the project", "this folder", "where we are", they mean this directory.
+
 CRITICAL LANGUAGE RULE: You MUST respond ONLY in the same language the user is using (Portuguese, English, Spanish, etc.). NEVER use Chinese, Japanese, Korean, or any other language not matching the user's message. NEVER mix Chinese characters in your responses.
 
 Be concise, friendly, and helpful."""
 
+        # ---- Agent context system (SOUL / IDENTITY / USER / MEMORY / daily) ----
+        # Load all four .agent/*.md + today's daily as a frozen snapshot.
+        # Per spec §2.1: the snapshot is captured once at session start and
+        # never changes mid-session (preserves LLM prefix cache).
+        ctx: AgentContext = load_agent_context(workspace_path / ".agent")
+        sections = ctx.to_prompt_sections()
+
+        # SOUL.md is slot #1 — identity (per spec §0). Empty falls back to
+        # the built-in identity above (graceful degradation, never blocks).
+        if sections["soul"]:
+            system_prompt = f"{sections['soul']}\n\n---\n\n{system_prompt}"
+        # IDENTITY.md — current role overlay (per spec §0).
+        if sections["identity"]:
+            system_prompt = system_prompt + f"\n\n## Current Role (IDENTITY.md)\n{sections['identity']}"
+        # USER.md — profile, calibrates tone.
+        if sections["user"]:
+            system_prompt = system_prompt + f"\n\n## About the User (USER.md)\n{sections['user']}"
+        # MEMORY.md — Hermes-style usage header + §-delimited entries.
+        mem_rendered = render_memory_prompt(sections["memory"], used=ctx.memory.char_count)
+        if mem_rendered:
+            system_prompt = system_prompt + f"\n\n{mem_rendered}"
+        # Today's daily — recent turns, append-only.
+        if sections["daily"]:
+            system_prompt = system_prompt + f"\n\n## Today's Session Log (daily/{ctx.daily.path.name})\n{sections['daily']}"
+
         if mcp_tools:
-            system_prompt += "\n\n## Custom MCP Tools\nAdditional MCP tools are available from user-configured servers. Use them when relevant. Tool names are prefixed with mcp_{server_id}_."
+            system_prompt += "\n\n## Custom MCP Tools\nAdditional MCP tools are available from user-configured MCP servers. Use them when relevant. Tool names are prefixed with mcp_{server_id}_."
+
+        # Stash the context on the SessionManager so /api/config can expose
+        # the missing/corrupt flags → banner + wizard triggers on frontend.
+        self.last_context = ctx
 
         # Load user profile if exists
         user_profile = ""
@@ -993,6 +997,13 @@ Be concise, friendly, and helpful."""
             max_steps=self.config.get("agent", {}).get("max_steps", 50),
             workspace_dir=str(workspace_path),
         )
+
+        # Restore prior conversation context from the persisted JSON so
+        # the agent loop has memory across server restarts. The
+        # ``history`` WebSocket event already gives the frontend the
+        # visual timeline; this gives the *API* the same memory.
+        _hydrate_agent_messages(agent, session_id)
+
         self.sessions[session_id] = agent
         return agent
 
@@ -1253,8 +1264,43 @@ async def get_config():
         "region": minimax.get("region", "global") if isinstance(minimax, dict) else "global",
         "api_base": minimax.get("api_base", "https://api.minimax.io") if isinstance(minimax, dict) else "https://api.minimax.io",
         "api_key_configured": bool(minimax.get("api_key", "")) if isinstance(minimax, dict) else False,
+        # App-level settings (i18n, etc.) — top-level under `app`.
+        # Default is English (en-US); the install/setup flow writes
+        # the user's chosen language to `app.language` in config.yaml.
+        "app": {
+            "language": config.get("app", {}).get("language", "en-US")
+                if isinstance(config, dict) else "en-US",
+        },
+        # Agent context system — drives the IncompleteContextBanner + wizard.
+        # Freshly loaded each request so it reflects edits on disk; the
+        # *system prompt* still uses a frozen snapshot per session.
+        "agent_context": _agent_context_status(),
     }
     return safe_config
+
+
+def _agent_context_status() -> dict:
+    """Load the four .agent files and return the incomplete-context flag.
+
+    Used by /api/config to drive the frontend banner + wizard triggers.
+    Cheap to compute (4 file reads, no LLM call).
+    """
+    try:
+        from agent_context import load_agent_context
+        agent_dir = get_app_workspace_dir() / ".agent"
+        ctx = load_agent_context(agent_dir)
+        flag = ctx.to_incomplete_flag()
+        # Also expose char usage so the Settings cards can render counters.
+        flag["char_usage"] = {
+            "soul":    {"used": ctx.soul.char_count,    "limit": ctx.soul.limit},
+            "identity": {"used": ctx.identity.char_count, "limit": ctx.identity.limit},
+            "user":    {"used": ctx.user.char_count,    "limit": ctx.user.limit},
+            "memory":  {"used": ctx.memory.char_count,  "limit": ctx.memory.limit},
+        }
+        return flag
+    except Exception as exc:
+        _logger.warning(f"Failed to compute agent_context status: {exc}")
+        return {"missing": [], "corrupt": [], "banner_visible": False, "char_usage": {}}
 
 
 @app.get("/api/profile")
@@ -1687,6 +1733,216 @@ async def update_skills_config(req: SkillsConfigUpdate):
 class ToolsConfigRequest(BaseModel):
     web_search: bool = True
     understand_image: bool = True
+
+
+# ---------------------------------------------------------------------------
+# Agent Context — Daily log listing + read
+# ---------------------------------------------------------------------------
+#
+# The daily log is append-only (one block per turn) — there is no
+# PUT/DELETE on individual days. The frontend reads the most recent N
+# days for the daily-log viewer, and a specific day for the doc viewer.
+#
+# IMPORTANT: these routes are registered BEFORE the catch-all
+# /api/agent-context/{file_id} route below — otherwise FastAPI matches
+# "dailies" against {file_id} and rejects it as an unknown file id.
+# ---------------------------------------------------------------------------
+
+@app.get("/api/agent-context/dailies")
+async def list_dailies(n: int = 7):
+    """Return the N most recent daily log files (newest first).
+
+    Each entry carries just the date + size; the frontend opens the
+    file via ``/api/agent-context/daily/{date}`` on click. Limit is
+    capped at 30 to avoid scanning a long history.
+    """
+    n = max(1, min(int(n or 7), 30))
+    try:
+        agent_dir = get_app_workspace_dir() / ".agent"
+        files = list_recent_dailies(agent_dir, n=n)
+        return {
+            "dailies": [
+                {
+                    "date": f.stem,            # "2026-06-23"
+                    "size": f.stat().st_size, # bytes — for the UI
+                    "path": str(f),
+                }
+                for f in files
+            ],
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/agent-context/daily/{date_str}")
+async def read_daily(date_str: str):
+    """Read a single daily log by ISO date (``YYYY-MM-DD``).
+
+    Returns 404 if no log exists for that date — the frontend should
+    show "No activity on this day" rather than render an empty card.
+    Path is hard-confined to the daily/ directory to avoid traversal.
+    """
+    # Strict ISO date guard — reject anything that isn't 10 chars
+    # shaped like YYYY-MM-DD. Prevents path traversal via ../foo.
+    import re as _re
+    if not _re.fullmatch(r"\d{4}-\d{2}-\d{2}", date_str):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid date '{date_str}'. Expected YYYY-MM-DD.",
+        )
+    try:
+        agent_dir = get_app_workspace_dir() / ".agent"
+        target = (agent_dir / "daily" / f"{date_str}.md").resolve()
+        # Defence-in-depth: ensure the resolved path is still under
+        # ``agent_dir / "daily"``. resolve() should make symlinks safe,
+        # but on Windows the network share case is a known edge.
+        if not str(target).startswith(str((agent_dir / "daily").resolve())):
+            raise HTTPException(status_code=400, detail="Path escape detected.")
+        if not target.exists():
+            raise HTTPException(status_code=404, detail=f"No log for {date_str}.")
+        return {
+            "date": date_str,
+            "content": target.read_text(encoding="utf-8"),
+            "size": target.stat().st_size,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ---------------------------------------------------------------------------
+# Agent Context — CRUD on workspace/.agent/*.md (SOUL, IDENTITY, USER, MEMORY)
+# ---------------------------------------------------------------------------
+#
+# Per Agent Context spec §2.2: editing one of these files must invalidate
+# any in-memory agent so the next session reloads the new system prompt.
+# The wizard uses `invalidate_all()`; the tab uses `evict(session_id)` for
+# the active session (sufficient because the user is editing on the
+# frontend, not in the chat where a session is mid-flight).
+# ---------------------------------------------------------------------------
+
+class AgentContextFileUpdate(BaseModel):
+    content: str
+
+
+_VALID_AGENT_FILES = {"soul", "identity", "user", "memory"}
+
+# Maps the URL-safe ``file_id`` (lowercase, no extension) to the actual
+# filename on disk. Mirrors the constant list in ``agent_context.py``.
+_AGENT_FILE_NAMES = {
+    "soul":     "SOUL.md",
+    "identity": "IDENTITY.md",
+    "user":     "USER.md",
+    "memory":   "MEMORY.md",
+}
+
+
+@app.get("/api/agent-context/{file_id}")
+async def get_agent_context_file(file_id: str):
+    """Return the raw content + char usage for a single .agent/*.md file.
+
+    Reads from disk on every call (no cache) so the frontend always sees
+    the current state after the user saves a change. This is cheap —
+    the files are < 2.2 KB each.
+    """
+    if file_id not in _VALID_AGENT_FILES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid file id '{file_id}'. Expected one of: "
+                   f"{sorted(_VALID_AGENT_FILES)}",
+        )
+    try:
+        agent_dir = get_app_workspace_dir() / ".agent"
+        ctx = load_agent_context(agent_dir)
+        status = {
+            "soul": ctx.soul,
+            "identity": ctx.identity,
+            "user": ctx.user,
+            "memory": ctx.memory,
+        }[file_id]
+        limit = CHAR_LIMITS[file_id]
+        return {
+            "id": file_id,
+            "content": status.content or "",
+            "exists": status.exists,
+            "readable": status.readable,
+            "char_count": status.char_count,
+            "char_limit": limit,
+            "corrupt_reason": status.corrupt_reason,
+            "over_limit": status.over_limit,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/api/agent-context/{file_id}")
+async def put_agent_context_file(file_id: str, req: AgentContextFileUpdate):
+    """Write a single .agent/*.md file and invalidate session cache.
+
+    Per Agent Context spec §2.2 — security: the body is rejected if it
+    would inject a `<<` closing block delimiter (Hermes uses `<<` to
+    close tool-result tags) or if it exceeds the file's char limit.
+    The first guard prevents a single message from breaking the agent
+    loop. The second is a hard limit on prompt budget.
+
+    On success, returns the new char count + the up-to-date status
+    payload (same shape as ``_agent_context_status()``) so the frontend
+    can refresh its banner/wizard state in one round-trip.
+    """
+    if file_id not in _VALID_AGENT_FILES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid file id '{file_id}'. Expected one of: "
+                   f"{sorted(_VALID_AGENT_FILES)}",
+        )
+
+    body = req.content or ""
+
+    # Char limit enforcement — reject 413 so the frontend can show the
+    # "X / Y chars" hint and trim.
+    limit = CHAR_LIMITS[file_id]
+    if len(body) > limit:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Content too long: {len(body)} chars exceeds "
+                   f"limit of {limit} for '{file_id}'",
+        )
+
+    # Hermes `<<` guard — close-block delimiter injection protection.
+    if "<<" in body:
+        raise HTTPException(
+            status_code=400,
+            detail="Content contains '<<' (reserved Hermes close-block "
+                   "delimiter). Remove it before saving.",
+        )
+
+    agent_dir = get_app_workspace_dir() / ".agent"
+    target = agent_dir / _AGENT_FILE_NAMES[file_id]
+    try:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        # Write atomically via temp file + replace so a crash mid-write
+        # never leaves a half-written .md on disk.
+        tmp = target.with_suffix(target.suffix + ".tmp")
+        tmp.write_text(body, encoding="utf-8")
+        tmp.replace(target)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    # Invalidate session cache so the next chat reloads from disk.
+    # The frontend only calls PUT from the AgentContextTab or the
+    # onboarding wizard, never while a chat is in flight, so dropping
+    # the cached agent is safe.
+    dropped = session_manager.invalidate_all()
+
+    return {
+        "id": file_id,
+        "char_count": len(body),
+        "char_limit": limit,
+        "sessions_invalidated": dropped,
+        "status": _agent_context_status(),
+    }
+
 
 @app.post("/api/config/tools")
 async def update_tools_config(req: ToolsConfigRequest):
@@ -2384,6 +2640,21 @@ async def chat_websocket(websocket: WebSocket, session_id: str):
             # Add user message to agent
             agent.add_user_message(full_message)
 
+            # Daily log append — user block (per spec §5.2). The
+            # matching assistant block is written after the agent
+            # returns. Best-effort: a daily write failure should never
+            # break the chat.
+            try:
+                agent_dir_daily = get_app_workspace_dir() / ".agent"
+                if display_content and display_content.strip():
+                    append_daily_turn(
+                        agent_dir_daily,
+                        "user",
+                        display_content,
+                    )
+            except Exception as e:
+                _logger.warning(f"Daily append (user) failed: {e}")
+
             # Auto-save: append user message
             conv = load_conversation(session_id)
             conv["messages"].append({"type": "user", "content": display_content, "attachment": attachment})
@@ -2535,6 +2806,29 @@ async def chat_websocket(websocket: WebSocket, session_id: str):
                     "model": effective_model,
                 })
                 save_conversation(session_id, conv.get("title", get_conversation_title(conv["messages"])), conv["messages"])
+
+                # Daily log append (per Agent Context spec §5.2). Records
+                # this turn as a pair of blocks (user + assistant + `---`)
+                # in workspace/.agent/daily/{YYYY-MM-DD}.md. Best-effort —
+                # if the daily write fails, the chat still completes; we
+                # only log the error and move on. The daily file is
+                # separate from the conversation JSON so it can grow
+                # append-only without bloating reload speed.
+                try:
+                    agent_dir_daily = get_app_workspace_dir() / ".agent"
+                    # One block for the assistant turn. The matching
+                    # user-turn block is written below (right after
+                    # `display_content` is known), so each user/agent
+                    # pair becomes two blocks separated by `---`.
+                    if result and result.strip():
+                        append_daily_turn(
+                            agent_dir_daily,
+                            "assistant",
+                            result,
+                            thinking=full_thinking,
+                        )
+                except Exception as e:
+                    _logger.warning(f"Daily append (assistant) failed: {e}")
             except Exception as e:
                 _logger.error(f"Agent error: {e}")
                 await websocket.send_json({
