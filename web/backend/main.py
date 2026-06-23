@@ -1278,24 +1278,410 @@ async def save_profile(req: dict):
     return {"success": True}
 
 
+# ─── Skills (multi-source: User > Extra > External > Built-in) ────────────
+#
+# Discovery priority matches Kimi / agentskills.io: more-specific sources win.
+# The loader is built from config (`skills.*` block) on first call and cached;
+# mutation endpoints (PUT/POST/DELETE) and the explicit `/discover` endpoint
+# invalidate the cache. The cache is also keyed by source list so adding a
+# new ``extra_skill_dirs`` entry in Settings auto-rebuilds.
+
+_skills_loader_cache: dict | None = None
+_skills_sources_signature: tuple | None = None
+
+
+def _skills_config_block() -> dict:
+    """Return the ``skills:`` sub-dict from config.yaml (defaults applied)."""
+    cfg = _load_config_dict()
+    block = cfg.get("skills") if isinstance(cfg, dict) else None
+    if not isinstance(block, dict):
+        block = {}
+    return {
+        "merge_all_available_skills": bool(
+            block.get("merge_all_available_skills", True)
+        ),
+        "user_dir": block.get("user_dir"),  # None → default
+        "extra_skill_dirs": list(block.get("extra_skill_dirs") or []),
+    }
+
+
+def _skills_signature() -> tuple:
+    """A hashable key that changes when any source config changes."""
+    block = _skills_config_block()
+    return (
+        block["merge_all_available_skills"],
+        block["user_dir"] or "",
+        tuple(block["extra_skill_dirs"]),
+    )
+
+
+def _build_skills_loader():
+    """Construct a SkillLoader from config + env. Does not cache."""
+    from mini_agent.tools.skill_loader import (
+        SkillLoader,
+        SkillSource,
+        get_default_external_paths,
+        get_default_user_dir,
+    )
+
+    block = _skills_config_block()
+    user_dir_raw = block["user_dir"] or str(get_default_user_dir())
+    user_dir = Path(SkillLoader.expand_path(user_dir_raw, project_root=PROJECT_ROOT))
+    user_dir.mkdir(parents=True, exist_ok=True)
+
+    sources: list[tuple[Path, SkillSource]] = [
+        (user_dir, SkillSource.USER),
+    ]
+
+    # Extra: configurable paths (relative → project root; ~/ → home; absolute).
+    for raw in block["extra_skill_dirs"]:
+        path = SkillLoader.expand_path(str(raw), project_root=PROJECT_ROOT)
+        sources.append((path, SkillSource.EXTRA))
+
+    # External brand dirs (Claude / Codex / Gemini / Generic). Missing
+    # paths are silently skipped by the loader — we still register them.
+    for source, path in get_default_external_paths().items():
+        sources.append((path, source))
+
+    # Built-in (last / lowest priority).
+    sources.append((PROJECT_ROOT / "mini_agent" / "skills", SkillSource.BUILTIN))
+
+    return SkillLoader(sources=sources), user_dir
+
+
+def _get_skills_loader():
+    """Return the cached loader, rebuilding if config changed."""
+    global _skills_loader_cache, _skills_sources_signature
+    sig = _skills_signature()
+    if _skills_loader_cache is None or sig != _skills_sources_signature:
+        _skills_loader_cache, _ = _build_skills_loader()
+        _skills_sources_signature = sig
+    _skills_loader_cache.discover_skills()
+    return _skills_loader_cache
+
+
+def _invalidate_skills_loader() -> None:
+    global _skills_loader_cache, _skills_sources_signature
+    _skills_loader_cache = None
+    _skills_sources_signature = None
+
+
+def _skills_user_dir() -> Path:
+    """The user-writable skills dir (created on first call)."""
+    _, user_dir = _build_skills_loader()
+    return user_dir
+
+
+def _serialize_skill(skill, include_raw: bool = False) -> dict:
+    """Skill → API dict. ``include_raw`` adds the full markdown source."""
+    out = skill.to_dict()
+    if include_raw:
+        try:
+            out["raw_markdown"] = (
+                skill.skill_path.read_text(encoding="utf-8") if skill.skill_path else ""
+            )
+        except OSError:
+            out["raw_markdown"] = ""
+    return out
+
+
 @app.get("/api/skills")
-async def get_skills():
-    """List all available skills."""
+async def list_skills():
+    """List all available skills (merged across sources)."""
     try:
-        from mini_agent.tools.skill_loader import SkillLoader
-        skills_dir = PROJECT_ROOT / "mini_agent" / "skills"
-        loader = SkillLoader(str(skills_dir))
-        loader.discover_skills()
-        skills = []
-        for name, skill in loader.loaded_skills.items():
-            skills.append({
-                "name": skill.name,
-                "description": skill.description,
-                "license": skill.license,
-            })
-        return {"success": True, "skills": skills}
+        loader = _get_skills_loader()
+        skills = [_serialize_skill(s) for s in loader.loaded_skills.values()]
+        grouped = loader.get_skills_grouped_by_source()
+        grouped_dict = {
+            src: [_serialize_skill(s) for s in items]
+            for src, items in grouped.items()
+        }
+        return {
+            "success": True,
+            "skills": skills,
+            "grouped": grouped_dict,
+            "scan_errors": loader.last_scan_errors,
+            "count": len(skills),
+        }
     except Exception as e:
-        return {"success": False, "error": str(e)}
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/skills/sources")
+async def list_skill_sources():
+    """List all source paths with counts and reachability."""
+    try:
+        loader = _get_skills_loader()
+        out: list[dict] = []
+        seen: set = set()
+        for path, source in loader.sources:
+            key = (str(path), source.value)
+            if key in seen:
+                continue
+            seen.add(key)
+            count = sum(
+                1 for s in loader.loaded_skills.values()
+                if s.source == source
+            )
+            out.append({
+                "path": str(path),
+                "source": source.value,
+                "source_label": source.label,
+                "exists": path.exists() and path.is_dir(),
+                "read_only": source.read_only,
+                "count": count,
+            })
+        return {"success": True, "sources": out}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/skills/discover")
+async def rediscover_skills():
+    """Force a rescan of all configured sources (cache invalidation)."""
+    try:
+        _invalidate_skills_loader()
+        loader = _get_skills_loader()
+        return {
+            "success": True,
+            "count": len(loader.loaded_skills),
+            "scan_errors": loader.last_scan_errors,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/skills/{name}")
+async def get_skill(name: str):
+    """Get full content + raw markdown for one skill."""
+    try:
+        loader = _get_skills_loader()
+        skill = loader.get_skill(name)
+        if skill is None:
+            raise HTTPException(status_code=404, detail=f"Skill '{name}' not found.")
+        return {"success": True, "skill": _serialize_skill(skill, include_raw=True)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class SkillCreate(BaseModel):
+    name: str
+    description: str
+    body: str = ""
+    license: Optional[str] = None
+    compatibility: Optional[str] = None
+    allowed_tools: Optional[list] = None
+    metadata: Optional[dict] = None
+    skill_type: Optional[str] = None
+
+
+@app.post("/api/skills")
+async def create_skill(req: SkillCreate):
+    """Create a new skill in the user data dir."""
+    from mini_agent.tools.skill_loader import (
+        write_skill,
+        SkillValidationError,
+    )
+    try:
+        user_dir = _skills_user_dir()
+        skill = write_skill(
+            user_dir,
+            name=req.name,
+            description=req.description,
+            body=req.body,
+            license=req.license,
+            compatibility=req.compatibility,
+            allowed_tools=req.allowed_tools,
+            metadata=req.metadata,
+            skill_type=req.skill_type,
+        )
+        _invalidate_skills_loader()
+        return {"success": True, "skill": _serialize_skill(skill, include_raw=True)}
+    except SkillValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class SkillUpdate(BaseModel):
+    description: Optional[str] = None
+    body: Optional[str] = None
+    license: Optional[str] = None
+    compatibility: Optional[str] = None
+    allowed_tools: Optional[list] = None
+    metadata: Optional[dict] = None
+
+
+@app.put("/api/skills/{name}")
+async def update_skill(name: str, req: SkillUpdate):
+    """Update an existing user-dir skill. Refuses non-user sources."""
+    from mini_agent.tools.skill_loader import (
+        update_skill as _update_skill,
+        SkillValidationError,
+    )
+    try:
+        loader = _get_skills_loader()
+        existing = loader.get_skill(name)
+        if existing is None:
+            raise HTTPException(status_code=404, detail=f"Skill '{name}' not found.")
+        if existing.source.read_only:
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    f"Skill '{name}' is read-only "
+                    f"(source={existing.source.value}). Use 'Import to user' "
+                    f"to create an editable copy."
+                ),
+            )
+        user_dir = _skills_user_dir()
+        skill = _update_skill(
+            user_dir,
+            name=name,
+            description=req.description,
+            body=req.body,
+            license=req.license,
+            compatibility=req.compatibility,
+            allowed_tools=req.allowed_tools,
+            metadata=req.metadata,
+        )
+        _invalidate_skills_loader()
+        return {"success": True, "skill": _serialize_skill(skill, include_raw=True)}
+    except HTTPException:
+        raise
+    except SkillValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/skills/{name}")
+async def delete_skill(name: str):
+    """Delete a user-dir skill. Refuses non-user sources."""
+    from mini_agent.tools.skill_loader import (
+        delete_skill as _delete_skill,
+        SkillValidationError,
+    )
+    try:
+        loader = _get_skills_loader()
+        existing = loader.get_skill(name)
+        if existing is None:
+            raise HTTPException(status_code=404, detail=f"Skill '{name}' not found.")
+        if existing.source.read_only:
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    f"Skill '{name}' is read-only "
+                    f"(source={existing.source.value}). Cannot delete."
+                ),
+            )
+        user_dir = _skills_user_dir()
+        ok = _delete_skill(user_dir, name)
+        if not ok:
+            raise HTTPException(status_code=404, detail=f"Skill '{name}' not found on disk.")
+        _invalidate_skills_loader()
+        return {"success": True, "deleted": name}
+    except HTTPException:
+        raise
+    except SkillValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class SkillImportRequest(BaseModel):
+    url: str
+
+
+@app.post("/api/skills/import")
+async def import_skill_preview(req: SkillImportRequest):
+    """Fetch a SKILL.md from GitHub (raw or blob URL) and return a preview.
+
+    The frontend shows the preview; the user confirms by calling
+    POST /api/skills with the returned fields. No side effects on disk.
+    """
+    try:
+        url = (req.url or "").strip()
+        if not url:
+            raise HTTPException(status_code=400, detail="url is required.")
+
+        # Normalise GitHub URLs:
+        #   https://github.com/<owner>/<repo>/blob/<branch>/<path>/SKILL.md
+        #   https://raw.githubusercontent.com/<owner>/<repo>/<branch>/<path>/SKILL.md
+        if "github.com/" in url and "/blob/" in url:
+            url = url.replace("github.com/", "raw.githubusercontent.com/", 1)
+            url = url.replace("/blob/", "/", 1)
+
+        if not url.startswith(("http://", "https://")):
+            raise HTTPException(status_code=400, detail="Only http(s) URLs are supported.")
+
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+            resp = await client.get(url)
+            if resp.status_code != 200:
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"Upstream returned HTTP {resp.status_code}.",
+                )
+            raw_markdown = resp.text
+
+        if "---" not in raw_markdown:
+            raise HTTPException(
+                status_code=422,
+                detail="Remote file does not look like a SKILL.md (no frontmatter).",
+            )
+
+        # Parse via the loader's frontmatter parser (shared logic).
+        from mini_agent.tools.skill_loader import SkillLoader
+        fm, body = SkillLoader._parse_frontmatter(raw_markdown)
+        fm = fm or {}
+        body = (body or "").strip()
+
+        return {
+            "success": True,
+            "preview": {
+                "source_url": url,
+                "raw_markdown": raw_markdown,
+                "frontmatter": fm,
+                "body": body,
+                "suggested_name": fm.get("name") or "",
+                "suggested_description": fm.get("description") or "",
+                "suggested_license": fm.get("license"),
+                "suggested_compatibility": fm.get("compatibility"),
+                "suggested_allowed_tools": fm.get("allowed-tools"),
+                "suggested_metadata": fm.get("metadata"),
+            },
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class SkillsConfigUpdate(BaseModel):
+    merge_all_available_skills: Optional[bool] = None
+    extra_skill_dirs: Optional[list[str]] = None
+    user_dir: Optional[str] = None
+
+
+@app.put("/api/config/skills")
+async def update_skills_config(req: SkillsConfigUpdate):
+    """Persist the ``skills:`` block and invalidate the loader cache."""
+    try:
+        cfg = _load_config_dict()
+        block = cfg.get("skills") if isinstance(cfg.get("skills"), dict) else {}
+        if req.merge_all_available_skills is not None:
+            block["merge_all_available_skills"] = bool(req.merge_all_available_skills)
+        if req.extra_skill_dirs is not None:
+            block["extra_skill_dirs"] = list(req.extra_skill_dirs)
+        if req.user_dir is not None:
+            block["user_dir"] = req.user_dir or None
+        cfg["skills"] = block
+        _save_config_dict(cfg)
+        _invalidate_skills_loader()
+        return {"success": True, "skills": block}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 class ToolsConfigRequest(BaseModel):
@@ -1869,17 +2255,31 @@ async def chat_websocket(websocket: WebSocket, session_id: str):
             # Handle skill activation
             if data.get("type") == "activate_skill":
                 skill_name = data.get("skill")
-                # Load skill and inject into system prompt
-                from mini_agent.tools.skill_loader import SkillLoader
-                skills_dir = PROJECT_ROOT / "mini_agent" / "skills"
-                loader = SkillLoader(str(skills_dir))
-                loader.discover_skills()
+                # Use the cached multi-source loader (User > Extra > External > Built-in).
+                # If we don't have the helper available yet (very early startup),
+                # fall back to a single-dir scan to keep the handler robust.
+                try:
+                    loader = _get_skills_loader()
+                except Exception:
+                    from mini_agent.tools.skill_loader import SkillLoader
+                    loader = SkillLoader(str(PROJECT_ROOT / "mini_agent" / "skills"))
+                    loader.discover_skills()
                 skill = loader.get_skill(skill_name)
                 if skill:
                     # Inject skill content into messages as a system context update
                     skill_prompt = skill.to_prompt()
                     agent.messages.append(Message(role="user", content=f"[Skill Activated: {skill_name}]\n\n{skill_prompt}"))
-                    await websocket.send_json({"type": "skill_activated", "skill": skill_name})
+                    await websocket.send_json({
+                        "type": "skill_activated",
+                        "skill": skill_name,
+                        "source": skill.source.value,
+                    })
+                else:
+                    await websocket.send_json({
+                        "type": "skill_activate_failed",
+                        "skill": skill_name,
+                        "detail": f"Skill '{skill_name}' not found.",
+                    })
                 continue
 
             message = data.get("message", "").strip()

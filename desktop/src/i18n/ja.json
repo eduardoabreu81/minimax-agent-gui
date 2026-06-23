@@ -208,7 +208,8 @@
     "closeModal": "モーダル / パレットを閉じる",
     "navigatePalette": "パレット項目を移動",
     "selectPalette": "パレット項目を選択",
-    "newLine": "入力欄に改行"
+    "newLine": "入力欄に改行",
+    "skills": "スキル"
   },
   "onboarding": {
     "welcome": "MiniMax エージェントへようこそ",

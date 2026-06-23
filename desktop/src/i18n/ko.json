@@ -95,7 +95,7 @@
     "addSubtask": "하위 작업 추가...",
     "delete": "삭제",
     "tasksCount": "작업 {count}개",
-"toggleSort": "정렬 순서 전환",
+    "toggleSort": "정렬 순서 전환",
     "taskTitlePlaceholder": "작업 제목...",
     "descriptionPlaceholder": "설명...",
     "save": "저장",
@@ -208,7 +208,8 @@
     "closeModal": "모달 / 팔레트 닫기",
     "navigatePalette": "팔레트 항목 탐색",
     "selectPalette": "팔레트 항목 선택",
-    "newLine": "입력에 새 줄"
+    "newLine": "입력에 새 줄",
+    "skills": "스킬"
   },
   "onboarding": {
     "welcome": "MiniMax 에이전트에 오신 것을 환영합니다",

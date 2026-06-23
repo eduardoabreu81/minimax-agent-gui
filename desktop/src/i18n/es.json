@@ -208,7 +208,8 @@
     "closeModal": "Cerrar modal / paleta",
     "navigatePalette": "Navegar por los elementos de la paleta",
     "selectPalette": "Seleccionar elemento de la paleta",
-    "newLine": "Nueva línea en la entrada"
+    "newLine": "Nueva línea en la entrada",
+    "skills": "Skills"
   },
   "onboarding": {
     "welcome": "Bienvenido a MiniMax Agente",

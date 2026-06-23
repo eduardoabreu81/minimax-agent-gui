@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { useTheme } from '../../context/ThemeContext'
 import { apiFetch } from '../../lib/api.js'
+import SkillsTab from './SkillsTab.jsx'
 
 // Models available in the Token Plan. Chat models are the ones the user
 // can pick as their default — media models (image / video / speech / music)
@@ -464,7 +465,7 @@ export default function SettingsPanel() {
   // Scroll-spy: highlight the left-rail entry for whichever section is
   // currently in view. Each SectionHeader renders with id="settings-<key>".
   useEffect(() => {
-    const ids = ['about-you', 'appearance', 'default-model', 'agent', 'api-key', 'lang-region', 'generation-defaults', 'tools', 'mcp', 'shortcuts', 'about-app']
+    const ids = ['about-you', 'appearance', 'default-model', 'agent', 'api-key', 'lang-region', 'generation-defaults', 'skills', 'tools', 'mcp', 'shortcuts', 'about-app']
     const observer = new IntersectionObserver(
       (entries) => {
         const visible = entries.filter((e) => e.isIntersecting)
@@ -494,6 +495,7 @@ export default function SettingsPanel() {
     { id: 'api-key',             label: t('settings.apiKey'),              icon: Key },
     { id: 'lang-region',         label: t('settings.langRegion'),          icon: Globe },
     { id: 'generation-defaults', label: t('settings.generationDefaults'),  icon: Sliders },
+    { id: 'skills',               label: t('settings.skills') || 'Skills',   icon: Sparkles },
     { id: 'tools',               label: t('settings.tools'),               icon: Boxes },
     { id: 'mcp',                 label: t('settings.mcpServers'),          icon: Server },
     { id: 'shortcuts',           label: t('settings.shortcuts'),           icon: Keyboard },
@@ -902,7 +904,13 @@ export default function SettingsPanel() {
           </div>
         </Card>
 
-        {/* ─── 8. Tools ───────────────────────────────────────────────────── */}
+        {/* ─── 8. Skills ─────────────────────────────────────────────────── */}
+        <SectionHeader id="settings-skills" icon={Sparkles} title={t('settings.skills') || 'Skills'} />
+        <Card>
+          <SkillsTab />
+        </Card>
+
+        {/* ─── 9. Tools ───────────────────────────────────────────────────── */}
         <SectionHeader id="settings-tools" icon={Boxes} title={t('settings.tools')} />
         <Card>
           <Row label={t('settings.webSearch')} desc={t('settings.webSearchDesc')} last={false}>
@@ -929,7 +937,7 @@ export default function SettingsPanel() {
           </Row>
         </Card>
 
-        {/* ─── 8. MCP servers ─────────────────────────────────────────────── */}
+        {/* ─── 10. MCP servers ───────────────────────────────────────────── */}
         <div id="settings-mcp" className="flex items-center justify-between mb-3.5 scroll-mt-6">
           <SectionHeader icon={Server} title={t('settings.mcpServers')} />
           <button
@@ -1131,7 +1139,7 @@ export default function SettingsPanel() {
           </div>
         </Card>
 
-        {/* ─── 10. About ─────────────────────────────────────────────────── */}
+        {/* ─── 12. About ───────────────────────────────────────────────── */}
         <SectionHeader id="settings-about-app" icon={Info} title={t('settings.about')} />
         <Card>
           <div className="p-5 flex items-center gap-4">

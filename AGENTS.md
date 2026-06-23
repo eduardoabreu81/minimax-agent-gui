@@ -341,6 +341,9 @@ mirror a feature back to the web app, do it in the fork.
 - The `image_variations` (I2I) method uses `subject_reference` with `image_file` (data URL), not `image_base64`.
 - Frontend WebSocket connects directamente to `ws://localhost:8000` (not through Vite proxy for `/ws/chat/`).
 - Conversation IDs starting with `coding-` are filtered by backend as coding sessions.
+- **Skill sources priority is `User > Extra > Generic > Claude > Codex > Gemini > Built-in`** — Edit/Delete via `PUT/DELETE /api/skills/{name}` refuse non-User sources with HTTP 403 and a hint to "Import to user first". Use `POST /api/skills/import` to promote an external skill to the user dir.
+- **Skill name schema (Kimi / agentskills.io)** — `^[a-z0-9][a-z0-9-]{0,63}$`. Description 1-1024 chars. Validation lives in `mini_agent/tools/skill_loader.py` (`_validate_name`, `_validate_description`) and raises `SkillValidationError` → HTTP 400.
+- **Skills `config` block is cross-project** — `skills.extra_skill_dirs` lives in `config/config.yaml` (not workspace-local, by user decision). Default `user_dir` is `%APPDATA%/MiniMaxStudio/skills` on Windows, `~/.local/share/MiniMaxStudio/skills` on Unix. External brand dirs (`~/.claude/skills`, `~/.codex/skills`, `~/.gemini/skills`) are auto-discovered and silently skipped if missing.
 - **Token Plan web_search uses `"q"` not `"query"`** — see the
   warning in section 4 above. Hardcoding the legacy field name
   silently breaks the tool with HTTP 400.

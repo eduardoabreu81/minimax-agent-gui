@@ -163,6 +163,61 @@ controls and fixed a number of Token Plan API quirks.
 
 ### Added
 
+- **Multi-source skills (Kimi / agentskills.io spec)** — skills can
+  now be loaded from five layers (priority = `User > Extra > Generic >
+  Claude > Codex > Gemini > Built-in`), with the user dir writable
+  and all other sources read-only.
+  - **Loader** — `SkillLoader` refactored to accept
+    `[(Path, SkillSource)]` lists. Each skill may live in a
+    `<name>/SKILL.md` subdir (canonical) or a flat `<name>.md` file
+    (Kimi single-file layout; subdir wins on collision). Frontmatter
+    `name` and `description` are now optional with fallback chain
+    (frontmatter → first body line, truncated 240 → skip). Schema
+    validation per Kimi: name 1-64 chars `[a-z0-9-]+`, description
+    1-1024 chars, `compatibility` ≤500 chars. `SkillSource` enum
+    encodes origin, priority, and read-only flag.
+  - **External paths** — auto-discovered on first call:
+    `~/.claude/skills`, `~/.codex/skills`, `~/.gemini/skills`
+    (brand group), `~/.config/agents/skills` / `~/.agents/skills`
+    (generic). Missing dirs are silently skipped. On the Edu
+    workstation this surfaces 20+ skills from Claude Code out of
+    the box.
+  - **API** — `GET /api/skills` returns merged list + grouped
+    breakdown + scan errors. New endpoints:
+    `GET /api/skills/{name}` (raw markdown),
+    `POST /api/skills` (create in user dir),
+    `PUT /api/skills/{name}` (edit; refuses non-user sources with
+    403 — "Import to user" first),
+    `DELETE /api/skills/{name}` (refuses non-user sources),
+    `POST /api/skills/import` (GitHub URL → preview, no side
+    effects),
+    `POST /api/skills/discover` (force rescan),
+    `GET /api/skills/sources` (paths + counts + read-only flag),
+    `PUT /api/config/skills` (persist `merge_all_available_skills`,
+    `extra_skill_dirs`, `user_dir`). Loader is cached + keyed by
+    config signature; mutations auto-invalidate.
+  - **System prompt** — `get_skills_metadata_prompt()` now groups
+    skills by scope (omits empty groups), matching Kimi's order.
+  - **WebSocket** — `/ws/chat/{sid}` `activate_skill` handler
+    uses the cached multi-source loader; missing skill emits
+    `skill_activate_failed` instead of silent no-op.
+  - **Desktop UI** — new **Settings → Skills** sub-tab with:
+    sources panel (paths + badges + counts, Add custom path, Re-scan),
+    skills list grouped by scope (badge `[U]` User / `[B]` Built-in /
+    `[C]` Claude / `[X]` Codex / `[G]` Gemini / `[E]` Extra /
+    `·` Generic) with search, click-right context menu
+    (View / Edit / Import to user / Copy path / Delete), **Create
+    skill** modal with form (name + description + body + license +
+    compatibility + allowed-tools) and **live SKILL.md preview**,
+    **Import from GitHub** modal (URL → preview → install to user).
+    All 6 i18n locales updated.
+  - **Config** — new `skills:` block in `config.yaml`:
+    `user_dir` (default `%APPDATA%/MiniMaxStudio/skills` on
+    Windows, `~/.local/share/MiniMaxStudio/skills` on Linux),
+    `extra_skill_dirs` (list of paths; supports `~` and `%ENV%`),
+    `merge_all_available_skills` (reserved for the legacy
+    first-match-only mode). Persisted cross-project (global, not
+    workspace-scoped — by user decision).
 - **Coding workspace isolation** — each coding session now binds to a
   folder the user picks (native picker via `tauri-plugin-dialog`,
   browser fallback `<input webkitdirectory>`). Once the first message
