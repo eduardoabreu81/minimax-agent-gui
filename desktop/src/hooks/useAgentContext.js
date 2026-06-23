@@ -233,14 +233,21 @@ export function useAgentContext() {
     // Helpers exposed for the wizard — fetches the body for a preset
     // or role by id. Prefers the live data from /presets + /roles;
     // falls back to the JS-side map if the backend is unreachable
-    // (or the id isn't in the response).
+    // (or the id isn't in the response). The 'custom' role has no
+    // canonical body by design — both the live and JS paths return
+    // '' so the wizard knows to use the user's typed text instead.
     getPresetBody: (presetId) => {
       const live = presets.find(p => p.id === presetId)
-      return live?.body || FALLBACK_PRESETS[presetId] || ''
+      if (live?.body) return live.body
+      return FALLBACK_PRESETS[presetId] || ''
     },
     getRoleBody: (roleId) => {
       const live = roles.find(r => r.id === roleId)
-      return live?.body || FALLBACK_ROLES[roleId] || ''
+      if (live) {
+        // Live data present: trust the backend. custom = no body.
+        return live.body || ''
+      }
+      return FALLBACK_ROLES[roleId] || ''
     },
   }
 }
