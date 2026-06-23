@@ -9,7 +9,7 @@ import {
 import { useTheme } from '../../context/ThemeContext'
 import { apiFetch } from '../../lib/api.js'
 import SkillsTab from './SkillsTab.jsx'
-import AgentContextTab from '../agent-context/AgentContextTab.jsx'
+import { useContextModal } from '../agent-context/ContextProvider.jsx'
 
 // Models available in the Token Plan. Chat models are the ones the user
 // can pick as their default — media models (image / video / speech / music)
@@ -144,8 +144,6 @@ export default function SettingsPanel() {
     understandImage: true,
     apiBase: '',
   })
-  const [userProfile, setUserProfile] = useState({ bio: '' })
-  const [profileSaving, setProfileSaving] = useState(false)
   const [userPlan, setUserPlan] = useState('plus')
   const [quotaData, setQuotaData] = useState(null)
   const [mcpServers, setMcpServers] = useState([])
@@ -339,9 +337,7 @@ export default function SettingsPanel() {
     fetchAudioDefaults()
 
     apiFetch('/api/profile')
-      .then(r => r.json())
-      .then(data => setUserProfile({ bio: data.bio || '' }))
-      .catch(() => {})
+      .catch(() => {})  // profile is now loaded by AboutYouCard; no top-level state needed
 
     apiFetch('/api/minimax/quota')
       .then(r => r.json())
@@ -415,23 +411,6 @@ export default function SettingsPanel() {
     }
   }
 
-  const handleSaveProfile = async () => {
-    setProfileSaving(true)
-    try {
-      await apiFetch('/api/profile', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(userProfile),
-      })
-      setSavedMessage(t('settings.profileSaved'))
-      setTimeout(() => setSavedMessage(''), 3000)
-    } catch (e) {
-      setSavedMessage(t('settings.profileFailed'))
-    } finally {
-      setProfileSaving(false)
-    }
-  }
-
   const handleSaveTools = async (key, value) => {
     try {
       const payload = key === 'webSearch'
@@ -486,17 +465,19 @@ export default function SettingsPanel() {
     return () => observer.disconnect()
   }, [])
 
-  // Sections list for the left rail — keep labels + icons in sync with the
-  // actual SectionHeader calls below.
+  // Sections list for the left rail. About You + Agent context used
+  // to live here as separate entries; they were merged into a single
+  // rail entry "Context" that opens a fullscreen modal (see
+  // components/agent-context/ContextModal.jsx). This keeps the
+  // Settings page compact and the two related concerns together.
   const railSections = [
-    { id: 'about-you',           label: t('settings.aboutYou'),            icon: User },
+    { id: 'context',             label: t('agentContext.contextLabel') || 'Context', icon: Brain, action: 'openContextModal' },
     { id: 'appearance',          label: t('settings.appearance'),          icon: Palette },
     { id: 'default-model',       label: t('settings.defaultModel'),        icon: Cpu },
     { id: 'agent',               label: t('settings.agent'),               icon: Shield },
     { id: 'api-key',             label: t('settings.apiKey'),              icon: Key },
     { id: 'lang-region',         label: t('settings.langRegion'),          icon: Globe },
     { id: 'generation-defaults', label: t('settings.generationDefaults'),  icon: Sliders },
-    { id: 'agent-context',       label: t('agentContext.title') || 'Agent context', icon: Brain },
     { id: 'skills',              label: t('settings.skills') || 'Skills',  icon: Sparkles },
     { id: 'tools',               label: t('settings.tools'),               icon: Boxes },
     { id: 'mcp',                 label: t('settings.mcpServers'),          icon: Server },
@@ -504,10 +485,20 @@ export default function SettingsPanel() {
     { id: 'about-app',           label: t('settings.about'),               icon: Info },
   ]
 
-  const scrollToSection = (id) => {
-    const el = document.getElementById(`settings-${id}`)
+  const contextModal = useContextModal()
+
+  // The rail click handler now branches on a possible `action` key:
+  // rail sections with an action are buttons that open something
+  // (the Context modal) instead of scrolling to a settings-X anchor.
+  // All other sections behave as before (scroll-spy target).
+  const handleRailClick = (section) => {
+    if (section.action === 'openContextModal') {
+      contextModal.openModal()
+      return
+    }
+    const el = document.getElementById(`settings-${section.id}`)
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    setActiveSection(id)
+    setActiveSection(section.id)
   }
 
   return (
@@ -526,12 +517,14 @@ export default function SettingsPanel() {
         </div>
         {railSections.map((s) => {
           const Icon = s.icon
-          const active = activeSection === s.id
+          // Sections with `action` (currently only Context) don't
+          // participate in scroll-spy — they open a modal instead.
+          const active = !s.action && activeSection === s.id
           return (
             <button
               key={s.id}
               type="button"
-              onClick={() => scrollToSection(s.id)}
+              onClick={() => handleRailClick(s)}
               className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-[8px] text-[12.5px] transition-colors text-left ${
                 active
                   ? 'bg-primary/10 text-primary font-medium'
@@ -561,35 +554,7 @@ export default function SettingsPanel() {
             {t('settings.subtitle')}
           </p>
 
-        {/* ─── 1. About you ────────────────────────────────────────────────── */}
-        <SectionHeader id="settings-about-you" icon={User} title={t('settings.aboutYou')} />
-        <Card>
-          <div className="p-5">
-            <p className="text-[11.5px] text-muted-foreground leading-relaxed mb-3">
-              {t('settings.aboutYouDesc')}
-            </p>
-            <textarea
-              value={userProfile.bio}
-              onChange={(e) => setUserProfile({ bio: e.target.value })}
-              placeholder={t('settings.aboutYouPlaceholder')}
-              rows={6}
-              className="w-full bg-surface border border-border rounded-[10px] px-3 py-2.5 text-[13px] text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:border-primary transition-colors leading-relaxed"
-            />
-            <div className="flex justify-between items-center mt-3">
-              <p className="text-[10px] text-muted-foreground">{t('settings.aboutYouHint')}</p>
-              <button
-                onClick={handleSaveProfile}
-                disabled={profileSaving}
-                className="px-4 py-1.5 bg-primary hover:bg-primary-hover disabled:opacity-40 text-white rounded-[8px] text-[12px] font-medium transition-colors flex items-center gap-1.5"
-              >
-                <Save size={12} />
-                {t('settings.save')}
-              </button>
-            </div>
-          </div>
-        </Card>
-
-        {/* ─── 2. Appearance ──────────────────────────────────────────────── */}
+        {/* ─── 1. Appearance ──────────────────────────────────────────────── */}
         <SectionHeader id="settings-appearance" icon={Palette} title={t('settings.appearance')} />
         <Card>
           <Row label={t('settings.mode')} desc={t('settings.modeDesc')} last={false}>
@@ -906,17 +871,7 @@ export default function SettingsPanel() {
           </div>
         </Card>
 
-        {/* ─── 8. Agent context ───────────────────────────────────────────── */}
-        <SectionHeader
-          id="settings-agent-context"
-          icon={Brain}
-          title={t('agentContext.title') || 'Agent context'}
-        />
-        <Card>
-          <AgentContextTab />
-        </Card>
-
-        {/* ─── 9. Skills ─────────────────────────────────────────────────── */}
+        {/* ─── 8. Skills ─────────────────────────────────────────────────── */}
         <SectionHeader id="settings-skills" icon={Sparkles} title={t('settings.skills') || 'Skills'} />
         <Card>
           <SkillsTab />
@@ -1136,7 +1091,7 @@ export default function SettingsPanel() {
           </div>
         </Card>
 
-        {/* ─── 9. Shortcuts ──────────────────────────────────────────────── */}
+        {/* ─── 10. Shortcuts ─────────────────────────────────────────────── */}
         <SectionHeader id="settings-shortcuts" icon={Keyboard} title={t('settings.shortcuts')} />
         <Card>
           <div className="divide-y divide-border">
@@ -1151,7 +1106,7 @@ export default function SettingsPanel() {
           </div>
         </Card>
 
-        {/* ─── 12. About ───────────────────────────────────────────────── */}
+        {/* ─── 11. About ───────────────────────────────────────────────── */}
         <SectionHeader id="settings-about-app" icon={Info} title={t('settings.about')} />
         <Card>
           <div className="p-5 flex items-center gap-4">

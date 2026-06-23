@@ -6,6 +6,7 @@ import { SessionTokensProvider } from './context/SessionTokensContext'
 import { hasAnyRisk } from './hooks/useSessionProtection'
 import { useBackendReady } from './hooks/useBackendReady'
 import { useAgentContext } from './hooks/useAgentContext'
+import { ContextModalProvider, useContextModal } from './components/agent-context/ContextProvider.jsx'
 import Sidebar from './components/Sidebar'
 import Titlebar from './components/shell/Titlebar'
 import BackendLoader from './components/shell/BackendLoader'
@@ -22,6 +23,7 @@ import QuickSettings from './components/settings/QuickSettings'
 import Onboarding from './components/onboarding/Onboarding'
 import OnboardingWizard, { WIZARD_SEEN_KEY } from './components/agent-context/OnboardingWizard.jsx'
 import IncompleteContextBanner from './components/agent-context/IncompleteContextBanner.jsx'
+import ContextModal from './components/agent-context/ContextModal.jsx'
 import CommandPalette from './components/command-palette/CommandPalette'
 import StatusBar from './components/shared/StatusBar'
 
@@ -53,7 +55,15 @@ function App() {
     )
   }
 
-  return <AppShell />
+  // Wrap AppShell in the ContextModalProvider so the AppShell body
+  // (which calls useContextModal) is INSIDE the provider. The provider
+  // itself doesn't call any hooks in App, so this doesn't break the
+  // hook-count-stability rule for App.
+  return (
+    <ContextModalProvider>
+      <AppShell />
+    </ContextModalProvider>
+  )
 }
 
 // AppShell — the real application tree.
@@ -111,8 +121,10 @@ function AppShell() {
   // Agent Context system — banner + wizard mount state. The hook
   // owns the .agent/ status, the localStorage flag controls whether
   // the wizard is shown on first launch. The wizard can be re-opened
-  // any time via the banner's "Set up now" button.
+  // any time via the banner's "Set up now" button, and the Context
+  // modal is opened from the banner's "Open Settings" shortcut.
   const agentContext = useAgentContext()
+  const contextModal = useContextModal()
   const [wizardOpen, setWizardOpen] = useState(false)
   // Auto-open the wizard on first launch if the user hasn't seen it
   // AND the .agent/ files are not yet filled. Runs once.
@@ -124,19 +136,15 @@ function AppShell() {
     }
   }, [agentContext.loading, agentContext.status?.banner_visible])
 
+  // The "Open Settings" / "Set up now" shortcuts in the banner
+  // both go to the new Context modal (no more "switch to settings
+  // tab + scroll" dance). "Set up now" additionally opens the
+  // wizard on top of the modal.
   const openAgentContextSettings = useCallback(() => {
-    setActiveTab('settings')
-    // The Settings panel uses scroll-spy; the agent-context section
-    // has id="settings-agent-context" so we scroll it into view after
-    // a tick (let the panel mount first).
-    setTimeout(() => {
-      const el = document.getElementById('settings-agent-context')
-      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    }, 60)
-  }, [])
+    contextModal.openModal()
+  }, [contextModal])
 
   const openAgentContextWizard = useCallback(() => {
-    setActiveTab('settings')
     setWizardOpen(true)
   }, [])
 
@@ -272,6 +280,7 @@ function AppShell() {
             open={wizardOpen}
             onClose={() => setWizardOpen(false)}
           />
+          <ContextModal />
           <QuickSettings
             isOpen={false}
             onClose={() => {}}

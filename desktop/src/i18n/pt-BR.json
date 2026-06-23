@@ -332,6 +332,7 @@
   },
   "agentContext": {
     "title": "Contexto do agente",
+    "contextLabel": "Contexto",
     "subtitle": "5 arquivos definem como o agente se comporta neste workspace.",
     "userOnly": "Somente você",
     "youAndAgent": "Você + agente",
@@ -410,6 +411,8 @@
         "appendOnly": "Append-only · gerado pelo agente a cada turno"
       }
     },
+
+    "rerunOnboarding": "Refazer onboarding",
 
     "common": {
       "save": "Salvar",

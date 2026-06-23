@@ -48,7 +48,11 @@ export default function SkillsTab() {
   const [error, setError] = useState(null)
   const [rescanning, setRescanning] = useState(false)
   const [search, setSearch] = useState('')
-  const [expandedGroups, setExpandedGroups] = useState(() => new Set(SOURCE_ORDER))
+  // Default = all groups collapsed. The Skills list can be long
+  // (20+ skills from ~/.claude/skills plus extras), so collapsing
+  // everything keeps the Settings page compact. The user expands
+  // a group by clicking its header.
+  const [expandedGroups, setExpandedGroups] = useState(() => new Set())
 
   const [createOpen, setCreateOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
