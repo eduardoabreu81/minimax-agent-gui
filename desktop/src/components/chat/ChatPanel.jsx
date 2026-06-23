@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { apiFetch, apiWebSocketUrl } from '../../lib/api.js'
 import { useTranslation } from 'react-i18next'
 import { Send, ArrowRight, Plus, User, Bot, Loader2, Paperclip, X, Image as ImageIcon, FileText, MessageSquarePlus, Trash2, ChevronDown, Pencil, Search } from 'lucide-react'
+import SlashMenu from '../shared/SlashMenu.jsx'
 import { useSessionProtection } from '../../hooks/useSessionProtection'
 import { useSessionTokens } from '../../context/SessionTokensContext'
 import ThinkingBlock from '../shared/ThinkingBlock'
@@ -689,18 +690,13 @@ export default function ChatPanel({
           )}
           <div className="relative">
             {showSkills && filteredSkills.length > 0 && (
-              <div className="absolute bottom-full left-0 w-full bg-card border border-border rounded-xl shadow-lg z-50 py-1 mb-1 max-h-48 overflow-y-auto">
-                {filteredSkills.map((skill, i) => (
-                  <div
-                    key={skill.name}
-                    onClick={() => activateSkill(skill.name)}
-                    className={`px-3 py-2 cursor-pointer ${i === skillIndex ? 'bg-primary/10 text-primary' : 'text-foreground hover:bg-surface'}`}
-                  >
-                    <div className="text-sm font-medium">{skill.name}</div>
-                    <div className="text-xs text-muted-foreground">{skill.description}</div>
-                  </div>
-                ))}
-              </div>
+              <SlashMenu
+                skills={filteredSkills}
+                activeIndex={skillIndex}
+                onSelect={(s) => activateSkill(s.name)}
+                onHoverIndex={setSkillIndex}
+                size="md"
+              />
             )}
             <input
               type="file"

@@ -18,6 +18,7 @@ import { useAgentActivity } from '../../context/AgentActivityContext'
 import { useSessionProtection } from '../../hooks/useSessionProtection'
 import { useSessionTokens } from '../../context/SessionTokensContext'
 import ThinkingBlock from '../shared/ThinkingBlock'
+import SlashMenu from '../shared/SlashMenu.jsx'
 import CopyButton from '../shared/CopyButton'
 
 /**
@@ -1178,19 +1179,13 @@ const sendCodingMessage = useCallback(() => {
                   className={isAgent ? 'w-full bg-card border border-border rounded-xl px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:border-primary' : 'w-full bg-card border border-border rounded-lg px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:border-primary'}
                 />
                 {showSkills && filteredSkills.length > 0 && (
-                  <div className={isAgent ? 'absolute bottom-full left-0 w-full bg-card border border-border rounded-xl shadow-lg z-50 py-1 mb-1 max-h-48 overflow-y-auto' : 'absolute bottom-full left-0 w-full bg-card border border-border rounded-lg shadow-lg z-50 py-1 mb-1 max-h-48 overflow-y-auto'}>
-                    {filteredSkills.map((skill, i) => (
-                      <div
-                        key={skill.name}
-                        ref={el => { if (i === skillIndex && el) el.scrollIntoView({ block: 'nearest' }) }}
-                        onClick={() => activateSkill(skill.name)}
-                        className={`px-3 py-2 cursor-pointer ${i === skillIndex ? 'bg-primary/10 text-primary' : 'text-foreground hover:bg-surface'}`}
-                      >
-                        <div className="text-sm font-medium">{skill.name}</div>
-                        <div className="text-xs text-muted-foreground">{skill.description}</div>
-                      </div>
-                    ))}
-                  </div>
+                  <SlashMenu
+                    skills={filteredSkills}
+                    activeIndex={skillIndex}
+                    onSelect={(s) => activateSkill(s.name)}
+                    onHoverIndex={setSkillIndex}
+                    size={isAgent ? 'md' : 'sm'}
+                  />
                 )}
               </div>
               <div className="flex justify-between items-center mt-1.5 gap-2">
