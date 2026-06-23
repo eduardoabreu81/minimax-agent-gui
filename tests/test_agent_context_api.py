@@ -190,3 +190,111 @@ class TestReadDaily:
     def test_missing_date_returns_404(self, client):
         r = client.get("/api/agent-context/daily/2099-12-31")
         assert r.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# GET /api/agent-context/presets + /roles
+# ---------------------------------------------------------------------------
+
+class TestPresetsEndpoint:
+    def test_default_lang_en_us(self, client):
+        r = client.get("/api/agent-context/presets")
+        assert r.status_code == 200
+        body = r.json()
+        assert body["lang"] == "en-US"
+        assert len(body["presets"]) == 5
+        ids = {p["id"] for p in body["presets"]}
+        assert ids == {"concise", "friendly", "mentor", "expert", "creative"}
+
+    def test_each_preset_has_name_desc_body(self, client):
+        r = client.get("/api/agent-context/presets")
+        for p in r.json()["presets"]:
+            assert p["name"], f"missing name for {p['id']}"
+            assert p["desc"], f"missing desc for {p['id']}"
+            assert p["body"], f"missing body for {p['id']}"
+            assert len(p["body"]) > 50  # real content, not a stub
+
+    def test_lang_query_param_pt_br(self, client):
+        r = client.get("/api/agent-context/presets?lang=pt-BR")
+        assert r.status_code == 200
+        body = r.json()
+        assert body["lang"] == "pt-BR"
+        names = {p["name"] for p in body["presets"]}
+        assert "Conciso" in names
+        assert "Concise" not in names  # all translated, not mixed
+
+    def test_invalid_lang_falls_back(self, client):
+        r = client.get("/api/agent-context/presets?lang=garbage")
+        assert r.status_code == 200
+        assert r.json()["lang"] == "en-US"
+
+    def test_case_insensitive_lang(self, client):
+        r = client.get("/api/agent-context/presets?lang=pt-br")
+        assert r.json()["lang"] == "pt-BR"
+
+
+class TestRolesEndpoint:
+    def test_default_lang_en_us(self, client):
+        r = client.get("/api/agent-context/roles")
+        assert r.status_code == 200
+        body = r.json()
+        assert body["lang"] == "en-US"
+        assert len(body["roles"]) == 4
+        ids = {r_["id"] for r_ in body["roles"]}
+        assert ids == {"eng", "reviewer", "pm", "custom"}
+
+    def test_three_roles_have_body_custom_does_not(self, client):
+        r = client.get("/api/agent-context/roles")
+        for r_ in r.json()["roles"]:
+            if r_["id"] == "custom":
+                assert "body" not in r_, "custom role should not have a canonical body"
+            else:
+                assert "body" in r_, f"{r_['id']} role should have a body"
+                assert len(r_["body"]) > 50
+
+    def test_lang_pt_br_translates(self, client):
+        r = client.get("/api/agent-context/roles?lang=pt-BR")
+        body = r.json()
+        eng = next(r_ for r_ in body["roles"] if r_["id"] == "eng")
+        # Body is in Portuguese (some PT content present)
+        assert any(c in eng["body"] for c in "çãõáéí"), \
+            f"eng body should be in Portuguese: {eng['body'][:80]!r}"
+
+
+class TestLangResolution:
+    """The endpoints should respect the user's `app.language` from
+    config.yaml when no `?lang=` query param is provided."""
+
+    def test_app_language_from_config_drives_default(self, client):
+        # Patch the global config in main to set app.language=pt-BR
+        import main
+        original = main.config
+        try:
+            if isinstance(main.config, dict):
+                main.config = {**main.config, "app": {"language": "pt-BR"}}
+            else:
+                # Pydantic model fallback
+                try:
+                    main.config.app.language = "pt-BR"
+                except Exception:
+                    pass
+            r = client.get("/api/agent-context/presets")
+            assert r.json()["lang"] == "pt-BR"
+        finally:
+            main.config = original
+
+    def test_explicit_query_param_overrides_config(self, client):
+        import main
+        original = main.config
+        try:
+            if isinstance(main.config, dict):
+                main.config = {**main.config, "app": {"language": "pt-BR"}}
+            else:
+                try:
+                    main.config.app.language = "pt-BR"
+                except Exception:
+                    pass
+            r = client.get("/api/agent-context/presets?lang=en-US")
+            assert r.json()["lang"] == "en-US"
+        finally:
+            main.config = original

@@ -62,11 +62,30 @@ PRESETS = {
 
 
 # --- Roles (IDENTITY.md) ---
+# Each non-custom role carries a "body" key (i18n key) that resolves
+# to the markdown content the wizard writes to IDENTITY.md. The
+# "custom" role has no body — the user defines it inline.
 ROLES = {
-    "eng": {"name": "role.eng.name", "desc": "role.eng.desc"},
-    "reviewer": {"name": "role.reviewer.name", "desc": "role.reviewer.desc"},
-    "pm": {"name": "role.pm.name", "desc": "role.pm.desc"},
-    "custom": {"name": "role.custom.name", "desc": "role.custom.desc"},
+    "eng": {
+        "name": "role.eng.name",
+        "desc": "role.eng.desc",
+        "body": "role.eng.body",
+    },
+    "reviewer": {
+        "name": "role.reviewer.name",
+        "desc": "role.reviewer.desc",
+        "body": "role.reviewer.body",
+    },
+    "pm": {
+        "name": "role.pm.name",
+        "desc": "role.pm.desc",
+        "body": "role.pm.body",
+    },
+    "custom": {
+        "name": "role.custom.name",
+        "desc": "role.custom.desc",
+        # no body — the user writes the role description inline
+    },
 }
 
 
@@ -180,10 +199,13 @@ _STRINGS: dict[str, dict[str, str]] = {
         # Roles (IDENTITY)
         "role.eng.name": "Engineering partner",
         "role.eng.desc": "Focado em escrever e manter código",
+        "role.eng.body": "Você é o engineering partner do usuário. Seu trabalho é escrever, refatorar e debugar código junto com ele. Vies para ação: quando o usuário descreve um problema, proponha mudanças concretas de código, não análise abstrata.\n\n## Estilo\n- Código antes de prosa\n- Aponte a causa raiz antes de tentar fixes\n- Sugira testes quando relevante\n- Trade-offs explícitos quando há mais de uma abordagem",
         "role.reviewer.name": "Code reviewer",
         "role.reviewer.desc": "Lê código, identifica problemas, sugere melhorias",
+        "role.reviewer.body": "Você é um code reviewer. Leia o código que o usuário compartilha, identifique problemas, sugira melhorias. Foque em correção, legibilidade e performance. Seja direto sobre os problemas mas respeitoso com o autor.\n\n## Estilo\n- Severidade explícita (nit / suggestion / blocker)\n- Justifique cada sugestão com o porquê\n- Reconheça o que está bom antes de corrigir",
         "role.pm.name": "Project manager",
         "role.pm.desc": "Organiza tarefas, acompanha progresso, gerencia escopo",
+        "role.pm.body": "Você é um project manager. Ajude o usuário a organizar tarefas, acompanhar progresso, gerenciar escopo. Decomponha trabalho em chunks, identifique bloqueios, surface riscos cedo. Vies para clareza em vez de completude.\n\n## Estilo\n- Próxima ação concreta primeiro\n- Riscos e dependências visíveis\n- Escopo negociável, prazo firme",
         "role.custom.name": "Customizado",
         "role.custom.desc": "Você define o papel",
 
@@ -292,10 +314,13 @@ _STRINGS: dict[str, dict[str, str]] = {
         # Roles (IDENTITY)
         "role.eng.name": "Engineering partner",
         "role.eng.desc": "Focused on writing and maintaining code",
+        "role.eng.body": "You are the user's engineering partner. Your job is to write, refactor, and debug code with the user. Bias toward action: when the user describes a problem, propose concrete code changes, not abstract analysis.\n\n## Style\n- Code over prose\n- Surface the root cause before attempting fixes\n- Suggest tests when relevant\n- Explicit trade-offs when more than one approach works",
         "role.reviewer.name": "Code reviewer",
         "role.reviewer.desc": "Reads code, identifies issues, suggests improvements",
+        "role.reviewer.body": "You are a code reviewer. Read the code the user shares, identify issues, suggest improvements. Focus on correctness, readability, and performance. Be direct about problems but respectful of the author.\n\n## Style\n- Explicit severity (nit / suggestion / blocker)\n- Justify each suggestion with the why\n- Acknowledge what's good before correcting",
         "role.pm.name": "Project manager",
         "role.pm.desc": "Organizes tasks, tracks progress, manages scope",
+        "role.pm.body": "You are a project manager. Help the user organize tasks, track progress, manage scope. Break down work into chunks, identify blockers, surface risks early. Bias toward clarity over completeness.\n\n## Style\n- Concrete next action first\n- Visible risks and dependencies\n- Scope is negotiable, deadline is firm",
         "role.custom.name": "Custom",
         "role.custom.desc": "You define the role",
 
@@ -352,6 +377,19 @@ def role_label(role_id: str, lang: str = DEFAULT_LANG, *, field: str = "name") -
     if spec is None:
         raise KeyError(f"Unknown role: {role_id}. Known: {list(ROLES)}")
     return t(spec[field], lang)
+
+
+def role_body(role_id: str, lang: str = DEFAULT_LANG) -> str | None:
+    """Return the role's IDENTITY.md body, or None if the role is
+    'custom' (no canonical body — the user supplies it inline).
+    """
+    spec = ROLES.get(role_id)
+    if spec is None:
+        raise KeyError(f"Unknown role: {role_id}. Known: {list(ROLES)}")
+    body_key = spec.get("body")
+    if body_key is None:
+        return None
+    return t(body_key, lang)
 
 
 def level_label(level_id: str, lang: str = DEFAULT_LANG) -> str:

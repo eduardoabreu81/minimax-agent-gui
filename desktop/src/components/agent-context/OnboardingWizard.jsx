@@ -32,7 +32,7 @@ const STEP_IDS = ['about', 'personality', 'identity', 'review']
 
 export default function OnboardingWizard({ open, onClose }) {
   const { t, i18n } = useTranslation()
-  const { saveBatch, refreshStatus } = useAgentContext()
+  const { saveBatch, refreshStatus, getPresetBody, getRoleBody, presets, roles } = useAgentContext()
 
   const [step, setStep] = useState(0)
   const [name, setName] = useState('')
@@ -59,26 +59,22 @@ export default function OnboardingWizard({ open, onClose }) {
 
   if (!open) return null
 
-  // The preset/role bodies live in the backend i18n tables. We
-  // grab them here so the wizard writes the *full* body, not the
-  // JS fallback (which is a one-liner). For now the wizard just
-  // uses a short seed — the body can be edited in the tab.
+  // Preset/role bodies come from the hook (which fetches from the
+  // backend /presets and /roles endpoints on mount). The backend
+  // i18n table is the single source of truth. If the hook hasn't
+  // loaded yet, getPresetBody/getRoleBody return the JS fallback
+  // map so the wizard still has *something* to show.
   //
-  // The actual full preset bodies are in web/backend/i18n.py. If
-  // we ever expose them via a /api/agent-context/presets endpoint,
-  // this function should call that instead.
-  const PRESET_BODIES = {
-    concise: '# Personality\n\nYou are a pragmatic senior engineer. Direct, no fluff. Prefer showing code over describing in prose.\n\n## Style\n- Direct without being cold\n- Substance > formality\n- Push back on bad ideas with reasoning\n- Admit uncertainty plainly\n\n## What to avoid\n- Sycophancy\n- Hype language\n- Repeating the user\'s framing if it\'s wrong',
-    friendly: '# Personality\n\nYou are a warm, kind code partner. Celebrate wins, explain patiently, keep the vibe light.\n\n## Style\n- Welcoming but direct\n- Use concrete examples\n- Acknowledge effort before correcting\n- Ask back when something is unclear\n\n## What to avoid\n- Sarcasm\n- Monosyllabic replies\n- Blaming the user for the bug',
-    mentor: '# Personality\n\nYou are a patient mentor. Always explain the reasoning behind decisions.\n\n## Style\n- Explain the why before the how\n- Point out common patterns and pitfalls\n- Suggest further reading when useful\n- Treat errors as learning opportunities',
-    expert: '# Personality\n\nYou are a technical expert who goes deep. Cite trade-offs, surface nuances.\n\n## Style\n- High density, no fluff\n- Cite trade-offs and edge cases explicitly\n- Use jargon without translating\n- Reference docs and RFCs when relevant',
-    creative: '# Personality\n\nYou are a creative partner. Generate options, explore unexpected angles.\n\n## Style\n- Propose 2-3 alternatives before recommending\n- Use analogies and metaphors\n- Question the problem framing before solving\n- Celebrate unconventional ideas',
+  // The "preview" string on each card is the body's second line —
+  // a one-sentence teaser. The full body is only written to
+  // SOUL.md / IDENTITY.md when the user clicks "Create 4 files".
+  const presetTeaser = (id) => {
+    const body = getPresetBody(id)
+    return body.split('\n').find(l => l.trim() && !l.startsWith('#')) || ''
   }
-
-  const ROLE_BODIES = {
-    eng: 'You are the user\'s engineering partner. Your job is to write, refactor, and debug code with the user. Bias toward action: when the user describes a problem, propose concrete code changes, not abstract analysis.',
-    reviewer: 'You are a code reviewer. Read the code the user shares, identify issues, suggest improvements. Focus on correctness, readability, and performance. Be direct about problems but respectful of the author.',
-    pm: 'You are a project manager. Help the user organize tasks, track progress, manage scope. Break down work into chunks, identify blockers, surface risks early. Bias toward clarity over completeness.',
+  const roleTeaser = (id) => {
+    const body = getRoleBody(id)
+    return body.split('.')[0] || ''
   }
 
   const handleClose = (markSeen = true) => {
@@ -102,12 +98,14 @@ export default function OnboardingWizard({ open, onClose }) {
     setError(null)
     setSaving(true)
     try {
+      // Identity body: custom = user types it inline; non-custom =
+      // canonical body from /roles (via the hook).
       const identityBody = role === 'custom'
         ? customRole.trim()
-        : ROLE_BODIES[role] || ''
+        : getRoleBody(role)
 
       const entries = [
-        { id: 'soul',     content: PRESET_BODIES[preset] || '' },
+        { id: 'soul',     content: getPresetBody(preset) },
         { id: 'identity', content: identityBody },
         { id: 'user',     content: buildUserBody(name, timezone, level) },
         { id: 'memory',   content: buildMemoryBody() },
@@ -243,10 +241,13 @@ export default function OnboardingWizard({ open, onClose }) {
                     }`}
                   >
                     <div className="text-sm font-medium text-foreground">
-                      {t(`agentContext.presets.${p}`)}
+                      {/* Prefer the live preset name from /presets (already
+                          i18n-resolved by the backend); fall back to the
+                          frontend t() key for offline mode. */}
+                      {presets.find(x => x.id === p)?.name || t(`agentContext.presets.${p}`)}
                     </div>
                     <div className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                      {PRESET_BODIES[p]?.split('\n')[2] || ''}
+                      {presetTeaser(p)}
                     </div>
                   </button>
                 ))}
@@ -270,11 +271,11 @@ export default function OnboardingWizard({ open, onClose }) {
                     }`}
                   >
                     <div className="text-sm font-medium text-foreground">
-                      {t(`agentContext.roles.${r}`)}
+                      {roles.find(x => x.id === r)?.name || t(`agentContext.roles.${r}`)}
                     </div>
                     {r !== 'custom' && (
                       <div className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                        {ROLE_BODIES[r]?.split('.')[0] || ''}
+                        {roleTeaser(r)}
                       </div>
                     )}
                   </button>

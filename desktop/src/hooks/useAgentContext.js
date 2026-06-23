@@ -26,12 +26,11 @@ import { apiFetch } from '../lib/api.js'
 // File IDs the backend knows about. Lowercase, no extension.
 export const FILE_IDS = ['soul', 'identity', 'user', 'memory']
 
-// Default content for each file — used by the wizard and the "Reset"
-// button. The real preset bodies live in `web/backend/i18n.py` and are
-// fetched from the backend on wizard start; this map is the JS-side
-// fallback if the backend is unreachable. Keep in sync with the
-// backend's PRESETS dict (or better: have the wizard fetch from
-// /api/agent-context/presets when that endpoint lands).
+// JS-side fallback preset/role bodies. Used only if the backend
+// /presets or /roles endpoints fail. The single source of truth
+// for the canonical bodies is `web/backend/i18n.py`; the wizard
+// prefers the live response. Keep these short — the wizard is
+// the consumer and only sees them if the backend is unreachable.
 const FALLBACK_PRESETS = {
   concise: 'Direct, minimal prose. Substance > formality.',
   friendly: 'Warm and encouraging. Celebrate wins, explain patiently.',
@@ -87,6 +86,11 @@ export function useAgentContext() {
   // they call fetchFile(id) on demand.
   const [files, setFiles] = useState({})   // { soul: { content, char_count, ... } }
   const [dailies, setDailies] = useState([]) // [{ date, size, path }]
+  // `presets` and `roles` come from /api/agent-context/presets and
+  // /roles. Loaded once on mount so the wizard can use the canonical
+  // bodies (the single source of truth is web/backend/i18n.py).
+  const [presets, setPresets] = useState([]) // [{ id, name, desc, body }]
+  const [roles, setRoles] = useState([])     // [{ id, name, desc, body? }]
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const mountedRef = useRef(true)
@@ -122,16 +126,35 @@ export function useAgentContext() {
     }
   }, [])
 
-  // Initial load — status + dailies, files are lazy.
+  const refreshPresetsAndRoles = useCallback(async () => {
+    // Fetch in parallel. Each falls back to the JS map if the backend
+    // is unreachable (the wizard's preview cards still need *something*
+    // to show).
+    try {
+      const [pRes, rRes] = await Promise.all([
+        apiFetch('/api/agent-context/presets'),
+        apiFetch('/api/agent-context/roles'),
+      ])
+      if (!mountedRef.current) return
+      const pData = await pRes.json()
+      const rData = await rRes.json()
+      if (Array.isArray(pData.presets)) setPresets(pData.presets)
+      if (Array.isArray(rData.roles)) setRoles(rData.roles)
+    } catch (e) {
+      console.warn('[useAgentContext] /presets or /roles failed:', e)
+    }
+  }, [])
+
+  // Initial load — status + dailies + presets/roles, files are lazy.
   useEffect(() => {
     mountedRef.current = true
     setLoading(true)
-    Promise.all([refreshStatus(), refreshDailies()])
+    Promise.all([refreshStatus(), refreshDailies(), refreshPresetsAndRoles()])
       .finally(() => {
         if (mountedRef.current) setLoading(false)
       })
     return () => { mountedRef.current = false }
-  }, [refreshStatus, refreshDailies])
+  }, [refreshStatus, refreshDailies, refreshPresetsAndRoles])
 
   // -------- File operations --------
 
@@ -195,20 +218,29 @@ export function useAgentContext() {
     status,
     files,
     dailies,
+    presets,
+    roles,
     loading,
     error,
     refreshStatus,
     refreshDailies,
+    refreshPresetsAndRoles,
     fetchFile,
     saveFile,
     saveBatch,
     fetchDaily,
 
     // Helpers exposed for the wizard — fetches the body for a preset
-    // or role by id. Currently uses a JS-side fallback (the real
-    // preset bodies live in web/backend/i18n.py). A future
-    // /api/agent-context/presets endpoint would replace this.
-    getPresetBody: (presetId) => FALLBACK_PRESETS[presetId] || '',
-    getRoleBody: (roleId) => FALLBACK_ROLES[roleId] || '',
+    // or role by id. Prefers the live data from /presets + /roles;
+    // falls back to the JS-side map if the backend is unreachable
+    // (or the id isn't in the response).
+    getPresetBody: (presetId) => {
+      const live = presets.find(p => p.id === presetId)
+      return live?.body || FALLBACK_PRESETS[presetId] || ''
+    },
+    getRoleBody: (roleId) => {
+      const live = roles.find(r => r.id === roleId)
+      return live?.body || FALLBACK_ROLES[roleId] || ''
+    },
   }
 }

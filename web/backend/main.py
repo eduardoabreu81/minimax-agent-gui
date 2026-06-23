@@ -52,6 +52,16 @@ from agent_context import (
     list_recent_dailies,
 )
 
+from i18n import (
+    SUPPORTED as I18N_SUPPORTED,
+    lang_or_default,
+    preset_label,
+    role_label,
+    role_body,
+    PRESETS as I18N_PRESETS,
+    ROLES as I18N_ROLES,
+)
+
 from mini_max_mcp.client import MiniMaxSyncClient, MiniMaxClient
 from mini_max_mcp.pricing import (
     calculate_image_cost,
@@ -1747,6 +1757,83 @@ class ToolsConfigRequest(BaseModel):
 # /api/agent-context/{file_id} route below — otherwise FastAPI matches
 # "dailies" against {file_id} and rejects it as an unknown file id.
 # ---------------------------------------------------------------------------
+
+@app.get("/api/agent-context/presets")
+async def list_presets(lang: str | None = None):
+    """Return the 5 SOUL presets (id + i18n name/desc/body).
+
+    The `lang` query param resolves labels in pt-BR or en-US. If
+    omitted or invalid, falls back to the user's `app.language` from
+    config (default en-US). The frontend uses the bodies to seed
+    SOUL.md when the user picks a preset in the wizard.
+    """
+    resolved = _resolve_lang(lang)
+    try:
+        return {
+            "lang": resolved,
+            "presets": [
+                {
+                    "id": pid,
+                    "name": preset_label(pid, resolved),
+                    "desc": preset_label(pid, resolved, field="desc"),
+                    "body": preset_label(pid, resolved, field="body"),
+                }
+                for pid in I18N_PRESETS
+            ],
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/agent-context/roles")
+async def list_roles(lang: str | None = None):
+    """Return the 4 role templates (id + i18n name/desc/body).
+
+    The 3 non-custom roles (eng, reviewer, pm) carry a canonical body
+    that the wizard writes to IDENTITY.md. The 'custom' role has no
+    body — the user types it inline in the wizard's text field.
+    """
+    resolved = _resolve_lang(lang)
+    try:
+        out = []
+        for rid in I18N_ROLES:
+            entry = {
+                "id": rid,
+                "name": role_label(rid, resolved),
+                "desc": role_label(rid, resolved, field="desc"),
+            }
+            body = role_body(rid, resolved)
+            if body is not None:
+                entry["body"] = body
+            out.append(entry)
+        return {"lang": resolved, "roles": out}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+def _resolve_lang(lang: str | None) -> str:
+    """Resolve a `lang` query param to a supported language code.
+
+    Priority:
+      1. The `lang` query param if valid (case-insensitive, supports
+         both `pt-BR` and `pt_br` forms).
+      2. The user's `app.language` in config.yaml.
+      3. The backend default (en-US).
+    """
+    if lang and lang.strip():
+        try:
+            return lang_or_default(lang)
+        except Exception:
+            pass
+    try:
+        cfg_lang = config.get("app", {}).get("language") if isinstance(config, dict) else None
+        if cfg_lang:
+            return lang_or_default(cfg_lang)
+    except Exception:
+        pass
+    from i18n import DEFAULT_LANG
+    return DEFAULT_LANG
+
 
 @app.get("/api/agent-context/dailies")
 async def list_dailies(n: int = 7):
