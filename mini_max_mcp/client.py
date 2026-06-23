@@ -140,9 +140,16 @@ class MiniMaxSyncClient:
         n: int = 1,
         prompt_optimizer: bool = False,
         watermark: bool = False,
-        seed: int = None
+        seed: int = None,
+        subject_reference: Optional[list] = None,
     ) -> Tuple[bool, str]:
-        """Generate image from text prompt (sync)."""
+        """Generate image from text prompt (sync).
+
+        Both T2I and i2i hit the same ``/v1/image_generation`` endpoint —
+        i2i is enabled by passing ``subject_reference`` (typically
+        ``[{"type": "character", "image_file": "<url or base64>"}]``) and
+        using ``model="image-01-live"``. T2I uses ``model="image-01"``.
+        """
         data = {
             "model": model,
             "prompt": prompt,
@@ -160,6 +167,8 @@ class MiniMaxSyncClient:
             data["aigc_watermark"] = True
         if seed is not None:
             data["seed"] = seed
+        if subject_reference:
+            data["subject_reference"] = subject_reference
 
         success, result = self._post_json("/v1/image_generation", data)
         if not success:
@@ -1510,11 +1519,28 @@ def tts_sync(api_key: str, api_base: str, text: str, voice: str, speed: float, o
         client.close()
 
 
-def image_sync(api_key: str, api_base: str, prompt: str, output_path: str, aspect_ratio: str = "1:1", width: int = None, height: int = None, n: int = 1, prompt_optimizer: bool = False, watermark: bool = False, seed: int = None) -> Tuple[bool, str]:
-    """Synchronous image generation wrapper."""
+def image_sync(api_key: str, api_base: str, prompt: str, output_path: str, aspect_ratio: str = "1:1", width: int = None, height: int = None, n: int = 1, prompt_optimizer: bool = False, watermark: bool = False, seed: int = None, model: str = "image-01", subject_reference: Optional[list] = None) -> Tuple[bool, str]:
+    """Synchronous image generation wrapper.
+
+    Both T2I and i2i share this entry point — i2i is selected by passing
+    ``subject_reference`` and ``model="image-01-live"`` (or any of the
+    ``image-01-live*`` variants). See ``MiniMaxSyncClient.image_generate``.
+    """
     client = MiniMaxSyncClient(api_key, api_base)
     try:
-        return client.image_generate(prompt, aspect_ratio=aspect_ratio, width=width, height=height, output_path=output_path, n=n, prompt_optimizer=prompt_optimizer, watermark=watermark, seed=seed)
+        return client.image_generate(
+            prompt,
+            model=model,
+            aspect_ratio=aspect_ratio,
+            width=width,
+            height=height,
+            output_path=output_path,
+            n=n,
+            prompt_optimizer=prompt_optimizer,
+            watermark=watermark,
+            seed=seed,
+            subject_reference=subject_reference,
+        )
     finally:
         client.close()
 

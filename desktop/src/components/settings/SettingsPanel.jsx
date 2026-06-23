@@ -129,7 +129,13 @@ export default function SettingsPanel() {
     apiKeyConfigured: false,
     model: 'MiniMax-M3',
     maxSteps: 50,
-    workspaceDir: './workspace',
+    // ``workspaceDir`` was removed in v0.5 — coding sessions have their
+    // own picker in the CodingPanel header, and the app workspace is
+    // fixed (under %APPDATA%/MiniMaxStudio/). We keep the field name
+    // around in case any stale localStorage payload still has it
+    // (see useEffect below — it's silently ignored).
+    workspaceDir: '',
+    appWorkspaceDir: '',
     systemPrompt: '',
     region: 'global',
     webSearch: true,
@@ -314,7 +320,9 @@ export default function SettingsPanel() {
           apiKeyConfigured: data.api_key_configured || false,
           model: data.agent?.model || 'MiniMax-M3',
           maxSteps: data.agent?.max_steps || 50,
-          workspaceDir: data.agent?.workspace_dir || './workspace',
+          // v0.5: ``workspace_dir`` is gone — we read the new
+          // ``app_workspace_dir`` (read-only indicator below) instead.
+          appWorkspaceDir: data.app_workspace_dir || '',
           systemPrompt: data.agent?.system_prompt || '',
           apiBase: data.api_base || '',
           region: data.region || 'global',
@@ -380,7 +388,8 @@ export default function SettingsPanel() {
       const agentPayload = {}
       if (localSettings.model) agentPayload.model = localSettings.model
       if (localSettings.maxSteps) agentPayload.max_steps = Number(localSettings.maxSteps)
-      if (localSettings.workspaceDir) agentPayload.workspace_dir = localSettings.workspaceDir
+      // v0.5: workspaceDir is no longer sent — per-session coding
+      // workspace is set via PUT /api/coding/workspace instead.
       if (localSettings.region) agentPayload.region = localSettings.region
       if (localSettings.apiBase) agentPayload.api_base = localSettings.apiBase
 
@@ -438,7 +447,10 @@ export default function SettingsPanel() {
       apiKeyConfigured: false,
       model: 'MiniMax-M3',
       maxSteps: 50,
-      workspaceDir: './workspace',
+      // v0.5: no global workspaceDir; show the live app workspace
+      // path (read-only) and let coding sessions pick their own folder.
+      workspaceDir: '',
+      appWorkspaceDir: localSettings.appWorkspaceDir,
       systemPrompt: '',
       region: 'global',
       apiBase: '',
@@ -703,14 +715,19 @@ export default function SettingsPanel() {
               <p className="text-[10px] text-muted-foreground mt-1">{t('settings.maxStepsHint')}</p>
             </div>
 
+            {/* ``workspaceDir`` removed in v0.5 — coding sessions pick a
+                folder from the CodingPanel header; the app workspace is
+                fixed (%APPDATA%/MiniMaxStudio/). We show a read-only
+                indicator so the user can see where their data lives. */}
             <div>
-              <label className="text-[11.5px] font-semibold text-muted-foreground mb-1.5 block">{t('settings.workspaceDir')}</label>
+              <label className="text-[11.5px] font-semibold text-muted-foreground mb-1.5 block">{t('settings.appWorkspaceDir')}</label>
               <input
                 type="text"
-                value={localSettings.workspaceDir}
-                onChange={(e) => setLocalSettings(s => ({ ...s, workspaceDir: e.target.value }))}
-                className="w-full h-[36px] bg-surface border border-border rounded-[9px] px-3 font-mono text-[12.5px] text-foreground focus:outline-none focus:border-primary"
+                value={localSettings.appWorkspaceDir || t('settings.appWorkspaceLoading')}
+                readOnly
+                className="w-full h-[36px] bg-surface border border-border rounded-[9px] px-3 font-mono text-[12.5px] text-muted-foreground focus:outline-none cursor-default"
               />
+              <p className="text-[10px] text-muted-foreground mt-1">{t('settings.appWorkspaceHint')}</p>
             </div>
 
             <div>

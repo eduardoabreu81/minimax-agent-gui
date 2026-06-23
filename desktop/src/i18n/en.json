@@ -61,7 +61,15 @@
     "create": "Create",
     "cancel": "Cancel",
     "workingTreeClean": "Working tree clean",
-    "noCommits": "No commits yet"
+    "noCommits": "No commits yet",
+    "workspace": {
+      "openFolder": "Open folder…",
+      "pickFolder": "Pick the project folder the agent will read/write",
+      "changeFolder": "Change folder…",
+      "opening": "Opening…",
+      "recent": "Recent",
+      "removeFromRecent": "Remove from recent"
+    }
   },
   "tasks": {
     "title": "Task Board",
@@ -92,7 +100,11 @@
     "descriptionPlaceholder": "Description...",
     "save": "Save",
     "create": "Create",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "agentBadge": "Created by agent",
+    "loading": "Loading...",
+    "errorLoad": "Failed to load tasks",
+    "retry": "Retry"
   },
   "settings": {
     "title": "Settings",
@@ -148,7 +160,9 @@
     "matrixRainDesc": "Animated code rain background",
     "maxStepsLabel": "Max steps per request",
     "maxStepsHint": "Maximum number of reasoning steps per request",
-    "workspaceDir": "Workspace directory",
+    "appWorkspaceDir": "App data location",
+    "appWorkspaceHint": "Where MiniMax Studio stores conversations, task board, media generations, and settings. Coding sessions pick their own project folder from the header — this one is fixed.",
+    "appWorkspaceLoading": "loading…",
     "apiBase": "API base URL",
     "apiBaseHint": "Leave empty to use the default MiniMax endpoint for the selected region. Set a custom URL only if you are routing through an Anthropic-compatible proxy.",
     "systemPrompt": "System prompt",

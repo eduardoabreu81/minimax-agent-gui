@@ -11,6 +11,7 @@ import {
 import XTermTerminal from './XTermTerminal'
 import MarkdownRenderer from '../MarkdownRenderer'
 import WorkspaceSidebar from './WorkspaceSidebar'
+import WorkspacePicker from './WorkspacePicker'
 import AgentChatPanel from './AgentChatPanel'
 import { useCodingChat } from './useCodingChat'
 import { useAgentActivity } from '../../context/AgentActivityContext'
@@ -125,6 +126,14 @@ export default function CodingPanel({
   // assistant message (rendered via ThinkingBlock).
   const codingStreamingThinkingRef = useRef('')
 
+  // Coding workspace — per-session folder picker state.
+  // Mirrors the backend's _coding_sessions[session_id]. Three states:
+  //   none     → no workspace attached (forces user to pick before sending).
+  //   selected → workspace set, user can still swap folders.
+  //   locked   → first message sent; workspace is permanent for this session.
+  const [codingWorkspace, setCodingWorkspace] = useState({ dir: null, label: null, locked: false })
+  const [recentWorkspaces, setRecentWorkspaces] = useState([])
+
   const { register } = useSessionProtection()
 
   useEffect(() => {
@@ -154,14 +163,22 @@ export default function CodingPanel({
 
   const loadFiles = useCallback(async (path = currentPath) => {
     try {
-      const res = await apiFetch(`/api/files?path=${encodeURIComponent(path)}`)
+      const res = await apiFetch(
+        `/api/files?path=${encodeURIComponent(path)}&session_id=${encodeURIComponent(codingSessionId)}`
+      )
       const data = await res.json()
       setFiles(data.entries || [])
       setCurrentPath(path)
+      // The backend also returns the workspace_dir it resolved against,
+      // so the picker chip / explorer root stay in sync after a workspace
+      // swap (where `path` may be the *new* workspace, not a sub-dir).
+      if (data.workspace_dir && (!codingWorkspace.dir || data.workspace_dir !== codingWorkspace.dir)) {
+        // No-op: refreshCodingWorkspace on sessionId change handles this.
+      }
     } catch (e) {
       console.error('Failed to load files:', e)
     }
-  }, [currentPath])
+  }, [currentPath, codingSessionId, codingWorkspace.dir])
 
   const openFile = async (path) => {
     const type = getFileType(path)
@@ -177,7 +194,9 @@ export default function CodingPanel({
       return
     }
     try {
-      const res = await apiFetch(`/api/files/content?path=${encodeURIComponent(path)}`)
+      const res = await apiFetch(
+        `/api/files/content?path=${encodeURIComponent(path)}&session_id=${encodeURIComponent(codingSessionId)}`
+      )
       if (!res.ok) {
         const text = await res.text().catch(() => 'Unknown error')
         throw new Error(`HTTP ${res.status}: ${text}`)
@@ -216,7 +235,11 @@ export default function CodingPanel({
       await apiFetch('/api/files/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: activeFile, content: fileContents[activeFile] }),
+        body: JSON.stringify({
+          path: activeFile,
+          content: fileContents[activeFile],
+          session_id: codingSessionId,
+        }),
       })
     } catch (e) {
       console.error('Failed to save file:', e)
@@ -225,7 +248,7 @@ export default function CodingPanel({
 
   const loadGitStatus = async () => {
     try {
-      const res = await apiFetch('/api/git/status')
+      const res = await apiFetch(`/api/git/status?session_id=${encodeURIComponent(codingSessionId)}`)
       const data = await res.json()
       setGitStatus(data)
     } catch (e) {
@@ -238,7 +261,7 @@ export default function CodingPanel({
       const res = await apiFetch('/api/shell', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ command: cmd }),
+        body: JSON.stringify({ command: cmd, session_id: codingSessionId }),
       })
       return await res.json()
     } catch (e) {
@@ -261,6 +284,64 @@ export default function CodingPanel({
     } catch (e) { /* ignore */ }
   }
 
+  const fetchRecentWorkspaces = async () => {
+    try {
+      const res = await apiFetch('/api/coding/recent-workspaces')
+      const data = await res.json()
+      if (data.success) setRecentWorkspaces(data.workspaces || [])
+    } catch (e) { /* ignore */ }
+  }
+
+  const refreshCodingWorkspace = async (sid = codingSessionId) => {
+    try {
+      const res = await apiFetch(`/api/coding/workspace?session_id=${encodeURIComponent(sid)}`)
+      const data = await res.json()
+      if (data.success) {
+        setCodingWorkspace({
+          dir: data.workspace_dir || null,
+          label: data.workspace_dir ? (data.workspace_dir.split(/[\\/]/).pop() || data.workspace_dir) : null,
+          locked: !!data.locked,
+        })
+      }
+    } catch (e) { /* ignore */ }
+  }
+
+  const handlePickWorkspace = async (path) => {
+    try {
+      const res = await apiFetch('/api/coding/workspace', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: codingSessionId, workspace_dir: path }),
+      })
+      const data = await res.json()
+      if (!data.success) {
+        setCodingMessages((prev) => [...prev, { type: 'system', content: `Workspace error: ${data.detail || 'unknown'}` }])
+        return
+      }
+      setCodingWorkspace({
+        dir: data.workspace_dir,
+        label: data.label || (data.workspace_dir.split(/[\\/]/).pop() || data.workspace_dir),
+        locked: false,
+      })
+      // Refresh file explorer + git against the new workspace.
+      loadFiles(data.workspace_dir)
+      loadGitStatus()
+      fetchRecentWorkspaces()
+    } catch (e) {
+      setCodingMessages((prev) => [...prev, { type: 'system', content: `Workspace error: ${e.message}` }])
+    }
+  }
+
+  const handleRemoveRecent = async (path) => {
+    try {
+      const res = await apiFetch(`/api/coding/recent-workspaces?path=${encodeURIComponent(path)}`, {
+        method: 'DELETE',
+      })
+      const data = await res.json()
+      if (data.success) setRecentWorkspaces(data.workspaces || [])
+    } catch (e) { /* ignore */ }
+  }
+
   const fetchSkills = async () => {
     try {
       const res = await apiFetch('/api/skills')
@@ -276,6 +357,8 @@ export default function CodingPanel({
     setShowCodingConvList(false)
     setCodingSearchQuery('')
     setCodingSearchResults(null)
+    // New session = no workspace attached yet; user must pick one.
+    setCodingWorkspace({ dir: null, label: null, locked: false })
     fetchCodingConversations()
   }
 
@@ -285,6 +368,9 @@ export default function CodingPanel({
     setShowCodingConvList(false)
     setCodingSearchQuery('')
     setCodingSearchResults(null)
+    // Workspace state is authoritative on the backend; refresh so the
+    // picker chip + file explorer + git all switch in lockstep.
+    refreshCodingWorkspace(conv.id)
   }
 
   const deleteCodingConversation = async (e, convId) => {
@@ -318,7 +404,18 @@ export default function CodingPanel({
   // Coding Agent WebSocket
   useEffect(() => {
     fetchCodingConversations()
+    fetchRecentWorkspaces()
   }, [])
+
+  // Whenever the session id changes, pull the workspace + lock state
+  // from the backend so the picker chip, file explorer, and git status
+  // all point at the right folder (especially when the user picks a
+  // past conversation from the dropdown — that conversation may have
+  // been started in a different folder).
+  useEffect(() => {
+    refreshCodingWorkspace(codingSessionId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [codingSessionId])
 
   // Register the current coding session with the StatusBar so the context
   // chip tracks this conversation's tokens. Cleared on unmount; re-registers
@@ -351,6 +448,19 @@ export default function CodingPanel({
         codingStreamingThinkingRef.current = ''
         setCodingThinking(false)
         activity.clearActivity()
+      } else if (data.type === 'session_workspace') {
+        // Backend tells us which folder this conversation belongs to
+        // and whether the lock has been flipped. Update the picker
+        // chip + file explorer + git in lockstep.
+        setCodingWorkspace({
+          dir: data.workspace_dir || null,
+          label: data.workspace_dir ? (data.workspace_dir.split(/[\\/]/).pop() || data.workspace_dir) : null,
+          locked: !!data.locked,
+        })
+        if (data.workspace_dir) {
+          loadFiles(data.workspace_dir)
+          loadGitStatus()
+        }
       } else if (data.type === 'status' && data.content === 'thinking...') {
         setCodingThinking(true)
         activity.setThinkingState(true)
@@ -547,13 +657,25 @@ export default function CodingPanel({
     return () => window.removeEventListener('approvePlan', handleApprove)
   }, [approveAndRunPlan])
 
-  const sendCodingMessage = useCallback(() => {
+const sendCodingMessage = useCallback(() => {
     if ((!codingInput.trim() && !codingAttachment) || !codingWs || codingWs.readyState !== WebSocket.OPEN) return
 
     if (permissionRequest) {
       setCodingMessages(prev => [...prev, {
         type: 'system',
         content: 'Respond to the pending tool permission request before sending another message.'
+      }])
+      return
+    }
+
+    // Coding workspace gate: refuse to send the first message before
+    // the user picks a folder. Backend enforces the same rule and
+    // replies with an error event if we ever slip past this check,
+    // but the UX is friendlier when we catch it here.
+    if (!codingWorkspace.dir) {
+      setCodingMessages(prev => [...prev, {
+        type: 'system',
+        content: 'Pick a workspace folder in the Coding header before sending your first message.',
       }])
       return
     }
@@ -610,10 +732,19 @@ export default function CodingPanel({
     }])
     codingStreamingThinkingRef.current = ''
     codingWs.send(JSON.stringify(payload))
+    // Defensive lock: also fire the lock endpoint client-side so the
+    // backend state flips to "locked" even if the WebSocket races.
+    // The WebSocket handler will set it again on the first server-side
+    // processing — both paths are idempotent.
+    apiFetch(`/api/coding/session/${encodeURIComponent(codingSessionId)}/lock`, {
+      method: 'POST',
+    }).then(() => {
+      setCodingWorkspace((w) => ({ ...w, locked: true }))
+    }).catch(() => { /* server will lock on first message */ })
     setCodingInput('')
     setCodingAttachment(null)
     setCodingThinking(true)
-  }, [codingInput, codingWs, activeFile, fileContents, codingAttachment, agentMode, activity, gitStatus, activeModel, supportsThinking, thinkingEnabled])
+  }, [codingInput, codingWs, activeFile, fileContents, codingAttachment, agentMode, activity, gitStatus, activeModel, supportsThinking, thinkingEnabled, codingWorkspace.dir, codingSessionId])
 
   const activateSkill = (skillName) => {
     if (codingWs && codingWs.readyState === WebSocket.OPEN) {
@@ -826,7 +957,27 @@ export default function CodingPanel({
                           ) : (
                             <>
                               <p className="text-xs font-medium text-foreground truncate">{conv.title}</p>
-                              <p className="text-[10px] text-muted-foreground">{conv.message_count} messages</p>
+                              <div className="flex items-center gap-1.5 mt-0.5">
+                                {/* VSCode-style: show the workspace path
+                                    under each conversation title so the
+                                    user can see which project a chat
+                                    belongs to at a glance. */}
+                                {conv.workspace_dir ? (
+                                  <span
+                                    className="text-[10px] text-primary/80 font-mono truncate flex items-center gap-1"
+                                    title={conv.workspace_dir}
+                                  >
+                                    <Folder size={9} className="shrink-0" />
+                                    {conv.workspace_dir}
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] text-muted-foreground/60 italic">
+                                    no workspace
+                                  </span>
+                                )}
+                                <span className="text-[10px] text-muted-foreground/60">·</span>
+                                <span className="text-[10px] text-muted-foreground">{conv.message_count} msg</span>
+                              </div>
                             </>
                           )}
                         </div>
@@ -1239,6 +1390,20 @@ export default function CodingPanel({
         <div className="flex items-center gap-2">
           <Code2 size={18} className="text-primary" />
           <h2 className="text-sm font-semibold">{t('coding.title')}</h2>
+          {/* Workspace picker — only place in the app where the user
+              picks the folder the agent will read/write. Sits next to
+              the title (left side) so it's obvious this is the active
+              workspace for THIS coding session. Mirrors the branch
+              chip in the StatusBar (right side) — those are the only
+              two header slots that talk about "where am I working". */}
+          <WorkspacePicker
+            state={codingWorkspace.locked ? 'locked' : (codingWorkspace.dir ? 'selected' : 'none')}
+            workspaceDir={codingWorkspace.dir}
+            label={codingWorkspace.label}
+            recentWorkspaces={recentWorkspaces}
+            onChange={handlePickWorkspace}
+            onRemoveRecent={handleRemoveRecent}
+          />
           {activeFile && (
             <span className="text-xs text-muted-foreground font-mono ml-2">{activeFile}</span>
           )}

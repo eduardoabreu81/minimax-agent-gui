@@ -10,8 +10,13 @@
 //
 // 34×34 icon container with bg primary/.14 + primary color.
 // Title 15px weight 600. Subtitle 11.5px muted-foreground.
+//
+// When `right` is provided (e.g. ModeTabBar), the subtitle is hidden —
+// the right slot already conveys the same mode information visually, so
+// keeping the subtitle would just cause it to wrap and squeeze the pills.
 
-export default function MediaHeader({ icon, title, subtitle }) {
+export default function MediaHeader({ icon, title, subtitle, right }) {
+  const showSubtitle = subtitle && !right
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
       <div
@@ -29,16 +34,27 @@ export default function MediaHeader({ icon, title, subtitle }) {
       >
         {icon}
       </div>
-      <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--app-text)' }}>
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div style={{
+          fontSize: 15, fontWeight: 600, color: 'var(--app-text)',
+          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+        }}>
           {title}
         </div>
-        {subtitle && (
-          <div style={{ fontSize: 11.5, color: 'var(--app-text-2)' }}>
+        {showSubtitle && (
+          <div style={{
+            fontSize: 11.5, color: 'var(--app-text-2)',
+            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+          }}>
             {subtitle}
           </div>
         )}
       </div>
+      {right && (
+        <div style={{ flexShrink: 0 }}>
+          {right}
+        </div>
+      )}
     </div>
   );
 }

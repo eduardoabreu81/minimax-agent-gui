@@ -61,7 +61,15 @@
     "create": "Crear",
     "cancel": "Cancelar",
     "workingTreeClean": "Árbol de trabajo limpio",
-    "noCommits": "Aún no hay commits"
+    "noCommits": "Aún no hay commits",
+    "workspace": {
+      "openFolder": "Abrir carpeta…",
+      "pickFolder": "Elige la carpeta del proyecto que el agente leerá/escribirá",
+      "changeFolder": "Cambiar carpeta…",
+      "opening": "Abriendo…",
+      "recent": "Recientes",
+      "removeFromRecent": "Quitar de recientes"
+    }
   },
   "tasks": {
     "title": "Tablero de Tareas",
@@ -92,7 +100,11 @@
     "descriptionPlaceholder": "Descripción...",
     "save": "Guardar",
     "create": "Crear",
-    "cancel": "Cancelar"
+    "cancel": "Cancelar",
+    "agentBadge": "Creada por el agente",
+    "loading": "Cargando...",
+    "errorLoad": "Error al cargar tareas",
+    "retry": "Reintentar"
   },
   "settings": {
     "title": "Configuración",
@@ -140,7 +152,9 @@
     "matrixRainDesc": "Fondo animado de lluvia de código",
     "maxStepsLabel": "Máx. pasos por solicitud",
     "maxStepsHint": "Número máximo de pasos de razonamiento por solicitud",
-    "workspaceDir": "Directorio del workspace",
+    "appWorkspaceDir": "Ubicación de datos del app",
+    "appWorkspaceHint": "Donde MiniMax Studio guarda conversaciones, tablero de tareas, generaciones de medios y ajustes. Las sesiones de coding eligen su propia carpeta desde el header — esta es fija.",
+    "appWorkspaceLoading": "cargando…",
     "apiBase": "URL base de la API",
     "apiBaseHint": "Déjalo vacío para usar el endpoint MiniMax por defecto de la región seleccionada. Define una URL personalizada solo si estás enrutando a través de un proxy compatible con Anthropic.",
     "systemPrompt": "Prompt del sistema",

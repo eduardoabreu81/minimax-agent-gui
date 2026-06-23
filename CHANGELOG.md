@@ -163,13 +163,67 @@ controls and fixed a number of Token Plan API quirks.
 
 ### Added
 
-- **Settings Modal: custom API base URL** — the Agent tab now lets
-  users override the default MiniMax Anthropic-compatible endpoint.
-  The backend validates the URL and persists it via the existing
-  `PUT /api/config/agent` endpoint. The project uses Anthropic SDK
-  as the single LLM protocol (MiniMax's docs recommend it for
-  prompt-cache benefits); the `api_base` override is intended for
-  proxies or advanced routing only.
+- **Coding workspace isolation** — each coding session now binds to a
+  folder the user picks (native picker via `tauri-plugin-dialog`,
+  browser fallback `<input webkitdirectory>`). Once the first message
+  is sent, the workspace locks: subsequent messages resolve relative
+  paths against that folder, file/git/shell/upload/media endpoints
+  all take a `session_id`, and conversations persist their
+  `workspace_dir` so reloads restore the binding. Recent workspaces
+  are remembered (top 10, MRU, dedupe, removable). Backed by 5 new
+  endpoints (`/api/coding/workspace`, `/api/coding/recent-workspaces`,
+  `/api/coding/session/{id}/lock`, etc) and `SessionManager` now
+  accepts per-session `coding_workspace_dir`. 15 new tests in
+  `tests/test_coding_workspace.py`.
+- **Task Board agent ↔ user shared storage** — the agent can now
+  `tasks_create` / `tasks_list` / `tasks_update` against the same
+  `workspace/tasks.json` the user sees in the Task Board panel.
+  Deletion is intentionally reserved for the user (agent is a
+  guest, not an owner). Cards created by the agent display an
+  `agent` badge so the user can tell who added what.
+- **Backend startup healthcheck** — `App.jsx` now gates the real
+  shell behind a `/api/config` poll (`useBackendReady.js`) so the
+  React tree only mounts after the PyInstaller FastAPI sidecar is
+  listening on `:8765`. Failed healthchecks show a fullscreen
+  `BackendLoader` with retry. Timeout (30s) mirrors
+  `HEALTHCHECK_TIMEOUT` in `lib.rs`.
+- **MediaPanel layout unified** — `MediaPanelLayout` gains a
+  full-width `topBar` slot and a `'full'` (single-column library)
+  layout variant. New `ModeTabBar` (pill-style) drives sub-mode
+  switching across Speech (4 modes) and Music (3 modes). `MediaHeader`
+  gets a `right` slot for inline pills. Speech / Image / Music /
+  Video panels refactored to consume the new shared layout.
+
+### Fixed
+
+- **T2I + I2I unification on `/v1/image_generation`** — both modes
+  now share the same endpoint and entry point
+  (`MiniMaxSyncClient.image_generate`, `image_sync`). I2I is selected
+  by passing `subject_reference=[{"type": "character", "image_file": ...}]`
+  and `model="image-01-live"` instead of a separate code path. The
+  sync wrapper exposes both `model` and `subject_reference` params
+  so the agent can drive either mode.
+- **`TaskBoard.jsx` status label fallback** — was reading
+  `statusConfig.id === 'in-progress' ? ...` (a config key), which
+  returned the wrong translation key for any non-`in-progress`
+  status. Now reads the actual `task.status` value.
+
+### Internal
+
+- `desktop/design-reference/` (mockup HTML, screenshots,
+  `TAURI_SPEC.md`, `support.js`) moved to `desktop/.gitignore` —
+  working material, not part of the installable app.
+- `App.jsx` trailing newline restored.
+
+### Settings Modal: custom API base URL
+
+- The Agent tab now lets users override the default MiniMax
+  Anthropic-compatible endpoint. The backend validates the URL and
+  persists it via the existing `PUT /api/config/agent` endpoint.
+  The project uses Anthropic SDK as the single LLM protocol
+  (MiniMax's docs recommend it for prompt-cache benefits); the
+  `api_base` override is intended for proxies or advanced routing
+  only.
 
 ## [0.3.1] — 2026-06-02 — Stub cleanup
 

@@ -1,15 +1,26 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Volume2, Save, Loader2, RefreshCw, Mic, Gauge, Check, Coins, Mic2, Wand2, Upload, X, Trash2, Sparkles, Headphones, AudioLines, FileAudio } from 'lucide-react'
+import {
+  Volume2, Save, Loader2, RefreshCw, Mic, Check, Coins, Mic2, Wand2, Upload, X, Trash2,
+  Sparkles, AudioLines, FileAudio, Search, Play, ChevronDown, ChevronRight, AlertCircle, Globe, Plus,
+} from 'lucide-react'
 import { useSessionProtection } from '../../hooks/useSessionProtection'
 import RecentGenerations from './RecentGenerations'
 import MediaPanelLayout from '../shared/MediaPanelLayout'
-import MediaHeader from '../shared/MediaHeader'
-import GalleryHeader from '../shared/GalleryHeader'
+import ModeTabBar from '../shared/ModeTabBar'
 import { apiFetch } from '../../lib/api.js'
 
-// TAURI_SPEC.md §6b — 4 sub-modes for the Speech panel.
-// Model options cover the public T2A lineup per the MiniMax docs.
+// ───────────────────────────────────────────────────────────────────────────
+// Constants — TAURI_SPEC §6b
+// ───────────────────────────────────────────────────────────────────────────
+
+const SPEECH_MODES = [
+  { id: 'synthesize', label: 'Synthesize', icon: Volume2 },
+  { id: 'clone',      label: 'Clone',      icon: Mic2 },
+  { id: 'design',     label: 'Design',     icon: Wand2 },
+  { id: 'voices',     label: 'Voices',     icon: AudioLines },
+]
+
 const SPEECH_MODELS = [
   { id: 'speech-2.8-hd',     label: 'Speech 2.8 HD' },
   { id: 'speech-2.8-turbo',  label: 'Speech 2.8 Turbo' },
@@ -22,87 +33,292 @@ const SPEECH_MODELS = [
 ]
 
 const EMOTIONS = [
-  { id: '', value: 'auto' },
-  { id: 'happy', value: 'happy' },
-  { id: 'sad', value: 'sad' },
-  { id: 'angry', value: 'angry' },
-  { id: 'fearful', value: 'fearful' },
-  { id: 'disgusted', value: 'disgusted' },
-  { id: 'surprised', value: 'surprised' },
-  { id: 'calm', value: 'calm' },
-  { id: 'fluent', value: 'fluent' },
-  { id: 'whisper', value: 'whisper' },
+  { id: '',         label: 'Auto' },
+  { id: 'happy',    label: 'happy' },
+  { id: 'sad',      label: 'sad' },
+  { id: 'angry',    label: 'angry' },
+  { id: 'fearful',  label: 'fearful' },
+  { id: 'disgusted',label: 'disgusted' },
+  { id: 'surprised',label: 'surprised' },
+  { id: 'calm',     label: 'calm' },
+  { id: 'fluent',   label: 'fluent' },
+  { id: 'whisper',  label: 'whisper' },
 ]
 
-const SOUND_EFFECTS = [
-  { id: '', value: 'none' },
-  { id: 'spacious_echo', value: 'spacious_echo' },
-  { id: 'auditorium_echo', value: 'auditorium_echo' },
-  { id: 'lofi_telephone', value: 'lofi_telephone' },
-  { id: 'robotic', value: 'robotic' },
+const SOUND_EFFECT_CHIPS = [
+  { id: 'spacious_echo',   label: 'Spacious echo' },
+  { id: 'auditorium_echo', label: 'Auditorium' },
+  { id: 'lofi_telephone',  label: 'Lo-fi phone' },
+  { id: 'robotic',         label: 'Robotic' },
 ]
 
-const LANGUAGE_OPTIONS = [
-  'auto', 'Chinese', 'Chinese,Yue', 'English', 'Arabic', 'Russian', 'Spanish',
-  'French', 'Portuguese', 'German', 'Turkish', 'Dutch', 'Ukrainian', 'Vietnamese',
-  'Indonesian', 'Japanese', 'Italian', 'Korean', 'Thai', 'Polish', 'Romanian',
-  'Greek', 'Czech', 'Finnish', 'Hindi', 'Bulgarian', 'Danish', 'Hebrew', 'Malay',
-  'Persian', 'Slovak', 'Swedish', 'Croatian', 'Filipino', 'Hungarian', 'Norwegian',
-  'Slovenian', 'Catalan', 'Nynorsk', 'Tamil', 'Afrikaans',
+const DESIGN_TRAITS = [
+  { id: 'warm',      label: '+ Warm' },
+  { id: 'energetic', label: '+ Energetic' },
+  { id: 'deep',      label: '+ Deep' },
+  { id: 'youthful',  label: '+ Youthful' },
+  { id: 'raspy',     label: '+ Raspy' },
 ]
 
-function formatBytes(bytes) {
-  if (!bytes || bytes <= 0) return '—'
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / 1024 / 1024).toFixed(2)} MB`
+const DELIVERY_OPTIONS = [
+  { id: 'standard', label: 'Standard' },
+  { id: 'async',    label: 'Async · long text' },
+]
+
+const LANGUAGE_BOOST_OPTIONS = [
+  { id: 'auto', label: 'auto' },
+  { id: 'en',   label: 'English' },
+  { id: 'zh',   label: 'Chinese' },
+  { id: 'ja',   label: 'Japanese' },
+  { id: 'ko',   label: 'Korean' },
+  { id: 'es',   label: 'Spanish' },
+  { id: 'pt',   label: 'Portuguese' },
+  { id: 'fr',   label: 'French' },
+  { id: 'de',   label: 'German' },
+  { id: 'ru',   label: 'Russian' },
+  { id: 'ar',   label: 'Arabic' },
+  { id: 'hi',   label: 'Hindi' },
+  { id: 'it',   label: 'Italian' },
+  { id: 'tr',   label: 'Turkish' },
+  { id: 'id',   label: 'Indonesian' },
+  { id: 'vi',   label: 'Vietnamese' },
+  { id: 'th',   label: 'Thai' },
+  { id: 'nl',   label: 'Dutch' },
+  { id: 'uk',   label: 'Ukrainian' },
+  { id: 'el',   label: 'Greek' },
+  { id: 'ms',   label: 'Malay' },
+  { id: 'pl',   label: 'Polish' },
+]
+
+// ───────────────────────────────────────────────────────────────────────────
+// Language detection — Intl.DisplayNames + Character & FX bucket
+// Per TAURI_SPEC §6b "Language grouping — derive, don't hardcode"
+// ───────────────────────────────────────────────────────────────────────────
+
+const _dn = typeof Intl !== 'undefined' && Intl.DisplayNames
+  ? new Intl.DisplayNames(['en'], { type: 'language' })
+  : null
+
+const KNOWN_LANG_CODES = ['en','zh','es','pt','fr','de','ja','ko','it','ru','ar','hi','id','vi','th','tr','nl','uk','el','ms','pl']
+
+const KNOWN_LANGS = new Set(
+  _dn
+    ? KNOWN_LANG_CODES.map(c => _dn.of(c)?.toLowerCase()).filter(Boolean)
+    : []
+)
+
+function voiceLanguage(voice) {
+  if (voice.source === 'voice_cloning')   return 'Cloned'
+  if (voice.source === 'voice_generation') return 'Designed'
+  const prefix = String(voice.voice_id || '').split('_')[0]
+  const base   = prefix.replace(/\s*\(.*\)\s*/, '').toLowerCase()
+  if (!KNOWN_LANGS.has(base)) return 'Character & FX'
+  const region = (prefix.match(/\(([^)]+)\)/) || [])[1]
+  return base[0].toUpperCase() + base.slice(1) + (region ? ` (${region})` : '')
 }
+
+function voiceTags(v) {
+  const lang = voiceLanguage(v)
+  const desc = (v.description || [])[0] || ''
+  const tags = []
+  if (!['Character & FX', 'Cloned', 'Designed'].includes(lang)) {
+    tags.push(lang.split(' (')[0])
+  }
+  if (/\bfemale\b|\bwoman\b|\blady\b|\bgirl\b/i.test(desc))         tags.push('Female')
+  else if (/\bmale\b|\bman\b|\bguy\b|\bboy\b/i.test(desc))           tags.push('Male')
+  const toneMatch = desc.match(/\b(warm|calm|deep|bright|serious|cheerful|confident|gentle|youthful|narration|gravitas|persuasive|soft|sweet|elegant|happy|excited|sad|neutral|formal|hostile|passionate|thoughtful|kind|warm-hearted|confident|wise|graceful|lovely|gentle-voiced|deep-voiced|expressive|playful|reserved|cheerful|magnetic|inspiring|romantic|intense|spirited|adventurous|melodic|soothing|patient|energetic|stoic|gentleman|storyteller|anchor|presenter|host|narrator|santa|elf|queen|princess|knight|soldier|warrior|boss|teacher|mentor|scholar|hostess|husband|wife|girlfriend|boyfriend|neighbor)\b/i)
+  if (toneMatch) tags.push(toneMatch[1].toLowerCase())
+  return tags.join(' · ')
+}
+
+function voiceInitials(name) {
+  if (!name) return '??'
+  const parts = name.split(/[\s_-]+/).filter(Boolean)
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase()
+  return name.slice(0, 2).toUpperCase()
+}
+
+const AVATAR_COLORS = [
+  'linear-gradient(135deg,#be185d,#ec4899)',
+  'linear-gradient(135deg,#1d4ed8,#3b82f6)',
+  'linear-gradient(135deg,#0f766e,#14b8a6)',
+  'linear-gradient(135deg,#b45309,#f59e0b)',
+  'linear-gradient(135deg,#7c3aed,#a855f7)',
+  'linear-gradient(135deg,#059669,#10b981)',
+  'linear-gradient(135deg,#dc2626,#f87171)',
+  'linear-gradient(135deg,#0891b2,#06b6d4)',
+]
+
+function voiceAvatarBg(seed) {
+  let hash = 0
+  for (let i = 0; i < seed.length; i++) {
+    hash = seed.charCodeAt(i) + ((hash << 5) - hash)
+  }
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length]
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// Inline sub-components
+// ───────────────────────────────────────────────────────────────────────────
+
+function VoiceAvatar({ voice, size = 34 }) {
+  const name = voice.voice_name || voice.voice_id || '??'
+  return (
+    <div
+      style={{
+        width: size, height: size, flexShrink: 0, borderRadius: 9,
+        background: voiceAvatarBg(voice.voice_id || name),
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: size <= 28 ? 10 : 12, fontWeight: 700, color: '#fff',
+      }}
+    >
+      {voiceInitials(name)}
+    </div>
+  )
+}
+
+function Toggle({ checked, onChange }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(!checked)}
+      style={{
+        width: 36, height: 20, borderRadius: 999,
+        background: checked ? 'hsl(var(--primary))' : 'hsl(var(--border))',
+        border: 'none', padding: 2, cursor: 'pointer',
+        display: 'flex', alignItems: 'center', transition: 'background 0.15s',
+        flexShrink: 0,
+      }}
+    >
+      <div
+        style={{
+          width: 16, height: 16, borderRadius: '50%', background: '#fff',
+          transform: checked ? 'translateX(16px)' : 'translateX(0)',
+          transition: 'transform 0.15s',
+        }}
+      />
+    </button>
+  )
+}
+
+// Language filter — globe icon + label + chevron, opens a small popup with
+// each language's name + count. Mockup lines 924-940.
+function LanguageFilter({ value, options, open, onOpenChange, onChange }) {
+  const ref = useRef(null)
+  useEffect(() => {
+    if (!open) return
+    const handler = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) onOpenChange(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open, onOpenChange])
+
+  const current = options.find(o => o.id === value) || options[0]
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button
+        onClick={() => onOpenChange(!open)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 6,
+          height: 24, padding: '0 8px', borderRadius: 7,
+          border: '0.5px solid var(--app-border)',
+          background: 'var(--app-surface)',
+          color: 'var(--app-text-2)',
+          fontSize: 11, fontWeight: 500, cursor: 'pointer',
+        }}
+      >
+        <Globe size={12} />
+        <span>{current?.label ?? 'All'}</span>
+        <ChevronDown size={11} />
+      </button>
+      {open && (
+        <div style={{
+          position: 'absolute', top: 30, right: 0, zIndex: 55,
+          width: 188, maxHeight: 230, overflowY: 'auto', padding: 5,
+          borderRadius: 10, background: 'var(--app-bg, var(--app-surface))',
+          border: '0.5px solid var(--app-border)',
+          boxShadow: '0 14px 36px rgba(0,0,0,0.45)',
+        }}>
+          {options.map(o => {
+            const active = value === o.id
+            return (
+              <button
+                key={o.id}
+                onClick={() => { onChange(o.id); onOpenChange(false) }}
+                style={{
+                  width: '100%',
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  padding: '6px 9px', border: 'none', borderRadius: 6,
+                  cursor: 'pointer',
+                  background: active ? 'hsl(var(--primary) / 0.12)' : 'transparent',
+                  color: 'var(--app-text)',
+                  fontSize: 11, fontWeight: 500, textAlign: 'left',
+                }}
+              >
+                <span>{o.label}</span>
+                <span style={{ fontSize: 10.5, color: 'var(--app-text-2)', fontVariantNumeric: 'tabular-nums' }}>{o.count}</span>
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// Main component
+// ───────────────────────────────────────────────────────────────────────────
 
 export default function SpeechPanel() {
   const { t } = useTranslation()
-  // Mode toggle (TAURI_SPEC §6b)
-  const [mode, setMode] = useState('synthesize')  // 'synthesize' | 'clone' | 'design' | 'voices'
+  const [mode, setMode] = useState('synthesize')
+
   // Synthesize state
-  const [delivery, setDelivery] = useState('standard')  // 'standard' | 'async'
+  const [delivery, setDelivery] = useState('standard')
   const [text, setText] = useState('')
   const [model, setModel] = useState('speech-2.8-hd')
   const [voiceId, setVoiceId] = useState('English_Graceful_Lady')
+  const [voiceLangFilter, setVoiceLangFilter] = useState('all')
+  const [voiceLangOpen, setVoiceLangOpen] = useState(false)
   const [speed, setSpeed] = useState(1.0)
   const [vol, setVol] = useState(1.0)
   const [pitch, setPitch] = useState(0)
   const [emotion, setEmotion] = useState('')
-  const [vmPitch, setVmPitch] = useState(0)         // voice_modify pitch (-100..100)
-  const [vmIntensity, setVmIntensity] = useState(0) // voice_modify intensity
-  const [vmTimbre, setVmTimbre] = useState(0)       // voice_modify timbre
-  const [vmSoundFx, setVmSoundFx] = useState('')    // sound_effects enum or ''
+  const [vmPitch, setVmPitch] = useState(0)
+  const [vmIntensity, setVmIntensity] = useState(0)
+  const [vmTimbre, setVmTimbre] = useState(0)
+  const [vmSoundFx, setVmSoundFx] = useState('')
   const [languageBoost, setLanguageBoost] = useState('auto')
-  // Voice list (3 buckets)
+
+  // Voices list
   const [voices, setVoices] = useState({ system_voice: [], voice_cloning: [], voice_generation: [] })
   const [voicesLoading, setVoicesLoading] = useState(false)
-  const [voiceFilter, setVoiceFilter] = useState('')
+  const [voiceDropdownOpen, setVoiceDropdownOpen] = useState(false)
+  const [voiceSearch, setVoiceSearch] = useState('')
+
   // Clone state
   const [cloneSample, setCloneSample] = useState(null)
   const [cloneSampleFileId, setCloneSampleFileId] = useState(null)
   const [cloneUploading, setCloneUploading] = useState(false)
   const [cloneVoiceId, setCloneVoiceId] = useState('')
-  const [clonePromptFileId, setClonePromptFileId] = useState(0)
-  const [clonePromptText, setClonePromptText] = useState('')
   const [cloneNR, setCloneNR] = useState(false)
   const [cloneVN, setCloneVN] = useState(false)
-  const [clonePreviewText, setClonePreviewText] = useState('')
+  const [clonePromptOpen, setClonePromptOpen] = useState(false)
+  const [clonePromptClip, setClonePromptClip] = useState(null)
+  const [clonePromptText, setClonePromptText] = useState('')
   const [cloneRunning, setCloneRunning] = useState(false)
   const [cloneResult, setCloneResult] = useState(null)
+
   // Design state
   const [designPrompt, setDesignPrompt] = useState('')
   const [designPreviewText, setDesignPreviewText] = useState('')
   const [designVoiceId, setDesignVoiceId] = useState('')
   const [designRunning, setDesignRunning] = useState(false)
   const [designResult, setDesignResult] = useState(null)
-  // Async long-text state
-  const [asyncTaskId, setAsyncTaskId] = useState('')
-  const [asyncFileId, setAsyncFileId] = useState(null)
-  const [asyncStatus, setAsyncStatus] = useState('')
-  const [polling, setPolling] = useState(false)
+
   // Common
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState(null)
@@ -111,6 +327,9 @@ export default function SpeechPanel() {
   const [history, setHistory] = useState([])
   const [historyLoading, setHistoryLoading] = useState(false)
   const cloneSampleInputRef = useRef(null)
+  const clonePromptInputRef = useRef(null)
+  const voiceDropdownRef = useRef(null)
+  const voiceLangRef = useRef(null)
 
   const { register } = useSessionProtection()
 
@@ -122,44 +341,7 @@ export default function SpeechPanel() {
     register('speech-text', text.trim().length > 0, 'Unsaved speech text')
   }, [text, register])
 
-  // ---- History (all 4 sub-modes share) ----
-
-  const fetchHistory = async () => {
-    setHistoryLoading(true)
-    try {
-      const res = await apiFetch('/api/generations')
-      const data = await res.json()
-      let tts = []
-      if (data.success) tts = data.data.tts || []
-
-      const wsRes = await apiFetch('/api/files?path=workspace')
-      const wsData = await wsRes.json()
-      if (wsData.entries) {
-        const wsTts = wsData.entries
-          .filter(e => !e.is_dir && /\.(mp3|wav|flac|pcm)$/i.test(e.name))
-          .filter(e => /^(tts_|tts_web|tts_output)/i.test(e.name))
-          .map(e => ({ name: e.name, path: e.path, size: 0 }))
-        const seen = new Set(tts.map(i => i.path))
-        wsTts.forEach(t => {
-          if (!seen.has(t.path)) tts.push(t)
-        })
-      }
-
-      tts.sort((a, b) => {
-        if (a.modified_at && b.modified_at) return b.modified_at.localeCompare(a.modified_at)
-        return b.name.localeCompare(a.name)
-      })
-
-      setHistory(tts)
-    } catch (e) { /* ignore */ }
-    setHistoryLoading(false)
-  }
-
-  useEffect(() => {
-    fetchHistory()
-  }, [])
-
-  // ---- Voices (3 buckets from /v1/get_voice) ----
+  // ── Data fetching ──────────────────────────────────────────────────────
 
   const fetchVoices = async () => {
     setVoicesLoading(true)
@@ -173,73 +355,148 @@ export default function SpeechPanel() {
           voice_generation: data.voice_generation || [],
         })
       }
-    } catch (e) {
-      // Silently fail — Voices mode will show an empty state
-    } finally {
-      setVoicesLoading(false)
-    }
+    } catch (e) { /* swallow */ }
+    finally { setVoicesLoading(false) }
   }
 
   useEffect(() => { fetchVoices() }, [])
 
-  // Flatten + dedupe by voice_id, applying filter
-  const flatVoices = (() => {
-    const all = [
-      ...(voices.system_voice || []).map(v => ({ ...v, source: 'system_voice' })),
-      ...(voices.voice_cloning || []).map(v => ({ ...v, source: 'voice_cloning' })),
-      ...(voices.voice_generation || []).map(v => ({ ...v, source: 'voice_generation' })),
-    ]
-    if (!voiceFilter) return all
-    const q = voiceFilter.toLowerCase()
-    return all.filter(v =>
-      (v.voice_name || v.voice_id || '').toLowerCase().includes(q) ||
-      (v.description || []).join(' ').toLowerCase().includes(q)
-    )
-  })()
+  const fetchHistory = async () => {
+    setHistoryLoading(true)
+    try {
+      const res = await apiFetch('/api/generations')
+      const data = await res.json()
+      let tts = data.success ? (data.data.tts || []) : []
+      const wsRes = await apiFetch('/api/files?path=workspace')
+      const wsData = await wsRes.json()
+      if (wsData.entries) {
+        const wsTts = wsData.entries
+          .filter(e => !e.is_dir && /\.(mp3|wav|flac|pcm)$/i.test(e.name))
+          .filter(e => /^(tts_|tts_web|tts_output)/i.test(e.name))
+          .map(e => ({ name: e.name, path: e.path, size: 0 }))
+        const seen = new Set(tts.map(i => i.path))
+        wsTts.forEach(t => { if (!seen.has(t.path)) tts.push(t) })
+      }
+      tts.sort((a, b) => {
+        if (a.modified_at && b.modified_at) return b.modified_at.localeCompare(a.modified_at)
+        return b.name.localeCompare(a.name)
+      })
+      setHistory(tts)
+    } catch (e) { /* ignore */ }
+    setHistoryLoading(false)
+  }
 
-  // ---- Synthesize ----
+  useEffect(() => { fetchHistory() }, [])
+
+  // ── Derived voice data ─────────────────────────────────────────────────
+
+  const flatVoices = useMemo(() => {
+    return [
+      ...voices.system_voice.map(v => ({ ...v, source: 'system_voice' })),
+      ...voices.voice_cloning.map(v => ({ ...v, source: 'voice_cloning' })),
+      ...voices.voice_generation.map(v => ({ ...v, source: 'voice_generation' })),
+    ]
+  }, [voices])
+
+  const selectedVoice = flatVoices.find(v => v.voice_id === voiceId)
+
+  // Voices grouped by language, sorted alphabetically (Cloned/Designed last)
+  const voicesByLanguage = useMemo(() => {
+    const groups = {}
+    for (const v of flatVoices) {
+      const lang = voiceLanguage(v)
+      if (!groups[lang]) groups[lang] = []
+      groups[lang].push(v)
+    }
+    const entries = Object.entries(groups)
+    const priority = (lang) => {
+      if (lang === 'Cloned')            return 1
+      if (lang === 'Designed')          return 2
+      if (lang === 'Character & FX')    return 3
+      return 0
+    }
+    entries.sort((a, b) => {
+      const pa = priority(a[0]), pb = priority(b[0])
+      if (pa !== pb) return pa - pb
+      return a[0].localeCompare(b[0])
+    })
+    return entries
+  }, [flatVoices])
+
+  // Language options for the filter dropdown
+  const languageOptions = useMemo(() => {
+    const total = voicesByLanguage.reduce((sum, [, list]) => sum + list.length, 0)
+    return [
+      { id: 'all', label: 'All', count: total },
+      ...voicesByLanguage.map(([lang, list]) => ({ id: lang, label: lang, count: list.length })),
+    ]
+  }, [voicesByLanguage])
+
+  // Voices for the dropdown, filtered by language selection
+  const voicesByLanguageFiltered = useMemo(() => {
+    if (voiceLangFilter === 'all') return voicesByLanguage
+    return voicesByLanguage.filter(([lang]) => lang === voiceLangFilter)
+  }, [voicesByLanguage, voiceLangFilter])
+
+  // Search-filtered for Voices library
+  const filteredVoices = useMemo(() => {
+    if (!voiceSearch.trim()) return flatVoices
+    const q = voiceSearch.toLowerCase()
+    return flatVoices.filter(v =>
+      (v.voice_name || v.voice_id || '').toLowerCase().includes(q) ||
+      voiceLanguage(v).toLowerCase().includes(q) ||
+      voiceTags(v).toLowerCase().includes(q)
+    )
+  }, [flatVoices, voiceSearch])
+
+  const systemVoicesFiltered = filteredVoices.filter(v => v.source === 'system_voice')
+  const clonedVoicesFiltered  = filteredVoices.filter(v => v.source === 'voice_cloning')
+  const designedVoicesFiltered= filteredVoices.filter(v => v.source === 'voice_generation')
+
+  // Sync voiceId when language filter changes — if the currently selected
+  // voice's language no longer matches the filter, auto-jump to the first
+  // voice in the filtered group so the trigger reflects the active filter.
+  // "All" leaves the selection untouched.
+  useEffect(() => {
+    if (voiceLangFilter === 'all') return
+    if (voicesByLanguage.length === 0) return
+    const current = flatVoices.find(v => v.voice_id === voiceId)
+    if (current && voiceLanguage(current) === voiceLangFilter) return
+    const firstVoice = voicesByLanguage.find(([lang]) => lang === voiceLangFilter)?.[1]?.[0]
+    if (firstVoice) setVoiceId(firstVoice.voice_id)
+  }, [voiceLangFilter, voicesByLanguage, flatVoices, voiceId])
+
+  // Close popups on outside click
+  useEffect(() => {
+    if (!voiceDropdownOpen) return
+    const handler = (e) => {
+      if (voiceDropdownRef.current && !voiceDropdownRef.current.contains(e.target)) {
+        setVoiceDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [voiceDropdownOpen])
+
+  // ── Handlers ───────────────────────────────────────────────────────────
 
   const buildVoiceModify = () => {
-    const vm = {
-      pitch: vmPitch,
-      intensity: vmIntensity,
-      timbre: vmTimbre,
-    }
+    const vm = { pitch: vmPitch, intensity: vmIntensity, timbre: vmTimbre }
     if (vmSoundFx) vm.sound_effects = vmSoundFx
-    // If all are zero and no sound effect, omit
-    if (!vm.sound_effects && vm.pitch === 0 && vm.intensity === 0 && vm.timbre === 0) {
-      return null
-    }
+    if (!vm.sound_effects && vm.pitch === 0 && vm.intensity === 0 && vm.timbre === 0) return null
     return vm
   }
 
   const synthesizeNow = async () => {
-    if (!text.trim()) {
-      setError('Text is required.')
-      return
-    }
-    if (text.length > 10000) {
-      setError('Text exceeds 10000 characters.')
-      return
-    }
-    setLoading(true)
-    setError(null)
-    setResult(null)
-    setCost(null)
-    setAsyncStatus('')
-    setAsyncTaskId('')
-    setAsyncFileId(null)
+    if (!text.trim()) { setError('Text is required.'); return }
+    if (text.length > 10000) { setError('Text exceeds 10000 characters.'); return }
+    setLoading(true); setError(null); setResult(null); setCost(null)
     try {
-      const endpoint = delivery === 'async'
-        ? '/api/minimax/speech/synthesize-async'
-        : '/api/minimax/speech/synthesize'
       const body = {
         text,
         model,
         voice_id: voiceId,
-        speed,
-        vol,
-        pitch,
+        speed, vol, pitch,
         language_boost: languageBoost,
         voice_modify_pitch: vmPitch,
         voice_modify_intensity: vmIntensity,
@@ -247,6 +504,9 @@ export default function SpeechPanel() {
         voice_modify_sound_effects: vmSoundFx,
       }
       if (emotion) body.emotion = emotion
+      const endpoint = delivery === 'async'
+        ? '/api/minimax/speech/synthesize-async'
+        : '/api/minimax/speech/synthesize'
       const res = await apiFetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -254,92 +514,34 @@ export default function SpeechPanel() {
       })
       const data = await res.json()
       if (!res.ok || !data.success) {
-        const msg = data.detail || data.error || 'TTS failed.'
-        throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg))
+        throw new Error(typeof (data.detail || data.error) === 'string'
+          ? (data.detail || data.error) : JSON.stringify(data.detail || data.error))
       }
-      if (delivery === 'async') {
-        // Async: store task_id and start polling
-        setAsyncTaskId(data.task_id || '')
-        setAsyncStatus(data.status || 'processing')
-        setAsyncFileId(data.file_id || null)
-        setPolling(true)
-      } else {
-        // Sync: file ready immediately
-        setResult(data)
-        if (typeof data.cost_credits === 'number' || typeof data.cost_usd === 'number') {
-          setCost({ cost_credits: data.cost_credits, cost_usd: data.cost_usd })
-        }
-        fetchHistory()
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('minimax:media-complete'))
-        }
+      setResult(data)
+      if (typeof data.cost_credits === 'number' || typeof data.cost_usd === 'number') {
+        setCost({ cost_credits: data.cost_credits, cost_usd: data.cost_usd })
       }
-    } catch (e) {
-      setError(e.message)
-    } finally {
-      setLoading(false)
-    }
+      fetchHistory()
+      if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('minimax:media-complete'))
+    } catch (e) { setError(e.message) }
+    finally { setLoading(false) }
   }
-
-  // Poll the async task every 3s while pending
-  useEffect(() => {
-    if (!polling || !asyncTaskId) return
-    let cancelled = false
-    const tick = async () => {
-      try {
-        const res = await apiFetch(`/api/minimax/speech/synthesize-async/${asyncTaskId}`)
-        const data = await res.json()
-        if (cancelled) return
-        if (res.ok && data.success) {
-          setAsyncStatus(data.status || 'processing')
-          setAsyncFileId(data.file_id || null)
-          if (data.status === 'success' && data.file_id) {
-            // Async tasks don't auto-download the file — we have file_id only.
-            // User can re-poll or use file_id via /api/files. For simplicity
-            // we surface "ready" and offer re-synthesize.
-            setPolling(false)
-            fetchHistory()
-            if (typeof window !== 'undefined') {
-              window.dispatchEvent(new CustomEvent('minimax:media-complete'))
-            }
-          } else if (data.status === 'failed' || data.status === 'expired') {
-            setPolling(false)
-            setError(`Async task ${data.status}.`)
-          }
-        }
-      } catch { /* swallow */ }
-      if (!cancelled) setTimeout(tick, 3000)
-    }
-    const id = setTimeout(tick, 1500)
-    return () => { cancelled = true; clearTimeout(id) }
-  }, [polling, asyncTaskId])
-
-  // ---- Clone ----
 
   const uploadCloneSample = async (file) => {
     if (!file) return
-    setError(null)
-    setCloneUploading(true)
+    setError(null); setCloneUploading(true)
     try {
-      const fd = new FormData()
-      fd.append('file', file)
+      const fd = new FormData(); fd.append('file', file)
       const res = await apiFetch('/api/minimax/speech/clone/upload', {
-        method: 'POST',
-        body: fd,
+        method: 'POST', body: fd,
       })
       const data = await res.json()
-      if (!res.ok || !data.success) {
-        throw new Error(data.detail || data.error || 'Sample upload failed.')
-      }
+      if (!res.ok || !data.success) throw new Error(data.detail || data.error || 'Sample upload failed.')
       setCloneSample(file)
       setCloneSampleFileId(data.file_id)
-      // Refresh voice library so the new clone appears once registered
       fetchVoices()
-    } catch (e) {
-      setError(e.message || 'Sample upload failed.')
-    } finally {
-      setCloneUploading(false)
-    }
+    } catch (e) { setError(e.message || 'Sample upload failed.') }
+    finally { setCloneUploading(false) }
   }
 
   const onPickCloneSample = (e) => {
@@ -354,22 +556,18 @@ export default function SpeechPanel() {
     if (file) uploadCloneSample(file)
   }
 
+  const onPickClonePrompt = (e) => {
+    const file = e.target.files?.[0]
+    if (file) setClonePromptClip(file)
+    if (e.target) e.target.value = ''
+  }
+
   const submitClone = async () => {
-    setError(null)
-    setCloneResult(null)
-    if (!cloneSampleFileId) {
-      setError('Upload a sample first.')
-      return
-    }
+    setError(null); setCloneResult(null)
+    if (!cloneSampleFileId) { setError('Upload a sample first.'); return }
     const v = cloneVoiceId.trim()
-    if (v.length < 8 || v.length > 256) {
-      setError('Voice ID must be 8–256 characters.')
-      return
-    }
-    if (!/^[A-Za-z]/.test(v)) {
-      setError('Voice ID must start with a letter.')
-      return
-    }
+    if (v.length < 8 || v.length > 256) { setError('Voice ID must be 8–256 characters.'); return }
+    if (!/^[A-Za-z]/.test(v)) { setError('Voice ID must start with a letter.'); return }
     setCloneRunning(true)
     try {
       const body = {
@@ -378,15 +576,9 @@ export default function SpeechPanel() {
         need_noise_reduction: cloneNR,
         need_volume_normalization: cloneVN,
       }
-      if (clonePreviewText.trim()) {
-        body.text = clonePreviewText
-        body.model = model
-        body.language_boost = languageBoost
-      }
-      if (clonePromptFileId && clonePromptText.trim()) {
-        body.clone_prompt_file_id = clonePromptFileId
-        body.clone_prompt_text = clonePromptText
-      }
+      if (clonePromptText.trim()) body.prompt_text = clonePromptText.trim()
+      // Note: prompt_audio upload not wired — only prompt_text is sent.
+      // Full prompt_audio support requires backend endpoint to accept it.
       const res = await apiFetch('/api/minimax/speech/clone', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -394,41 +586,23 @@ export default function SpeechPanel() {
       })
       const data = await res.json()
       if (!res.ok || !data.success) {
-        const msg = data.detail || data.error || 'Clone failed.'
-        throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg))
+        throw new Error(typeof (data.detail || data.error) === 'string'
+          ? (data.detail || data.error) : JSON.stringify(data.detail || data.error))
       }
       setCloneResult({ voice_id: v, demo_audio: data.demo_audio || '' })
       fetchVoices()
-    } catch (e) {
-      setError(e.message || 'Voice cloning failed.')
-    } finally {
-      setCloneRunning(false)
-    }
+    } catch (e) { setError(e.message || 'Voice cloning failed.') }
+    finally { setCloneRunning(false) }
   }
 
-  // ---- Design ----
-
   const submitDesign = async () => {
-    setError(null)
-    setDesignResult(null)
-    if (!designPrompt.trim()) {
-      setError('Voice description is required.')
-      return
-    }
-    if (!designPreviewText.trim()) {
-      setError('Preview text is required.')
-      return
-    }
-    if (designPreviewText.length > 500) {
-      setError('Preview text must be ≤500 chars.')
-      return
-    }
+    setError(null); setDesignResult(null)
+    if (!designPrompt.trim()) { setError('Voice description is required.'); return }
+    if (!designPreviewText.trim()) { setError('Preview text is required.'); return }
+    if (designPreviewText.length > 500) { setError('Preview text must be ≤500 chars.'); return }
     setDesignRunning(true)
     try {
-      const body = {
-        prompt: designPrompt,
-        preview_text: designPreviewText,
-      }
+      const body = { prompt: designPrompt, preview_text: designPreviewText }
       if (designVoiceId.trim()) body.voice_id = designVoiceId.trim()
       const res = await apiFetch('/api/minimax/speech/design', {
         method: 'POST',
@@ -437,515 +611,462 @@ export default function SpeechPanel() {
       })
       const data = await res.json()
       if (!res.ok || !data.success) {
-        const msg = data.detail || data.error || 'Design failed.'
-        throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg))
+        throw new Error(typeof (data.detail || data.error) === 'string'
+          ? (data.detail || data.error) : JSON.stringify(data.detail || data.error))
       }
-      setDesignResult({
-        voice_id: data.voice_id,
-        trial_audio_path: data.trial_audio_path,
-      })
+      setDesignResult({ voice_id: data.voice_id, trial_audio_path: data.trial_audio_path })
       fetchVoices()
-    } catch (e) {
-      setError(e.message || 'Voice design failed.')
-    } finally {
-      setDesignRunning(false)
-    }
+    } catch (e) { setError(e.message || 'Voice design failed.') }
+    finally { setDesignRunning(false) }
   }
 
-  // ---- Voices (delete) ----
+  const appendTrait = (trait) => {
+    const sep = designPrompt.trim() ? ', ' : ''
+    setDesignPrompt(prev => prev + sep + trait)
+  }
 
-  const deleteVoice = async (type, voiceId, voiceName) => {
-    if (!window.confirm(`Delete voice "${voiceName || voiceId}"? This cannot be undone.`)) return
+  const deleteVoice = async (type, vid, vname) => {
+    if (!window.confirm(`Delete voice "${vname || vid}"? This cannot be undone.`)) return
     setError(null)
     try {
-      const res = await apiFetch(
-        `/api/minimax/speech/voices/${type}/${encodeURIComponent(voiceId)}`,
-        { method: 'DELETE' }
-      )
+      const res = await apiFetch(`/api/minimax/speech/voices/${type}/${encodeURIComponent(vid)}`, { method: 'DELETE' })
       const data = await res.json()
-      if (!res.ok || !data.success) {
-        const msg = data.detail || data.error || 'Delete failed.'
-        throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg))
-      }
+      if (!res.ok || !data.success) throw new Error(data.detail || data.error || 'Delete failed.')
       fetchVoices()
-    } catch (e) {
-      setError(e.message || 'Delete failed.')
-    }
+    } catch (e) { setError(e.message || 'Delete failed.') }
   }
 
-  // ---- Mode toggle UI ----
+  // ── Reusable UI bits ────────────────────────────────────────────────────
 
-  const modeButton = (id, label, Icon) => {
-    const active = mode === id
-    return (
-      <button
-        key={id}
-        onClick={() => { setMode(id); setError(null) }}
-        className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium transition-colors ${
-          active
-            ? 'bg-primary text-white shadow-sm'
-            : 'bg-surface text-muted-foreground hover:text-foreground border border-border'
-        }`}
-      >
-        <Icon size={12} aria-hidden="true" />
-        {label}
-      </button>
-    )
-  }
+  const errorBox = error ? (
+    <div style={{
+      background: 'hsl(var(--error) / 0.1)',
+      border: '0.5px solid hsl(var(--error) / 0.2)',
+      borderRadius: 9, padding: '8px 12px',
+      fontSize: 11, color: 'hsl(var(--error))',
+    }}>{error}</div>
+  ) : null
 
-  const chip = (active) =>
-    `px-2.5 py-1.5 rounded-lg text-xs border transition-colors ${
-      active
-        ? 'bg-primary/10 border-primary text-primary'
-        : 'bg-surface border-border text-foreground hover:border-primary'
-    }`
-
-  // ---- Synthesize sub-mode controls ----
+  // ── Synthesize controls ────────────────────────────────────────────────
 
   const synthesizeControls = (
     <>
-      {/* Delivery: Standard / Async */}
-      <div>
-        <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Delivery</label>
-        <div className="flex gap-1.5">
-          <button onClick={() => setDelivery('standard')} className={chip(delivery === 'standard')}>Standard</button>
-          <button onClick={() => setDelivery('async')} className={chip(delivery === 'async')}>Async (long)</button>
-        </div>
+      {/* Delivery tabs — Standard | Async · long text (mockup L900-904) */}
+      <div style={{ display: 'flex', padding: 3, borderRadius: 9, background: 'var(--app-surface)' }}>
+        {DELIVERY_OPTIONS.map(d => {
+          const active = delivery === d.id
+          return (
+            <button
+              key={d.id}
+              onClick={() => setDelivery(d.id)}
+              style={{
+                flex: 1, padding: '6px 12px', borderRadius: 7, border: 'none',
+                background: active ? 'hsl(var(--primary))' : 'transparent',
+                color: active ? '#fff' : 'var(--app-text-2)',
+                fontSize: 11, fontWeight: 500, cursor: 'pointer',
+                transition: 'background 0.15s',
+              }}
+            >{d.label}</button>
+          )
+        })}
       </div>
 
-      {/* Text */}
+      {/* Text — mockup L906-913 */}
       <div>
-        <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Text to synthesize</label>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 7 }}>
+          <label style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--app-text-2)' }}>Text</label>
+          <span style={{ fontSize: 11, color: 'var(--app-text-2)', fontVariantNumeric: 'tabular-nums' }}>
+            {text.length.toLocaleString()} / 10000
+          </span>
+        </div>
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder="Enter text… (up to 10,000 characters)"
           rows={5}
-          className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:border-primary transition-colors"
+          style={{
+            width: '100%',
+            background: 'var(--app-surface)',
+            border: '0.5px solid var(--app-border)',
+            borderRadius: 10, padding: '11px 13px',
+            fontSize: 13, lineHeight: 1.6, color: 'var(--app-text)',
+            resize: 'none', fontFamily: 'inherit', boxSizing: 'border-box', outline: 'none',
+          }}
         />
-        <div className="flex items-center justify-between mt-1">
-          <span className="text-[11px] text-muted-foreground">{text.length.toLocaleString()} / 10,000</span>
-          {text.length > 10000 && <span className="text-[11px] text-error">Exceeds limit</span>}
+        <div style={{ fontSize: 10.5, color: 'var(--app-text-2)', marginTop: 6, lineHeight: 1.5 }}>
+          Insert <code style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--app-text)', padding: '1px 5px', background: 'var(--app-surface)', borderRadius: 3, fontSize: 9.5 }}>{'<#0.5#>'}</code> for a 0.5s pause · interjections like <code style={{ fontFamily: 'JetBrains Mono, monospace', color: 'var(--app-text)' }}>(laughs)</code> on speech-2.8.
         </div>
-        <p className="text-[10px] text-muted-foreground/70 mt-1">Tip: insert <code className="px-1 py-0.5 bg-surface rounded text-[10px]">{'<#0.5#>'}</code> for a 0.5s pause. (laughs), (sighs) work on 2.8.</p>
       </div>
 
-      {/* Model */}
+      {/* Model — mockup L914-918 */}
       <div>
-        <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Model</label>
-        <select
-          value={model}
-          onChange={(e) => setModel(e.target.value)}
-          className="w-full bg-surface border border-border rounded-lg px-2.5 py-2 text-xs text-foreground focus:outline-none focus:border-primary"
-        >
-          {SPEECH_MODELS.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
-        </select>
+        <label style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--app-text-2)', display: 'block', marginBottom: 7 }}>
+          Model
+        </label>
+        <div style={{ position: 'relative' }}>
+          <select
+            value={model}
+            onChange={(e) => setModel(e.target.value)}
+            style={{
+              width: '100%',
+              background: 'var(--app-surface)',
+              border: '0.5px solid var(--app-border)',
+              borderRadius: 10, padding: '9px 30px 9px 13px',
+              fontSize: 12.5, fontWeight: 600, color: 'var(--app-text)',
+              cursor: 'pointer', outline: 'none', appearance: 'none',
+            }}
+          >
+            {SPEECH_MODELS.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+          </select>
+          <ChevronDown size={12} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--app-text-2)' }} />
+        </div>
       </div>
 
-      {/* Voice */}
-      <div>
-        <div className="flex items-center justify-between mb-1.5">
-          <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-            <Mic size={12} aria-hidden="true" /> Voice
+      {/* Voice — mockup L919-971
+          Row 1: "Voice" label (left) + (language filter + refresh) (right)
+          Row 2: voice dropdown trigger (opens grouped popup) */}
+      <div ref={voiceDropdownRef} style={{ position: 'relative' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 7 }}>
+          <label style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--app-text-2)', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Mic size={11} /> Voice
           </label>
-          <div className="flex items-center gap-1.5">
-            <select
-              value={voiceFilter}
-              onChange={(e) => setVoiceFilter(e.target.value)}
-              className="text-[11px] bg-surface border border-border rounded-md px-1.5 py-0.5"
-            >
-              <option value="">All</option>
-              {Array.from(new Set(flatVoices.map(v => v.source).filter(Boolean))).sort().map(src => (
-                <option key={src} value={src}>{src.replace('_', ' ')}</option>
-              ))}
-            </select>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <LanguageFilter
+              value={voiceLangFilter}
+              options={languageOptions}
+              open={voiceLangOpen}
+              onOpenChange={setVoiceLangOpen}
+              onChange={setVoiceLangFilter}
+            />
             <button
               onClick={fetchVoices}
-              disabled={voicesLoading}
-              title="Refresh voices"
-              aria-label="Refresh voices"
-              className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-surface transition-colors"
+              title="Reload voices"
+              style={{
+                width: 24, height: 24, flexShrink: 0,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                borderRadius: 7, border: '0.5px solid var(--app-border)',
+                background: 'var(--app-surface)', color: 'var(--app-text-2)',
+                cursor: 'pointer',
+              }}
             >
-              <RefreshCw size={12} className={voicesLoading ? 'animate-spin' : ''} aria-hidden="true" />
+              <RefreshCw size={12} className={voicesLoading ? 'animate-spin' : ''} />
             </button>
           </div>
         </div>
-        <select
-          value={voiceId}
-          onChange={(e) => setVoiceId(e.target.value)}
-          className="w-full bg-surface border border-border rounded-lg px-2.5 py-2 text-xs text-foreground focus:outline-none focus:border-primary"
+        <button
+          onClick={() => setVoiceDropdownOpen(!voiceDropdownOpen)}
+          style={{
+            width: '100%',
+            background: 'var(--app-surface)',
+            border: '0.5px solid var(--app-border)',
+            borderRadius: 10, padding: '7px 11px',
+            cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 11,
+            outline: 'none',
+          }}
         >
-          {flatVoices
-            .filter(v => !voiceFilter || v.source === voiceFilter)
-            .map(v => (
-              <option key={`${v.source}-${v.voice_id}`} value={v.voice_id}>
-                {v.voice_name || v.voice_id}{v.source && v.source !== 'system_voice' ? ` · ${v.source.replace('_', ' ')}` : ''}
-              </option>
-            ))}
-        </select>
-      </div>
-
-      {/* Voice settings */}
-      <div className="space-y-2">
-        <div>
-          <label className="text-xs font-medium text-muted-foreground mb-1 flex items-center justify-between">
-            <span className="flex items-center gap-1"><Gauge size={12} aria-hidden="true" /> Speed</span>
-            <span className="text-foreground">{speed.toFixed(1)}x</span>
-          </label>
-          <input type="range" min="0.5" max="2.0" step="0.1" value={speed} onChange={(e) => setSpeed(parseFloat(e.target.value))} className="w-full accent-primary" />
-        </div>
-        <div>
-          <label className="text-xs font-medium text-muted-foreground mb-1 flex items-center justify-between">
-            <span>Volume</span>
-            <span className="text-foreground">{vol.toFixed(1)}x</span>
-          </label>
-          <input type="range" min="0.1" max="2.0" step="0.1" value={vol} onChange={(e) => setVol(parseFloat(e.target.value))} className="w-full accent-primary" />
-        </div>
-        <div>
-          <label className="text-xs font-medium text-muted-foreground mb-1 flex items-center justify-between">
-            <span>Pitch</span>
-            <span className="text-foreground">{pitch}</span>
-          </label>
-          <input type="range" min="-12" max="12" step="1" value={pitch} onChange={(e) => setPitch(parseInt(e.target.value))} className="w-full accent-primary" />
-        </div>
-        <div>
-          <label className="text-xs font-medium text-muted-foreground mb-1 block">Emotion</label>
-          <select value={emotion} onChange={(e) => setEmotion(e.target.value)} className="w-full bg-surface border border-border rounded-lg px-2.5 py-1.5 text-xs">
-            {EMOTIONS.map(e => <option key={e.id || 'auto'} value={e.id}>{e.value}</option>)}
-          </select>
-        </div>
-      </div>
-
-      {/* Voice effects */}
-      <details className="bg-surface/50 border border-border rounded-lg">
-        <summary className="px-3 py-2 text-xs font-medium text-muted-foreground cursor-pointer hover:text-foreground flex items-center justify-between">
-          <span className="flex items-center gap-1.5"><Sparkles size={12} /> Voice effects (optional)</span>
-          <span className="text-[10px] text-muted-foreground/70">pitch · intensity · timbre · fx</span>
-        </summary>
-        <div className="px-3 pb-3 pt-1 space-y-2">
-          <div>
-            <label className="text-[11px] text-muted-foreground mb-1 flex justify-between">
-              <span>Voice pitch</span><span>{vmPitch}</span>
-            </label>
-            <input type="range" min="-100" max="100" step="1" value={vmPitch} onChange={(e) => setVmPitch(parseInt(e.target.value))} className="w-full accent-primary" />
-          </div>
-          <div>
-            <label className="text-[11px] text-muted-foreground mb-1 flex justify-between">
-              <span>Intensity</span><span>{vmIntensity}</span>
-            </label>
-            <input type="range" min="-100" max="100" step="1" value={vmIntensity} onChange={(e) => setVmIntensity(parseInt(e.target.value))} className="w-full accent-primary" />
-          </div>
-          <div>
-            <label className="text-[11px] text-muted-foreground mb-1 flex justify-between">
-              <span>Timbre</span><span>{vmTimbre}</span>
-            </label>
-            <input type="range" min="-100" max="100" step="1" value={vmTimbre} onChange={(e) => setVmTimbre(parseInt(e.target.value))} className="w-full accent-primary" />
-          </div>
-          <div>
-            <label className="text-[11px] text-muted-foreground mb-1 block">Sound effect</label>
-            <select value={vmSoundFx} onChange={(e) => setVmSoundFx(e.target.value)} className="w-full bg-surface border border-border rounded-md px-2 py-1 text-[11px]">
-              {SOUND_EFFECTS.map(s => <option key={s.id || 'none'} value={s.id}>{s.value}</option>)}
-            </select>
-          </div>
-        </div>
-      </details>
-
-      {/* Language boost */}
-      <div>
-        <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Language boost</label>
-        <select value={languageBoost} onChange={(e) => setLanguageBoost(e.target.value)} className="w-full bg-surface border border-border rounded-lg px-2.5 py-1.5 text-xs">
-          {LANGUAGE_OPTIONS.map(l => <option key={l} value={l}>{l}</option>)}
-        </select>
-      </div>
-
-      {delivery === 'async' && asyncStatus && (
-        <div className="bg-surface border border-border rounded-lg px-3 py-2 text-[11px] text-muted-foreground">
-          Async task <code className="text-foreground">{asyncTaskId || '—'}</code> · status <span className="text-foreground font-medium">{asyncStatus}</span>
-          {asyncFileId && <span> · file_id <code>{asyncFileId}</code></span>}
-        </div>
-      )}
-    </>
-  )
-
-  // ---- Clone sub-mode controls ----
-
-  const cloneControls = (
-    <>
-      {/* Sample upload */}
-      <div>
-        <label className="text-xs font-medium text-muted-foreground mb-1.5 block flex items-center gap-1.5">
-          <Upload size={12} aria-hidden="true" /> Sample audio (10s – 5min)
-        </label>
-        <div
-          onDrop={onDropCloneSample}
-          onDragOver={(e) => e.preventDefault()}
-          onClick={() => cloneSampleInputRef.current?.click()}
-          className="bg-surface border-2 border-dashed border-border hover:border-primary rounded-lg p-4 text-center cursor-pointer transition-colors"
-        >
-          {cloneUploading ? (
-            <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
-              <Loader2 size={14} className="animate-spin" /> Uploading…
-            </div>
-          ) : cloneSample ? (
-            <div className="flex items-center justify-center gap-2 text-xs text-foreground">
-              <FileAudio size={14} className="text-primary" />
-              <span className="truncate flex-1 text-left">{cloneSample.name}</span>
-              <button onClick={(e) => { e.stopPropagation(); setCloneSample(null); setCloneSampleFileId(null) }} className="text-muted-foreground hover:text-error"><X size={12} /></button>
-            </div>
+          {selectedVoice ? (
+            <>
+              <VoiceAvatar voice={selectedVoice} size={32} />
+              <div style={{ flex: 1, textAlign: 'left', minWidth: 0 }}>
+                <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--app-text)',
+                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {selectedVoice.voice_name || selectedVoice.voice_id}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--app-text-2)',
+                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {voiceTags(selectedVoice) || voiceLanguage(selectedVoice)}
+                </div>
+              </div>
+            </>
           ) : (
-            <div className="text-xs text-muted-foreground">
-              <Upload size={20} className="mx-auto mb-1 text-muted-foreground/60" />
-              Drop audio file or click to browse
+            <div style={{ flex: 1, textAlign: 'left', fontSize: 12, color: 'var(--app-text-2)' }}>
+              {voicesLoading ? 'Loading voices…' : 'Select a voice'}
             </div>
           )}
-          <input ref={cloneSampleInputRef} type="file" accept="audio/*" onChange={onPickCloneSample} className="hidden" />
-        </div>
-      </div>
+          <ChevronDown size={14} color="var(--app-text-2)" />
+        </button>
 
-      {/* Voice ID */}
-      <div>
-        <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Voice ID (8–256 chars, must start with letter)</label>
-        <input
-          type="text"
-          value={cloneVoiceId}
-          onChange={(e) => setCloneVoiceId(e.target.value)}
-          placeholder="e.g. my-narrator-01"
-          className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
-        />
-      </div>
-
-      {/* Enhancements */}
-      <div className="space-y-1.5">
-        <label className="flex items-center gap-2 text-xs text-foreground cursor-pointer">
-          <input type="checkbox" checked={cloneNR} onChange={(e) => setCloneNR(e.target.checked)} className="accent-primary" />
-          Noise reduction
-        </label>
-        <label className="flex items-center gap-2 text-xs text-foreground cursor-pointer">
-          <input type="checkbox" checked={cloneVN} onChange={(e) => setCloneVN(e.target.checked)} className="accent-primary" />
-          Volume normalization
-        </label>
-      </div>
-
-      {/* Preview (optional) */}
-      <details className="bg-surface/50 border border-border rounded-lg">
-        <summary className="px-3 py-2 text-xs font-medium text-muted-foreground cursor-pointer hover:text-foreground flex items-center gap-1.5">
-          <Headphones size={12} /> Preview generation (optional)
-        </summary>
-        <div className="px-3 pb-3 pt-1 space-y-2">
-          <textarea
-            value={clonePreviewText}
-            onChange={(e) => setClonePreviewText(e.target.value)}
-            placeholder="Preview text — generates demo audio after clone"
-            rows={2}
-            className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:border-primary"
-          />
-        </div>
-      </details>
-
-      <p className="text-[10px] text-muted-foreground/70 flex items-start gap-1.5">
-        <span className="text-warning">⚠</span>
-        Cloned voices are auto-deleted if not used for 7 days. Save the voice_id to keep them.
-      </p>
-    </>
-  )
-
-  // ---- Design sub-mode controls ----
-
-  const designControls = (
-    <>
-      <div>
-        <label className="text-xs font-medium text-muted-foreground mb-1.5 block flex items-center gap-1.5">
-          <Wand2 size={12} aria-hidden="true" /> Voice description
-        </label>
-        <textarea
-          value={designPrompt}
-          onChange={(e) => setDesignPrompt(e.target.value)}
-          placeholder="e.g. Warm male narrator with British accent, calm and confident"
-          rows={4}
-          className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:border-primary"
-        />
-      </div>
-      <div>
-        <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Preview text (≤500 chars)</label>
-        <textarea
-          value={designPreviewText}
-          onChange={(e) => setDesignPreviewText(e.target.value)}
-          placeholder="Text the trial voice will speak"
-          rows={2}
-          className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:border-primary"
-        />
-        <span className="text-[10px] text-muted-foreground">{designPreviewText.length} / 500</span>
-      </div>
-      <div>
-        <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Voice ID (optional, auto-generated if blank)</label>
-        <input
-          type="text"
-          value={designVoiceId}
-          onChange={(e) => setDesignVoiceId(e.target.value)}
-          placeholder="Leave blank to auto-generate"
-          className="w-full bg-surface border border-border rounded-lg px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
-        />
-      </div>
-    </>
-  )
-
-  // ---- Voices sub-mode controls ----
-
-  const voiceGroupSection = (title, Icon, type, items) => (
-    <div>
-      <div className="flex items-center gap-1.5 mb-1.5">
-        <Icon size={12} className="text-primary" aria-hidden="true" />
-        <span className="text-xs font-medium text-muted-foreground">{title}</span>
-        <span className="text-[10px] text-muted-foreground/70">({items.length})</span>
-      </div>
-      <div className="bg-surface border border-border rounded-lg divide-y divide-border max-h-40 overflow-y-auto">
-        {items.length === 0 ? (
-          <div className="px-3 py-3 text-[11px] text-muted-foreground/70 text-center">No voices in this group</div>
-        ) : items.map(v => (
-          <div key={v.voice_id} className="flex items-center gap-2 px-2.5 py-2 text-xs">
-            <div className="flex-1 min-w-0">
-              <div className="truncate font-medium text-foreground">{v.voice_name || v.voice_id}</div>
-              <div className="text-[10px] text-muted-foreground truncate">
-                {v.voice_id}{(v.description || []).length > 0 ? ` · ${v.description.slice(0, 2).join(' / ')}` : ''}
+        {voiceDropdownOpen && (
+          <div style={{
+            position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 4,
+            background: 'var(--app-bg, var(--app-surface))',
+            border: '0.5px solid var(--app-border)',
+            borderRadius: 11, maxHeight: 300, overflowY: 'auto', zIndex: 50,
+            boxShadow: '0 16px 40px rgba(0,0,0,0.45)',
+          }}>
+            {voicesByLanguageFiltered.length === 0 && (
+              <div style={{ padding: 16, fontSize: 12, color: 'var(--app-text-2)', textAlign: 'center' }}>
+                {voicesLoading ? 'Loading…' : 'No voices in this language'}
               </div>
-            </div>
-            {type !== 'system_voice' && (
-              <button
-                onClick={() => deleteVoice(type, v.voice_id, v.voice_name)}
-                title="Delete voice"
-                className="p-1 rounded-md text-muted-foreground hover:text-error hover:bg-error/10 transition-colors"
-              >
-                <Trash2 size={12} aria-hidden="true" />
-              </button>
             )}
+            {voicesByLanguageFiltered.map(([lang, list]) => (
+              <div key={lang}>
+                <div style={{
+                  padding: '7px 8px 4px', fontSize: 10, fontWeight: 700,
+                  letterSpacing: 0.5, textTransform: 'uppercase',
+                  color: 'var(--app-text-2)',
+                  position: 'sticky', top: 0,
+                  background: 'var(--app-bg, var(--app-surface))',
+                }}>
+                  {lang} <span style={{ opacity: 0.6, fontWeight: 400, textTransform: 'none' }}>· {list.length}</span>
+                </div>
+                {list.map(v => {
+                  const selected = v.voice_id === voiceId
+                  return (
+                    <button
+                      key={`${v.source}-${v.voice_id}`}
+                      onClick={() => { setVoiceId(v.voice_id); setVoiceDropdownOpen(false) }}
+                      style={{
+                        width: '100%',
+                        background: selected ? 'hsl(var(--primary) / 0.12)' : 'transparent',
+                        border: 'none', padding: '6px 10px',
+                        cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10,
+                      }}
+                    >
+                      <VoiceAvatar voice={v} size={28} />
+                      <div style={{ flex: 1, textAlign: 'left', minWidth: 0 }}>
+                        <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--app-text)' }}>
+                          {v.voice_name || v.voice_id}
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--app-text-2)' }}>
+                          {voiceTags(v)}
+                        </div>
+                      </div>
+                      {selected && <Check size={15} color="hsl(var(--primary))" strokeWidth={2.4} />}
+                    </button>
+                  )
+                })}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Speed / Volume / Pitch — mockup L972-986 */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {[
+          { label: 'Speed',  value: speed, set: setSpeed,  display: `${speed.toFixed(1)}x`, min: 0.5, max: 2.0, step: 0.1 },
+          { label: 'Volume', value: vol,   set: setVol,    display: vol.toFixed(1),        min: 0.1, max: 2.0, step: 0.1 },
+          { label: 'Pitch',  value: pitch, set: setPitch,  display: String(pitch),         min: -12, max: 12,  step: 1   },
+        ].map(s => (
+          <div key={s.label}>
+            <div style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              fontSize: 11.5, fontWeight: 600, color: 'var(--app-text-2)', marginBottom: 7,
+            }}>
+              <span>{s.label}</span>
+              <span style={{ color: 'var(--app-text)', fontVariantNumeric: 'tabular-nums' }}>{s.display}</span>
+            </div>
+            <input
+              type="range" min={s.min} max={s.max} step={s.step}
+              value={s.value} onChange={(e) => s.set(parseFloat(e.target.value))}
+              style={{ width: '100%', accentColor: 'hsl(var(--primary))' }}
+            />
           </div>
         ))}
       </div>
-    </div>
-  )
 
-  const voicesControls = (
-    <>
-      {voicesLoading ? (
-        <div className="flex items-center gap-2 text-xs text-muted-foreground"><Loader2 size={12} className="animate-spin" /> Loading voices…</div>
-      ) : (
-        <>
-          {voiceGroupSection('System voices', Volume2, 'system_voice', voices.system_voice || [])}
-          {voiceGroupSection('Cloned voices', Mic2, 'voice_cloning', voices.voice_cloning || [])}
-          {voiceGroupSection('Designed voices', AudioLines, 'voice_generation', voices.voice_generation || [])}
-          <p className="text-[10px] text-muted-foreground/70">System voices are built-in and cannot be deleted. Cloned/Designed voices can be removed here.</p>
-        </>
-      )}
-    </>
-  )
-
-  const controls = (
-    <>
-      {/* Mode toggle */}
-      <div className="flex gap-1">
-        {modeButton('synthesize', 'Synthesize', Volume2)}
-        {modeButton('clone', 'Clone', Mic2)}
-        {modeButton('design', 'Design', Wand2)}
-        {modeButton('voices', 'Voices', AudioLines)}
+      {/* Emotion — mockup L987-1005 */}
+      <div>
+        <label style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--app-text-2)', display: 'block', marginBottom: 7 }}>
+          Emotion
+        </label>
+        <div style={{ position: 'relative' }}>
+          <select
+            value={emotion}
+            onChange={(e) => setEmotion(e.target.value)}
+            style={{
+              width: '100%',
+              background: 'var(--app-surface)',
+              border: '0.5px solid var(--app-border)',
+              borderRadius: 10, padding: '9px 30px 9px 13px',
+              fontSize: 12.5, fontWeight: 600, color: 'var(--app-text)',
+              cursor: 'pointer', outline: 'none', appearance: 'none',
+            }}
+          >
+            {EMOTIONS.map(e => <option key={e.id || 'auto'} value={e.id}>{e.label}</option>)}
+          </select>
+          <ChevronDown size={12} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--app-text-2)' }} />
+        </div>
       </div>
 
-      {/* Mode-specific controls */}
-      {mode === 'synthesize' && synthesizeControls}
-      {mode === 'clone' && cloneControls}
-      {mode === 'design' && designControls}
-      {mode === 'voices' && voicesControls}
+      {/* Voice effects — mockup L1006-1029 (always open, no (optional)) */}
+      <div>
+        <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--app-text-2)', marginBottom: 10 }}>
+          Voice effects
+        </div>
+        {[
+          { label: 'Pitch',     value: vmPitch,     set: setVmPitch,     lo: 'Deeper',   hi: 'Brighter' },
+          { label: 'Intensity', value: vmIntensity, set: setVmIntensity, lo: 'Softer',   hi: 'Stronger' },
+          { label: 'Timbre',    value: vmTimbre,    set: setVmTimbre,    lo: 'Nasal',    hi: 'Crisp'    },
+        ].map(s => (
+          <div key={s.label} style={{ marginBottom: 12 }}>
+            <input
+              type="range" min={-100} max={100} step={1}
+              value={s.value} onChange={(e) => s.set(parseInt(e.target.value))}
+              style={{ width: '100%', accentColor: 'hsl(var(--primary))' }}
+            />
+            <div style={{
+              display: 'flex', justifyContent: 'space-between',
+              fontSize: 10.5, color: 'var(--app-text-2)', marginTop: 5,
+            }}>
+              <span>{s.lo}</span>
+              <span>{s.hi}</span>
+            </div>
+          </div>
+        ))}
 
-      {error && (
-        <div className="bg-error/10 border border-error/20 rounded-lg p-2.5 text-xs text-error">{error}</div>
-      )}
+        {/* Sound effect chips */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginTop: 4 }}>
+          {SOUND_EFFECT_CHIPS.map(fx => {
+            const active = vmSoundFx === fx.id
+            return (
+              <button
+                key={fx.id}
+                onClick={() => setVmSoundFx(active ? '' : fx.id)}
+                style={{
+                  padding: '4px 9px', borderRadius: 7,
+                  cursor: 'pointer',
+                  background: active ? 'hsl(var(--primary))' : 'var(--app-surface)',
+                  color: active ? '#fff' : 'var(--app-text)',
+                  fontSize: 11, fontWeight: 500,
+                  border: active ? 'none' : '0.5px solid var(--app-border)',
+                }}
+              >{fx.label}</button>
+            )
+          })}
+        </div>
+      </div>
 
-      {/* Mode-specific submit */}
-      {mode === 'synthesize' && (
-        <button
-          onClick={synthesizeNow}
-          disabled={loading || !text.trim() || text.length > 10000}
-          className="mt-auto w-full py-2.5 bg-primary hover:bg-primary-hover disabled:opacity-40 text-white rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
-        >
-          {loading ? <Loader2 size={16} className="animate-spin" /> : <Volume2 size={16} />}
-          {loading ? 'Synthesizing…' : delivery === 'async' ? 'Submit Long Text' : 'Synthesize Speech'}
-        </button>
-      )}
-      {mode === 'clone' && (
-        <button
-          onClick={submitClone}
-          disabled={cloneRunning || !cloneSampleFileId || !cloneVoiceId.trim()}
-          className="mt-auto w-full py-2.5 bg-primary hover:bg-primary-hover disabled:opacity-40 text-white rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
-        >
-          {cloneRunning ? <Loader2 size={16} className="animate-spin" /> : <Mic2 size={16} />}
-          {cloneRunning ? 'Cloning…' : 'Clone Voice'}
-        </button>
-      )}
-      {mode === 'design' && (
-        <button
-          onClick={submitDesign}
-          disabled={designRunning || !designPrompt.trim() || !designPreviewText.trim() || designPreviewText.length > 500}
-          className="mt-auto w-full py-2.5 bg-primary hover:bg-primary-hover disabled:opacity-40 text-white rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
-        >
-          {designRunning ? <Loader2 size={16} className="animate-spin" /> : <Wand2 size={16} />}
-          {designRunning ? 'Designing…' : 'Design Voice'}
-        </button>
-      )}
+      {/* Language boost — mockup bottom of L972-1029 (NEW) */}
+      <div>
+        <label style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--app-text-2)', display: 'block', marginBottom: 7 }}>
+          Language boost
+        </label>
+        <div style={{ position: 'relative' }}>
+          <select
+            value={languageBoost}
+            onChange={(e) => setLanguageBoost(e.target.value)}
+            style={{
+              width: '100%',
+              background: 'var(--app-surface)',
+              border: '0.5px solid var(--app-border)',
+              borderRadius: 10, padding: '9px 30px 9px 13px',
+              fontSize: 12.5, fontWeight: 500, color: 'var(--app-text)',
+              cursor: 'pointer', outline: 'none', appearance: 'none',
+            }}
+          >
+            {LANGUAGE_BOOST_OPTIONS.map(l => <option key={l.id} value={l.id}>{l.label}</option>)}
+          </select>
+          <ChevronDown size={12} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--app-text-2)' }} />
+        </div>
+      </div>
+
+      {errorBox}
+
+      <button
+        onClick={synthesizeNow}
+        disabled={loading || !text.trim() || text.length > 10000}
+        style={{
+          marginTop: 'auto',
+          width: '100%', height: 42, padding: '0 11px',
+          background: 'hsl(var(--primary))',
+          color: '#fff', border: 'none', borderRadius: 11,
+          fontSize: 13.5, fontWeight: 600,
+          cursor: loading ? 'wait' : 'pointer',
+          opacity: (loading || !text.trim() || text.length > 10000) ? 0.4 : 1,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+        }}
+      >
+        {loading
+          ? <><Loader2 size={14} className="animate-spin" /> Generating…</>
+          : <><Volume2 size={16} /> Synthesize Speech</>}
+      </button>
     </>
   )
 
-  // ---- Canvas (mode-specific result area) ----
+  // ── Synthesize canvas — mockup L1038-1066 ─────────────────────────────
+  // Per user feedback: "History" + "Saved to..." go INSIDE the canvas body
+  // (not as a separate 52px galleryHeader), so they sit below the topBar
+  // along with the empty state / recent generations.
 
   const synthesizeCanvas = (
-    <div className="flex flex-col gap-3 h-full">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, height: '100%' }}>
+      {/* Inner canvas header — "History" + "Saved to..." */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+        <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--app-text)' }}>History</span>
+        <span style={{ fontSize: 11.5, color: 'var(--app-text-2)' }}>
+          Saved to workspace/generations/tts/
+        </span>
+      </div>
       {result ? (
-        <div className="bg-surface border border-border rounded-xl p-4 space-y-3">
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <p className="text-sm text-muted-foreground flex items-center gap-2">
-              <Check size={14} className="text-success" /> Audio generated
+        <div style={{
+          background: 'var(--app-surface)', border: '0.5px solid var(--app-border)',
+          borderRadius: 12, padding: 16, display: 'flex', flexDirection: 'column', gap: 12,
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+            <p style={{ fontSize: 13, color: 'var(--app-text-2)', display: 'flex', alignItems: 'center', gap: 6, margin: 0 }}>
+              <Check size={14} color="hsl(var(--success, #10b981))" /> Audio generated
             </p>
             {cost && (
-              <div
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/5 border border-primary/20 text-[10px] font-medium text-primary"
-                title="Cost for this generation"
-              >
+              <div style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                padding: '3px 10px', borderRadius: 999,
+                background: 'hsl(var(--primary) / 0.05)',
+                border: '0.5px solid hsl(var(--primary) / 0.2)',
+                fontSize: 10.5, fontWeight: 500, color: 'hsl(var(--primary))',
+              }}>
                 <Coins size={11} />
-                <span>
-                  {t('media.costLabel', {
-                    credits: cost.cost_credits ?? 0,
-                    usd: typeof cost.cost_usd === 'number' ? cost.cost_usd.toFixed(4) : '0.0000',
-                  })}
-                </span>
+                {t('media.costLabel', {
+                  credits: cost.cost_credits ?? 0,
+                  usd: typeof cost.cost_usd === 'number' ? cost.cost_usd.toFixed(4) : '0.0000',
+                })}
               </div>
             )}
           </div>
-          {result.file_path ? (
+          {result.file_path && (
             <>
-              <audio controls className="w-full" src={`/api/files/content?path=${encodeURIComponent(result.file_path)}`} />
+              <audio controls style={{ width: '100%' }} src={`/api/files/content?path=${encodeURIComponent(result.file_path)}`} />
               <a
                 href={`/api/files/content?path=${encodeURIComponent(result.file_path)}`}
                 download
-                className="inline-flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary-hover text-white text-sm rounded-lg transition-colors w-fit"
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  padding: '8px 14px',
+                  background: 'hsl(var(--primary))',
+                  color: '#fff', borderRadius: 8,
+                  fontSize: 13, textDecoration: 'none',
+                  width: 'fit-content',
+                }}
               >
                 <Save size={14} /> Download
               </a>
             </>
-          ) : (
-            <p className="text-xs text-muted-foreground">{result}</p>
           )}
         </div>
       ) : (
-        <div className="flex flex-col items-center justify-center gap-3 py-14 text-center">
-          <div className="w-16 h-16 rounded-full bg-surface border border-border flex items-center justify-center">
-            <Volume2 size={26} className="text-muted-foreground" aria-hidden="true" />
+        /* Empty state — mockup L1038-1065 (default "Your generated audio will appear here") */
+        <div style={{
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          gap: 0, padding: '40px 16px', textAlign: 'center', minHeight: 180,
+        }}>
+          <div style={{
+            width: 64, height: 64, borderRadius: '50%',
+            background: 'var(--app-surface)', border: '0.5px solid var(--app-border)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <Volume2 size={26} color="var(--app-text-2)" />
           </div>
-          <div>
-            <div className="text-sm text-foreground font-medium">{SPEECH_MODELS.find(m => m.id === model)?.label || model}</div>
-            <div className="text-[11px] text-muted-foreground mt-0.5">Your generated audio will appear here</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--app-text)', marginTop: 12 }}>
+            {SPEECH_MODELS.find(m => m.id === model)?.label || model}
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--app-text-2)', marginTop: 4 }}>
+            Your generated audio will appear here
           </div>
         </div>
       )}
 
-      <div className="border-t border-border" />
+      <div style={{ height: 1, background: 'var(--app-border)' }} />
 
       <RecentGenerations
         title="Recent generations"
@@ -958,109 +1079,628 @@ export default function SpeechPanel() {
     </div>
   )
 
-  const cloneCanvas = (
-    <div className="flex flex-col gap-3 h-full">
-      {cloneResult ? (
-        <div className="bg-surface border border-border rounded-xl p-4 space-y-3">
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <p className="text-sm text-muted-foreground flex items-center gap-2">
-              <Check size={14} className="text-success" /> Voice cloned
-            </p>
-          </div>
-          <div className="space-y-1">
-            <div className="text-xs text-muted-foreground">voice_id</div>
-            <code className="block px-3 py-2 bg-surface rounded text-sm text-foreground">{cloneResult.voice_id}</code>
-          </div>
-          {cloneResult.demo_audio && (
-            <audio controls className="w-full" src={cloneResult.demo_audio} />
+  // ── Clone controls ─────────────────────────────────────────────────────
+
+  const cloneControls = (
+    <>
+      {/* Sample audio dropzone */}
+      <div>
+        <label style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--app-text-2)', display: 'block', marginBottom: 7 }}>
+          Sample audio
+        </label>
+        <div
+          onDrop={onDropCloneSample}
+          onDragOver={(e) => e.preventDefault()}
+          onClick={() => cloneSampleInputRef.current?.click()}
+          style={{
+            background: 'var(--app-surface)',
+            border: '1.5px dashed var(--app-border)',
+            borderRadius: 12, padding: '20px',
+            textAlign: 'center', cursor: 'pointer',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
+          }}
+        >
+          {cloneUploading ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--app-text-2)' }}>
+              <Loader2 size={14} className="animate-spin" /> Uploading…
+            </div>
+          ) : cloneSample ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--app-text)' }}>
+              <FileAudio size={14} color="hsl(var(--primary))" />
+              <span style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {cloneSample.name}
+              </span>
+              <button
+                onClick={(e) => { e.stopPropagation(); setCloneSample(null); setCloneSampleFileId(null) }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--app-text-2)' }}
+              >
+                <X size={12} />
+              </button>
+            </div>
+          ) : (
+            <>
+              <div style={{
+                width: 40, height: 40, borderRadius: 10,
+                background: 'var(--app-surface)', border: '0.5px solid var(--app-border)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: 'hsl(var(--primary))',
+              }}>
+                <Upload size={19} />
+              </div>
+              <div style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--app-text)' }}>
+                Drop a voice sample or <span style={{ color: 'hsl(var(--primary))' }}>browse</span>
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--app-text-2)' }}>
+                10s–5min · max 20 MB · mp3, m4a, wav
+              </div>
+            </>
           )}
-          <p className="text-[11px] text-muted-foreground">Voice is now in your library (Voices tab). Reminder: auto-deleted if unused for 7 days.</p>
+          <input ref={cloneSampleInputRef} type="file" accept="audio/*" onChange={onPickCloneSample} style={{ display: 'none' }} />
+        </div>
+      </div>
+
+      {/* Voice ID */}
+      <div>
+        <label style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--app-text-2)', display: 'block', marginBottom: 7 }}>
+          Voice ID
+        </label>
+        <input
+          type="text"
+          value={cloneVoiceId}
+          onChange={(e) => setCloneVoiceId(e.target.value)}
+          placeholder="my-narrator-01"
+          style={{
+            width: '100%',
+            background: 'var(--app-surface)',
+            border: '0.5px solid var(--app-border)',
+            borderRadius: 10, padding: '9px 13px',
+            fontSize: 12.5, color: 'var(--app-text)', outline: 'none',
+            fontFamily: 'JetBrains Mono, monospace',
+            boxSizing: 'border-box',
+          }}
+        />
+        <div style={{ fontSize: 10.5, color: 'var(--app-text-2)', marginTop: 6, lineHeight: 1.5 }}>
+          8–256 chars · start with a letter · letters, digits, <code style={{ fontFamily: 'JetBrains Mono, monospace' }}>- _</code>
+        </div>
+      </div>
+
+      {/* Accuracy prompt — mockup L1087-1103 (collapsible) */}
+      <div style={{ border: '0.5px solid var(--app-border)', borderRadius: 11, overflow: 'hidden' }}>
+        <button
+          onClick={() => setClonePromptOpen(!clonePromptOpen)}
+          style={{
+            width: '100%',
+            display: 'flex', alignItems: 'center', gap: 9,
+            padding: '11px 13px', border: 'none',
+            background: 'hsl(var(--app-surface) / 0.4)',
+            color: 'var(--app-text)', cursor: 'pointer', textAlign: 'left',
+          }}
+        >
+          <Sparkles size={14} color="hsl(var(--primary))" />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 12.5, fontWeight: 600 }}>
+              Accuracy prompt <span style={{ fontWeight: 400, color: 'var(--app-text-2)' }}>· optional</span>
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--app-text-2)' }}>
+              Short clip + transcript boosts similarity
+            </div>
+          </div>
+          <ChevronRight
+            size={14}
+            color="var(--app-text-2)"
+            style={{
+              transform: clonePromptOpen ? 'rotate(90deg)' : 'rotate(0deg)',
+              transition: 'transform 0.15s',
+              flexShrink: 0,
+            }}
+          />
+        </button>
+        {clonePromptOpen && (
+          <div style={{ padding: 13, display: 'flex', flexDirection: 'column', gap: 11, borderTop: '0.5px solid var(--app-border)' }}>
+            <div
+              onClick={() => clonePromptInputRef.current?.click()}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 9,
+                height: 38, padding: '0 11px',
+                border: '1px dashed var(--app-border)',
+                borderRadius: 9,
+                color: 'var(--app-text-2)', fontSize: 11.5, cursor: 'pointer',
+              }}
+            >
+              {clonePromptClip ? (
+                <>
+                  <FileAudio size={14} color="hsl(var(--primary))" />
+                  <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--app-text)' }}>
+                    {clonePromptClip.name}
+                  </span>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setClonePromptClip(null) }}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--app-text-2)' }}
+                  ><X size={12} /></button>
+                </>
+              ) : (
+                <>
+                  <Upload size={14} /> Prompt clip · &lt; 8s
+                </>
+              )}
+              <input
+                ref={clonePromptInputRef}
+                type="file"
+                accept="audio/*"
+                onChange={onPickClonePrompt}
+                style={{ display: 'none' }}
+              />
+            </div>
+            <input
+              type="text"
+              value={clonePromptText}
+              onChange={(e) => setClonePromptText(e.target.value)}
+              placeholder="This voice sounds natural and pleasant."
+              style={{
+                width: '100%',
+                background: 'var(--app-surface)',
+                border: '0.5px solid var(--app-border)',
+                borderRadius: 9, padding: '9px 11px',
+                fontSize: 12.5, color: 'var(--app-text)', outline: 'none',
+                fontFamily: 'inherit',
+              }}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Toggles — mockup L1105-1113 */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <div style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--app-text)' }}>Noise reduction</div>
+            <div style={{ fontSize: 11, color: 'var(--app-text-2)' }}>Clean background hiss</div>
+          </div>
+          <Toggle checked={cloneNR} onChange={setCloneNR} />
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <div style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--app-text)' }}>Volume normalization</div>
+            <div style={{ fontSize: 11, color: 'var(--app-text-2)' }}>Even out loudness</div>
+          </div>
+          <Toggle checked={cloneVN} onChange={setCloneVN} />
+        </div>
+      </div>
+
+      {/* 7-day warning — mockup L1116-1119 */}
+      <div style={{
+        display: 'flex', alignItems: 'flex-start', gap: 8,
+        background: 'hsl(43 96% 56% / 0.1)',
+        border: '0.5px solid hsl(43 96% 56% / 0.25)',
+        borderRadius: 10, padding: '11px 12px',
+        fontSize: 11, color: 'var(--app-text)', lineHeight: 1.5,
+      }}>
+        <AlertCircle size={14} color="hsl(43 96% 46%)" style={{ flexShrink: 0, marginTop: 1 }} />
+        <span>A cloned voice is <strong>deleted automatically if unused for 7 days</strong>.</span>
+      </div>
+
+      {errorBox}
+
+      <button
+        onClick={submitClone}
+        disabled={cloneRunning || !cloneSampleFileId || !cloneVoiceId.trim()}
+        style={{
+          marginTop: 'auto', width: '100%', height: 42, padding: '0 11px',
+          background: 'hsl(var(--primary))',
+          color: '#fff', border: 'none', borderRadius: 11,
+          fontSize: 13.5, fontWeight: 600,
+          cursor: cloneRunning ? 'wait' : 'pointer',
+          opacity: (cloneRunning || !cloneSampleFileId || !cloneVoiceId.trim()) ? 0.4 : 1,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+        }}
+      >
+        {cloneRunning
+          ? <><Loader2 size={14} className="animate-spin" /> Cloning…</>
+          : <><Mic2 size={16} /> Clone voice</>}
+      </button>
+    </>
+  )
+
+  // ── Clone canvas ───────────────────────────────────────────────────────
+
+  const cloneCanvas = (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, height: '100%' }}>
+      {/* Inner canvas header — "Preview" */}
+      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 4 }}>
+        <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--app-text)' }}>Preview</span>
+      </div>
+      {cloneResult ? (
+        <div style={{
+          background: 'var(--app-surface)', border: '0.5px solid var(--app-border)',
+          borderRadius: 14, padding: 22,
+          maxWidth: 420, margin: '0 auto', width: '100%',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 13, marginBottom: 18 }}>
+            <div style={{
+              width: 46, height: 46, borderRadius: 12,
+              background: 'linear-gradient(135deg,#0ea5e9,#6366f1)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: '#fff', fontSize: 15, fontWeight: 700,
+            }}>
+              {(cloneResult.voice_id || 'CV').slice(0, 2).toUpperCase()}
+            </div>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--app-text)' }}>
+                {cloneResult.voice_id}
+              </div>
+              <div style={{ fontSize: 11.5, color: 'var(--app-text-2)', fontFamily: 'JetBrains Mono, monospace' }}>
+                cloned · {model}
+              </div>
+            </div>
+          </div>
+          {clonePromptText && (
+            <div style={{ fontSize: 12.5, color: 'var(--app-text-2)', lineHeight: 1.55, marginBottom: 16, fontStyle: 'italic' }}>
+              "{clonePromptText}"
+            </div>
+          )}
+          {cloneResult.demo_audio && (
+            <audio controls style={{ width: '100%' }} src={cloneResult.demo_audio} />
+          )}
         </div>
       ) : (
-        <div className="flex flex-col items-center justify-center gap-3 py-14 text-center">
-          <div className="w-16 h-16 rounded-full bg-surface border border-border flex items-center justify-center">
-            <Mic2 size={26} className="text-muted-foreground" aria-hidden="true" />
-          </div>
-          <div>
-            <div className="text-sm text-foreground font-medium">Clone a voice</div>
-            <div className="text-[11px] text-muted-foreground mt-0.5">Upload a 10s–5min sample to clone</div>
-          </div>
+        <div style={{
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          padding: '60px 16px', textAlign: 'center',
+          color: 'var(--app-text-2)',
+        }}>
+          <Mic2 size={32} style={{ opacity: 0.5, marginBottom: 12 }} />
+          <div style={{ fontSize: 12 }}>Your cloned voice preview will appear here</div>
         </div>
       )}
     </div>
   )
+
+  // ── Design controls ────────────────────────────────────────────────────
+
+  const designControls = (
+    <>
+      {/* Describe the voice */}
+      <div>
+        <label style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--app-text-2)', display: 'block', marginBottom: 7 }}>
+          Describe the voice
+        </label>
+        <textarea
+          value={designPrompt}
+          onChange={(e) => setDesignPrompt(e.target.value)}
+          placeholder="e.g. A warm, middle-aged male narrator with a calm British accent and gentle gravitas…"
+          rows={4}
+          style={{
+            width: '100%',
+            background: 'var(--app-surface)',
+            border: '0.5px solid var(--app-border)',
+            borderRadius: 10, padding: '11px 13px',
+            fontSize: 13, lineHeight: 1.6, color: 'var(--app-text)',
+            resize: 'none', fontFamily: 'inherit', boxSizing: 'border-box', outline: 'none',
+          }}
+        />
+      </div>
+
+      {/* Trait presets */}
+      <div>
+        <label style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--app-text-2)', display: 'block', marginBottom: 7 }}>
+          Trait presets
+        </label>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
+          {DESIGN_TRAITS.map(t => (
+            <button
+              key={t.id}
+              onClick={() => appendTrait(t.label.replace('+ ', ''))}
+              style={{
+                padding: '4px 9px', borderRadius: 7,
+                background: 'var(--app-surface)',
+                border: '0.5px solid var(--app-border)',
+                color: 'var(--app-text)', fontSize: 11, fontWeight: 500,
+                cursor: 'pointer',
+              }}
+            >{t.label}</button>
+          ))}
+        </div>
+      </div>
+
+      {/* Preview text */}
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 7 }}>
+          <label style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--app-text-2)' }}>Preview text</label>
+          <span style={{ fontSize: 11, color: designPreviewText.length > 500 ? 'hsl(var(--error))' : 'var(--app-text-2)', fontVariantNumeric: 'tabular-nums' }}>
+            {designPreviewText.length} / 500
+          </span>
+        </div>
+        <textarea
+          value={designPreviewText}
+          onChange={(e) => setDesignPreviewText(e.target.value)}
+          placeholder="Once upon a time, in a quiet village by the sea…"
+          rows={3}
+          style={{
+            width: '100%',
+            background: 'var(--app-surface)',
+            border: '0.5px solid var(--app-border)',
+            borderRadius: 10, padding: '11px 13px',
+            fontSize: 13, lineHeight: 1.6, color: 'var(--app-text)',
+            resize: 'none', fontFamily: 'inherit', boxSizing: 'border-box', outline: 'none',
+          }}
+        />
+      </div>
+
+      {errorBox}
+
+      <button
+        onClick={submitDesign}
+        disabled={designRunning || !designPrompt.trim() || !designPreviewText.trim() || designPreviewText.length > 500}
+        style={{
+          marginTop: 'auto', width: '100%', height: 42, padding: '0 11px',
+          background: 'hsl(var(--primary))',
+          color: '#fff', border: 'none', borderRadius: 11,
+          fontSize: 13.5, fontWeight: 600,
+          cursor: designRunning ? 'wait' : 'pointer',
+          opacity: (designRunning || !designPrompt.trim() || !designPreviewText.trim() || designPreviewText.length > 500) ? 0.4 : 1,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+        }}
+      >
+        {designRunning
+          ? <><Loader2 size={14} className="animate-spin" /> Designing…</>
+          : <><Wand2 size={16} /> Design voice</>}
+      </button>
+    </>
+  )
+
+  // ── Design canvas ──────────────────────────────────────────────────────
 
   const designCanvas = (
-    <div className="flex flex-col gap-3 h-full">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, height: '100%' }}>
+      {/* Inner canvas header — "Designed voice" + "Save voice" */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+        <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--app-text)' }}>Designed voice</span>
+        <button
+          onClick={() => {
+            if (designResult?.voice_id) {
+              navigator.clipboard?.writeText(designResult.voice_id)
+            }
+          }}
+          disabled={!designResult}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            padding: '6px 12px', borderRadius: 8,
+            background: 'hsl(var(--primary))', color: '#fff',
+            border: 'none', fontSize: 12, fontWeight: 600,
+            cursor: designResult ? 'pointer' : 'not-allowed',
+            opacity: designResult ? 1 : 0.4,
+          }}
+        >
+          <Plus size={13} /> Save voice
+        </button>
+      </div>
+
       {designResult ? (
-        <div className="bg-surface border border-border rounded-xl p-4 space-y-3">
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <p className="text-sm text-muted-foreground flex items-center gap-2">
-              <Check size={14} className="text-success" /> Voice designed
-            </p>
+        <div style={{
+          background: 'var(--app-surface)', border: '0.5px solid var(--app-border)',
+          borderRadius: 14, padding: 22, maxWidth: 420, margin: '0 auto', width: '100%',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 13, marginBottom: 18 }}>
+            <div style={{
+              width: 46, height: 46, borderRadius: 12,
+              background: 'linear-gradient(135deg,#a855f7,#ec4899)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: '#fff',
+            }}>
+              <Sparkles size={20} />
+            </div>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--app-text)' }}>
+                Designed voice
+              </div>
+              <div style={{ fontSize: 11.5, color: 'var(--app-text-2)', fontFamily: 'JetBrains Mono, monospace' }}>
+                voice_id pending save
+              </div>
+            </div>
           </div>
-          <div className="space-y-1">
-            <div className="text-xs text-muted-foreground">voice_id</div>
-            <code className="block px-3 py-2 bg-surface rounded text-sm text-foreground">{designResult.voice_id}</code>
-          </div>
+          {designPreviewText && (
+            <div style={{
+              fontSize: 12.5, color: 'var(--app-text-2)',
+              lineHeight: 1.55, marginBottom: 16, fontStyle: 'italic',
+            }}>
+              "{designPreviewText}…"
+            </div>
+          )}
           {designResult.trial_audio_path && (
-            <audio controls className="w-full" src={`/api/files/content?path=${encodeURIComponent(designResult.trial_audio_path)}`} />
+            <audio controls style={{ width: '100%' }} src={`/api/files/content?path=${encodeURIComponent(designResult.trial_audio_path)}`} />
           )}
         </div>
       ) : (
-        <div className="flex flex-col items-center justify-center gap-3 py-14 text-center">
-          <div className="w-16 h-16 rounded-full bg-surface border border-border flex items-center justify-center">
-            <Wand2 size={26} className="text-muted-foreground" aria-hidden="true" />
-          </div>
-          <div>
-            <div className="text-sm text-foreground font-medium">Design a voice</div>
-            <div className="text-[11px] text-muted-foreground mt-0.5">Describe the voice you want</div>
-          </div>
+        <div style={{
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          padding: '60px 16px', textAlign: 'center',
+          color: 'var(--app-text-2)',
+        }}>
+          <Wand2 size={32} style={{ opacity: 0.5, marginBottom: 12 }} />
+          <div style={{ fontSize: 12 }}>Your designed voice will appear here</div>
         </div>
       )}
     </div>
   )
 
-  const voicesCanvas = (
-    <div className="flex flex-col gap-3 h-full">
-      <p className="text-sm text-muted-foreground">Browse all available voices — system, cloned, and designed. Cloned and designed voices can be deleted from here.</p>
+  // ── Voices library (full-width) ────────────────────────────────────────
+
+  const VoiceCard = ({ voice, canDelete }) => (
+    <div style={{
+      background: 'var(--app-surface)', border: '0.5px solid var(--app-border)',
+      borderRadius: 12, padding: 13,
+      display: 'flex', alignItems: 'center', gap: 12,
+      transition: 'border-color 0.15s',
+    }}
+    onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'hsl(var(--primary))' }}
+    onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--app-border)' }}
+    >
+      <VoiceAvatar voice={voice} size={42} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{
+          fontSize: 12.5, fontWeight: 600, color: 'var(--app-text)',
+          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+        }}>
+          {voice.voice_name || voice.voice_id}
+        </div>
+        <div style={{
+          fontSize: 11, color: 'var(--app-text-2)',
+          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+        }}>
+          {voiceTags(voice) || voiceLanguage(voice)}
+        </div>
+      </div>
       <button
-        onClick={fetchVoices}
-        disabled={voicesLoading}
-        className="self-start inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
+        onClick={() => { setVoiceId(voice.voice_id); setMode('synthesize'); setVoiceDropdownOpen(false) }}
+        style={{
+          width: 30, height: 30, borderRadius: 8,
+          background: 'var(--app-bg)', border: '0.5px solid var(--app-border)',
+          cursor: 'pointer', color: 'var(--app-text-2)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          flexShrink: 0,
+        }}
+        title="Use in Synthesize"
       >
-        <RefreshCw size={12} className={voicesLoading ? 'animate-spin' : ''} /> Refresh
+        <Play size={13} fill="currentColor" />
       </button>
+      {canDelete && (
+        <button
+          onClick={() => deleteVoice(voice.source, voice.voice_id, voice.voice_name)}
+          style={{
+            width: 30, height: 30, borderRadius: 8,
+            background: 'transparent', border: '0.5px solid var(--app-border)',
+            cursor: 'pointer', color: 'var(--app-text-2)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            flexShrink: 0,
+          }}
+          title="Delete voice"
+        >
+          <Trash2 size={13} />
+        </button>
+      )}
     </div>
   )
 
-  const canvas = mode === 'synthesize' ? synthesizeCanvas
-    : mode === 'clone' ? cloneCanvas
+  const voicesControls = (
+    <>
+      {/* Search */}
+      <div style={{ position: 'relative' }}>
+        <Search size={13} style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: 'var(--app-text-2)', pointerEvents: 'none' }} />
+        <input
+          type="text"
+          value={voiceSearch}
+          onChange={(e) => setVoiceSearch(e.target.value)}
+          placeholder="Search voices…"
+          style={{
+            width: '100%',
+            background: 'var(--app-surface)',
+            border: '0.5px solid var(--app-border)',
+            borderRadius: 9, padding: '8px 12px 8px 32px',
+            fontSize: 12, color: 'var(--app-text)', outline: 'none',
+            fontFamily: 'inherit', boxSizing: 'border-box',
+          }}
+        />
+      </div>
+
+      {/* System voices */}
+      {voicesLoading ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--app-text-2)', padding: '12px 0' }}>
+          <Loader2 size={14} className="animate-spin" /> Loading voices…
+        </div>
+      ) : (
+        <>
+          {[
+            { title: 'System voices', items: systemVoicesFiltered, source: 'system_voice', badge: '40+' },
+            { title: 'Cloned',        items: clonedVoicesFiltered,  source: 'voice_cloning', badge: String(clonedVoicesFiltered.length) },
+            { title: 'Designed',      items: designedVoicesFiltered,source: 'voice_generation', badge: String(designedVoicesFiltered.length) },
+          ].map(section => {
+            if (section.source !== 'system_voice' && section.items.length === 0) return null
+            if (section.source === 'system_voice' && section.items.length === 0 && voiceSearch.trim()) return null
+            return (
+              <div key={section.title}>
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12,
+                }}>
+                  <h4 style={{ fontSize: 12, fontWeight: 600, color: 'var(--app-text)', margin: 0 }}>
+                    {section.title}
+                  </h4>
+                  <span style={{
+                    fontSize: 11, color: 'var(--app-text-2)',
+                    background: 'var(--app-surface)',
+                    padding: '1px 8px', borderRadius: 10,
+                  }}>{section.badge}</span>
+                </div>
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(232px, 1fr))',
+                  gap: 12,
+                }}>
+                  {section.items.slice(0, 12).map(v => (
+                    <VoiceCard
+                      key={v.voice_id}
+                      voice={v}
+                      canDelete={section.source !== 'system_voice'}
+                    />
+                  ))}
+                </div>
+                {section.items.length > 12 && (
+                  <div style={{ fontSize: 11, color: 'var(--app-text-2)', textAlign: 'center', marginTop: 8 }}>
+                    + {section.items.length - 12} more — search to filter
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </>
+      )}
+    </>
+  )
+
+  // ── Render ─────────────────────────────────────────────────────────────
+
+  const isVoices = mode === 'voices'
+  const controls = isVoices ? voicesControls
+    : mode === 'clone' ? cloneControls
+    : mode === 'design' ? designControls
+    : synthesizeControls
+
+  const canvas = mode === 'clone' ? cloneCanvas
     : mode === 'design' ? designCanvas
-    : voicesCanvas
-
-  const controlsHeader = (
-    <MediaHeader
-      icon={<Volume2 size={18} strokeWidth={2} />}
-      title="Speech"
-      subtitle="Synthesize · Clone · Design · Voices"
-    />
-  )
-
-  const galleryHeader = (
-    <GalleryHeader
-      title="History"
-      subtitle="Saved to workspace/generations/tts/"
-    />
-  )
+    : synthesizeCanvas
 
   return (
     <MediaPanelLayout
+      layout={isVoices ? 'full' : 'split'}
       controlsWidth={400}
-      controlsHeader={controlsHeader}
+      topBar={
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, width: '100%' }}>
+          {/* Left: icon + title (mockup L879-885) */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 11, minWidth: 0 }}>
+            <div
+              style={{
+                width: 34, height: 34, flexShrink: 0, borderRadius: 9,
+                background: 'hsl(var(--primary) / 0.14)',
+                color: 'hsl(var(--primary))',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}
+            >
+              <Volume2 size={18} strokeWidth={2} />
+            </div>
+            <span style={{
+              fontSize: 15, fontWeight: 600, color: 'var(--app-text)',
+              whiteSpace: 'nowrap',
+            }}>
+              Speech
+            </span>
+          </div>
+          {/* Right: sub-mode pills (mockup L886-892) */}
+          <div style={{ flexShrink: 0 }}>
+            <ModeTabBar modes={SPEECH_MODES} active={mode} onChange={setMode} />
+          </div>
+        </div>
+      }
       controls={controls}
-      galleryHeader={galleryHeader}
-      canvas={canvas}
+      canvas={isVoices ? null : canvas}
     />
   )
 }

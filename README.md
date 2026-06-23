@@ -246,6 +246,7 @@ are summarized from the official pricing page — always check
 _Complete. All Phase 1 items have shipped._
 
 ### Phase 2 — Productivity
+- [ ] **Install-time Onboarding Wizard** — First-launch flow that prompts the user to paste their MiniMax API key and runs a live connectivity check against the Token Plan `remains` endpoint (auto-detects Plus / Max / Ultra from the active models in `model_remains[]`). Optional step — users can skip and configure later in Settings → API.
 - [ ] **Task Board (Kanban)** — Project planning with todo/in-progress/done columns
 
 ### Phase 3 — Extensibility

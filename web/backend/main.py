@@ -4,10 +4,12 @@ import os
 import sys
 import json
 import uuid
+import time
 import asyncio
 import logging
 from pathlib import Path
 from contextlib import asynccontextmanager
+from datetime import datetime
 
 # Add project root to path so we can import mini_agent and mini_max_mcp
 PROJECT_ROOT = Path(__file__).parent.parent.parent
@@ -83,7 +85,10 @@ class ImageRequest(BaseModel):
     prompt_optimizer: bool = False
     watermark: bool = False
     seed: int = None
-    reference_image: str = ""  # For I2I: path or URL
+    # i2i: same endpoint as T2I but with subject_reference + model "image-01-live"
+    model: str = "image-01"
+    subject_reference: list = None
+    reference_image: str = ""  # legacy I2I: local file path (image_variations)
 
 
 # --- Music Generation ---------------------------------------------------------
@@ -352,19 +357,308 @@ def _conv_path(conv_id: str) -> Path:
     return CONVERSATIONS_DIR / f"{conv_id}.json"
 
 
+# --- App workspace + coding workspace management (v0.5 redesign) ---
+#
+# Two distinct concepts now:
+#
+# 1) APP WORKSPACE — fixed, owned by the MiniMax Studio app.
+#    Located at ``PROJECT_ROOT / "workspace"`` (= ``%APPDATA%/com.minimax.agent.desktop/workspace``
+#    when launched via the Tauri shell). Holds user data that is NOT
+#    tied to a coding project: chat/coding conversations, task board,
+#    uploads, media generations, profile, settings snapshot. Lives there
+#    regardless of which coding project the user is working on.
+#
+# 2) CODING WORKSPACE — picked per session from the CodingPanel header
+#    (a real folder the user wants the agent to read/write into). Tools
+#    like Read/Write/Edit/Bash resolve paths relative to this folder.
+#    Locked after the first message of the session. Media generated
+#    inside a coding session lands in ``<coding-workspace>/outputs/``
+#    instead of polluting the user's project or the app workspace.
+#
+# Both ``PROJECT_ROOT`` (set by Tauri via ``MINIMAX_PROJECT_ROOT``) and
+# the per-session ``coding_workspace_dir`` are persisted in
+# config.yaml under ``recent_coding_workspaces`` so the next session can
+# pre-fill the picker with the last few projects (VSCode-style).
+
+
+def _media_output_dir(session_id: str, media_kind: str) -> Path:
+    """Where generated media of ``media_kind`` (one of "images",
+    "videos", "music", "tts") should land for this session.
+
+    Coding sessions with a workspace attached → ``<coding-workspace>/outputs/<kind>``.
+    Everything else → ``<app-workspace>/generations/<kind>`` (the
+    pre-v0.5 location, preserved for backwards-compat reads).
+    """
+    if session_id and session_id.startswith("coding-"):
+        ws = _load_coding_workspace_for_session(session_id)
+        if ws:
+            d = Path(ws) / "outputs" / media_kind
+            d.mkdir(parents=True, exist_ok=True)
+            return d
+    d = get_app_workspace_dir() / "generations" / media_kind
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def get_app_workspace_dir() -> Path:
+    """The fixed app workspace — `PROJECT_ROOT/workspace`.
+
+    Always returns an absolute Path, creating the directory if missing.
+    This is where app-wide artifacts (conversations, tasks, uploads,
+    media generations) live. It does NOT change between coding projects.
+    """
+    p = PROJECT_ROOT / "workspace"
+    p.mkdir(parents=True, exist_ok=True)
+    return p
+
+
+def get_session_workspace_dir(session_id: str) -> Path:
+    """Resolve the effective workspace dir for a given session.
+
+    - Coding sessions (id starts with ``coding-``) use the
+      ``coding_workspace_dir`` they were started with, falling back to
+      the app workspace when none has been set yet (so the first call
+      to ``/api/files?path=...`` before the user picks a folder does
+      not 500 — it lists the app workspace instead).
+    - All other sessions use the app workspace.
+
+    Returns an absolute Path. Does NOT create the directory — the
+    caller decides whether to mkdir (CodingPanel wants the user to pick
+    a real folder; files endpoints create it on demand).
+    """
+    if session_id.startswith("coding-"):
+        cw = _load_coding_workspace_for_session(session_id)
+        if cw:
+            return Path(cw)
+    return get_app_workspace_dir()
+
+
+# Top-N cap for the recent-workspaces list (VSCode uses 10).
+RECENT_WORKSPACES_LIMIT = 10
+
+
+def _load_config_dict() -> dict:
+    """Read the current config as a plain dict (the in-memory ``config``
+    might be a Pydantic object after AgentConfig.from_yaml)."""
+    try:
+        if hasattr(config, "to_dict"):
+            return config.to_dict()
+    except Exception:
+        pass
+    if isinstance(config, dict):
+        return config
+    return {}
+
+
+def _save_config_dict(cfg: dict) -> None:
+    """Persist a dict-form config to ``CONFIG_PATH`` and update the
+    in-memory ``config`` global."""
+    global config
+    import yaml
+    CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+        yaml.dump(cfg, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+    config = cfg
+
+
+def _load_recent_coding_workspaces() -> list[dict]:
+    """Return the recent-coding-workspaces list (newest first).
+
+    Each entry is ``{"path": str, "last_used": iso8601, "label": str}``.
+    Missing/corrupt config → ``[]``.
+    """
+    cfg = _load_config_dict()
+    raw = cfg.get("recent_coding_workspaces") or []
+    if not isinstance(raw, list):
+        return []
+    out = []
+    for entry in raw:
+        if isinstance(entry, dict) and isinstance(entry.get("path"), str):
+            out.append({
+                "path": entry["path"],
+                "last_used": entry.get("last_used", ""),
+                "label": entry.get("label") or Path(entry["path"]).name or entry["path"],
+            })
+    return out
+
+
+def _add_recent_coding_workspace(path: str) -> list[dict]:
+    """Push a workspace path onto the recent list (MRU + dedupe + cap).
+
+    Returns the updated list. Persists to config.yaml.
+    """
+    cfg = _load_config_dict()
+    path = str(Path(path).resolve()) if path else ""
+    if not path:
+        return _load_recent_coding_workspaces()
+
+    existing = cfg.get("recent_coding_workspaces")
+    if not isinstance(existing, list):
+        existing = []
+
+    now_iso = datetime.now().isoformat(timespec="seconds")
+    label = Path(path).name or path
+
+    # Remove any earlier entry with the same resolved path (dedupe).
+    existing = [
+        e for e in existing
+        if not (isinstance(e, dict) and Path(str(e.get("path", ""))).resolve() == Path(path))
+    ]
+    existing.insert(0, {"path": path, "last_used": now_iso, "label": label})
+    existing = existing[:RECENT_WORKSPACES_LIMIT]
+
+    cfg["recent_coding_workspaces"] = existing
+    _save_config_dict(cfg)
+    return _load_recent_coding_workspaces()
+
+
+# Map of session_id -> {workspace_dir: str|None, locked: bool}.
+# Held in-process only (sessions are not persisted across restarts by
+# design — the per-session workspace is re-attached when the frontend
+# opens an existing conversation).
+_coding_sessions: dict[str, dict] = {}
+
+
+def _load_coding_workspace_for_session(session_id: str) -> str | None:
+    """Return the workspace_dir attached to this session, if any.
+
+    First checks the in-process map, then falls back to the conversation
+    metadata (saved on disk when the user picks a folder), so the
+    workspace survives a backend restart within the same conversation.
+    """
+    sess = _coding_sessions.get(session_id)
+    if sess and sess.get("workspace_dir"):
+        return sess["workspace_dir"]
+    conv = load_conversation(session_id)
+    ws = conv.get("workspace_dir") if isinstance(conv, dict) else None
+    return ws if isinstance(ws, str) and ws else None
+
+
+def _attach_coding_workspace(session_id: str, workspace_dir: str) -> None:
+    """Persist the coding workspace for a session in both the in-process
+    map AND the on-disk conversation metadata."""
+    sess = _coding_sessions.setdefault(session_id, {"locked": False, "workspace_dir": None})
+    if sess.get("locked"):
+        raise HTTPException(
+            status_code=409,
+            detail="This coding session is locked — workspace cannot be changed after the first message.",
+        )
+    sess["workspace_dir"] = str(Path(workspace_dir).resolve())
+    # Mirror onto the conversation JSON so it survives a backend restart.
+    conv = load_conversation(session_id)
+    if isinstance(conv, dict):
+        conv["workspace_dir"] = sess["workspace_dir"]
+        save_conversation_raw(conv)
+
+
+def _lock_coding_session(session_id: str) -> None:
+    """Lock a coding session — no more workspace changes allowed.
+
+    Called by the WebSocket handler right before the agent processes
+    the first user message of the session. Idempotent.
+    """
+    sess = _coding_sessions.setdefault(session_id, {"locked": False, "workspace_dir": None})
+    sess["locked"] = True
+
+
+def save_conversation_raw(conv: dict) -> None:
+    """Save a fully-built conversation dict (no timestamp juggling).
+
+    Used by helpers that already loaded the conversation and just want
+    to persist mutated metadata (e.g. ``workspace_dir``) without
+    touching the title/updated_at bookkeeping.
+    """
+    conv_id = conv.get("id")
+    if not conv_id:
+        return
+    path = _conv_path(conv_id)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(conv, f, ensure_ascii=False, indent=2)
+
+
+# --- Task board persistence ---
+# Single JSON file holds all tasks. Pattern matches conversation storage:
+# one file = one atomic write per mutation, easy to inspect with cat/jq,
+# no DB lock contention for an MVP-scale task board.
+TASKS_FILE = PROJECT_ROOT / "workspace" / "tasks.json"
+
+VALID_TASK_STATUSES = {"pending", "in-progress", "review", "done"}
+VALID_TASK_PRIORITIES = {"high", "medium", "low"}
+
+
+def _load_tasks() -> list:
+    """Load all tasks from disk. Returns [] if file missing/corrupt."""
+    if not TASKS_FILE.exists():
+        return []
+    try:
+        with open(TASKS_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, list) else []
+    except Exception:
+        return []
+
+
+def _save_tasks(tasks: list):
+    """Atomic write — tmp file + rename so concurrent reads never see partial JSON."""
+    TASKS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    tmp = TASKS_FILE.with_suffix(".json.tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(tasks, f, ensure_ascii=False, indent=2)
+    tmp.replace(TASKS_FILE)
+
+
+def _next_task_order(tasks: list) -> int:
+    """Next order value for drag&drop placement (appended to end)."""
+    if not tasks:
+        return 0
+    return max((t.get("order", 0) for t in tasks), default=-1) + 1
+
+
+def _generate_task_id() -> str:
+    return f"task-{int(time.time() * 1000)}-{uuid.uuid4().hex[:6]}"
+
+
+def _serialize_task(task: dict) -> dict:
+    """Return a stable shape for API responses. Adds server-derived fields
+    that the frontend can render directly (created_by badge, is_done flag)."""
+    return {
+        "id": task["id"],
+        "title": task.get("title", ""),
+        "description": task.get("description", ""),
+        "status": task.get("status", "pending"),
+        "priority": task.get("priority", "medium"),
+        "subtasks": task.get("subtasks", []),
+        "order": task.get("order", 0),
+        "created_at": task.get("created_at"),
+        "updated_at": task.get("updated_at"),
+        "created_by": task.get("created_by", "user"),
+        "source_session_id": task.get("source_session_id"),
+    }
+
+
 def list_conversations() -> list:
-    """List all saved conversations, newest first."""
+    """List all saved conversations, newest first.
+
+    Each entry includes ``workspace_dir`` so the CodingPanel can render
+    a VSCode-style recent-folders label under each conversation title
+    ("📁 /path/to/project"). Conversations without a workspace (chat
+    sessions, or pre-v0.5 coding sessions) get ``workspace_dir=None``.
+    """
     conversations = []
     for p in CONVERSATIONS_DIR.glob("*.json"):
         try:
             with open(p, "r", encoding="utf-8") as f:
                 data = json.load(f)
+            ws = data.get("workspace_dir")
             conversations.append({
                 "id": data.get("id", p.stem),
                 "title": data.get("title", "Untitled"),
                 "created_at": data.get("created_at", ""),
                 "updated_at": data.get("updated_at", ""),
                 "message_count": len(data.get("messages", [])),
+                "workspace_dir": ws if isinstance(ws, str) and ws else None,
+                "type": "coding" if (data.get("id", p.stem) or "").startswith("coding-") else "chat",
             })
         except Exception:
             pass
@@ -515,11 +809,30 @@ def search_conversations(query: str, type_filter: str = "") -> list:
 
 
 class SessionManager:
-    """Manages agent sessions in memory."""
+    """Manages agent sessions in memory.
+
+    Per the v0.5 workspace redesign, the effective workspace for a
+    session is resolved via ``get_session_workspace_dir(session_id)``:
+
+      - Coding sessions (``coding-...``) use the workspace the user
+        picked in the CodingPanel header (falling back to the app
+        workspace until they pick one).
+      - Everything else uses the fixed app workspace.
+
+    Tools (Read/Write/Edit/Bash + media) are constructed against that
+    resolved path, so the agent reads/writes in the right place without
+    needing to know which kind of session it is.
+    """
 
     def __init__(self):
         self.sessions = {}
         self.config = config
+
+    def evict(self, session_id: str) -> None:
+        """Drop a cached agent — used when the coding workspace changes
+        before the session is locked (the agent was built against the
+        old workspace and would point at the wrong files)."""
+        self.sessions.pop(session_id, None)
 
     async def get_or_create_agent(self, session_id: str) -> Agent:
         if session_id in self.sessions:
@@ -537,9 +850,20 @@ class SessionManager:
             model=model,
         )
 
-        workspace_dir = self.config.get("agent", {}).get("workspace_dir", "./workspace")
-        workspace_path = PROJECT_ROOT / workspace_dir
-        workspace_path.mkdir(parents=True, exist_ok=True)
+        # Per-session workspace: coding sessions use the user-picked
+        # folder; everything else uses the fixed app workspace. The
+        # app workspace is created on demand; the coding workspace must
+        # already exist (the picker validates that).
+        workspace_path = get_session_workspace_dir(session_id)
+        try:
+            workspace_path.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            # Coding workspace may not exist yet (the user hasn't picked
+            # one). The tools still need *some* absolute path so they
+            # can resolve relative ones — fall back to the app workspace
+            # so the WebSocket connect succeeds. The picker will refuse
+            # to send the first message until a real folder is set.
+            workspace_path = get_app_workspace_dir()
         from mini_agent.tools.file_tools import EditTool
         tools = [
             ReadTool(workspace_dir=str(workspace_path)),
@@ -567,6 +891,28 @@ class SessionManager:
             ])
         except ImportError:
             pass
+
+        # Task board tools — shared with the Tasks panel. The agent can
+        # create / list / update tasks on the user's board; deletion is
+        # intentionally not exposed (see tasks_tool.py docstring).
+        #
+        # The task board is a GLOBAL feature (one board per user, not
+        # one per coding project), so tasks.json always lives in the
+        # app workspace — never in a coding session's workspace.
+        try:
+            from mini_agent.tools import (
+                TasksCreateTool,
+                TasksListTool,
+                TasksUpdateTool,
+            )
+            tasks_file = str(get_app_workspace_dir() / "tasks.json")
+            tools.extend([
+                TasksCreateTool(tasks_file=tasks_file),
+                TasksListTool(tasks_file=tasks_file),
+                TasksUpdateTool(tasks_file=tasks_file),
+            ])
+        except ImportError as exc:
+            _logger.warning(f"Task board tools not registered: {exc}")
 
         # Load external MCP tools from user-configured servers
         mcp_tools: list = []
@@ -611,7 +957,7 @@ When asked to create a landing page, website, or any project:
 CRITICAL: When the user message includes file content inline (between triple backticks), that is the FULL content of the file they want you to analyze. Analyze THAT content directly. Do NOT call read_file for files mentioned in earlier conversation turns unless the user explicitly asks about them again.
 
 You are working in: `{workspace_path}`
-All relative paths are resolved from this directory.
+This is the project folder the user picked in the MiniMax Studio header — all relative paths are resolved from this directory, and any file you write ends up here.
 
 Always be concise but thorough."""
         else:
@@ -654,22 +1000,32 @@ Be concise, friendly, and helpful."""
 session_manager = SessionManager()
 
 
+# --- Lifespan (defined before ``app`` so the FastAPI() call below can
+# capture the reference). Wraps the lifespan for the v0.5 redesign:
+# startup ensures the generations directories exist under the app
+# workspace; shutdown just logs.
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     _logger.info("MiniMax Agent Web starting up...")
-    # Ensure generations directories exist
     for subdir in ("images", "videos", "music", "tts"):
-        (PROJECT_ROOT / "workspace" / "generations" / subdir).mkdir(parents=True, exist_ok=True)
+        (get_app_workspace_dir() / "generations" / subdir).mkdir(
+            parents=True, exist_ok=True
+        )
     yield
     _logger.info("Shutting down...")
 
 
+# --- FastAPI app instance ---
+# Declared BEFORE any ``@app.*`` decorator below (the new coding
+# workspace endpoints and the older REST/WebSocket handlers all hang
+# off this single ``app``).
 app = FastAPI(
     title="MiniMax Agent Web",
     description="All-in-one platform for MiniMax Token Plan",
     version="0.3.0",
     lifespan=lifespan,
 )
+
 
 # CORS for development
 app.add_middleware(
@@ -679,6 +1035,163 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# --- Coding workspace endpoints (v0.5 redesign) ---
+#
+# The CodingPanel header lets the user pick a real folder for the
+# current session. The lifecycle is:
+#
+#   1) GET    /api/coding/workspace?session_id=...       → returns the
+#                                                         workspace + lock
+#                                                         state for the
+#                                                         session (or 404
+#                                                         if none set).
+#   2) PUT    /api/coding/workspace                      → attach a folder
+#                                                         to a session
+#                                                         (404/409 if
+#                                                         locked). Also
+#                                                         pushes the path
+#                                                         onto the recent
+#                                                         list.
+#   3) GET    /api/coding/recent-workspaces              → VSCode-style
+#                                                         recent list
+#                                                         (newest first,
+#                                                         capped at 10).
+#   4) DELETE /api/coding/recent-workspaces/{path}       → remove a path
+#                                                         from the recent
+#                                                         list (pinned
+#                                                         folders keep
+#                                                         sticking around
+#                                                         otherwise).
+#   5) POST   /api/coding/session/{id}/lock              → server-side
+#                                                         lock (also fired
+#                                                         automatically by
+#                                                         the WebSocket
+#                                                         handler on the
+#                                                         first message).
+#
+# All of these are REST + JSON; no streaming. Errors follow the existing
+# HTTPException pattern (400 invalid path, 404 not found, 409 locked).
+
+
+def _validate_workspace_path(path: str) -> Path:
+    """Sanity-check a user-supplied workspace path.
+
+    Returns the resolved absolute Path. Raises 400 if the path is
+    empty or doesn't exist / isn't a directory. We don't try to gate
+    on whether the agent is *allowed* to write there — that's the
+    user's call (they picked the folder).
+    """
+    if not isinstance(path, str) or not path.strip():
+        raise HTTPException(status_code=400, detail="workspace path must be a non-empty string.")
+    try:
+        resolved = Path(path).expanduser().resolve()
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid path: {e}")
+    if not resolved.exists():
+        raise HTTPException(status_code=404, detail=f"Path does not exist: {resolved}")
+    if not resolved.is_dir():
+        raise HTTPException(status_code=400, detail=f"Path is not a directory: {resolved}")
+    return resolved
+
+
+@app.get("/api/coding/workspace")
+async def get_coding_workspace(session_id: str = ""):
+    """Return the workspace attached to a coding session (if any)."""
+    if not session_id or not session_id.startswith("coding-"):
+        raise HTTPException(status_code=400, detail="session_id must start with 'coding-'.")
+    sess = _coding_sessions.get(session_id, {})
+    workspace_dir = _load_coding_workspace_for_session(session_id)
+    return {
+        "success": True,
+        "session_id": session_id,
+        "workspace_dir": workspace_dir,
+        "locked": bool(sess.get("locked")),
+        "effective_dir": str(get_session_workspace_dir(session_id)),
+    }
+
+
+class CodingWorkspaceUpdate(BaseModel):
+    session_id: str
+    workspace_dir: str
+
+
+@app.put("/api/coding/workspace")
+async def set_coding_workspace(req: CodingWorkspaceUpdate):
+    """Attach a folder to a coding session.
+
+    Validates the path, stores it in the in-process session map AND
+    the conversation JSON (so it survives a backend restart), pushes
+    the path onto the recent-workspaces MRU list, and evicts any
+    cached agent for the session so the next WebSocket message builds
+    a fresh one against the new workspace.
+    """
+    if not req.session_id.startswith("coding-"):
+        raise HTTPException(status_code=400, detail="session_id must start with 'coding-'.")
+    resolved = _validate_workspace_path(req.workspace_dir)
+    try:
+        _attach_coding_workspace(req.session_id, str(resolved))
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to attach workspace: {e}")
+    session_manager.evict(req.session_id)
+    _add_recent_coding_workspace(str(resolved))
+    return {
+        "success": True,
+        "session_id": req.session_id,
+        "workspace_dir": str(resolved),
+        "label": resolved.name or str(resolved),
+        "locked": False,
+    }
+
+
+@app.get("/api/coding/recent-workspaces")
+async def list_recent_workspaces():
+    """VSCode-style recent-workspaces list (newest first)."""
+    return {"success": True, "workspaces": _load_recent_coding_workspaces()}
+
+
+@app.delete("/api/coding/recent-workspaces")
+async def remove_recent_workspace(path: str):
+    """Drop a path from the recent list (e.g. user removed a project folder)."""
+    target = str(Path(path).expanduser().resolve()) if path else ""
+    if not target:
+        raise HTTPException(status_code=400, detail="path is required.")
+    cfg = _load_config_dict()
+    existing = cfg.get("recent_coding_workspaces") or []
+    if not isinstance(existing, list):
+        existing = []
+    kept = [
+        e for e in existing
+        if not (
+            isinstance(e, dict)
+            and str(Path(str(e.get("path", ""))).expanduser().resolve()) == target
+        )
+    ]
+    cfg["recent_coding_workspaces"] = kept
+    _save_config_dict(cfg)
+    return {"success": True, "workspaces": _load_recent_coding_workspaces()}
+
+
+@app.post("/api/coding/session/{session_id}/lock")
+async def lock_coding_session(session_id: str):
+    """Lock a coding session's workspace — no more changes allowed.
+
+    Fired either by the frontend (defensive — usually right after the
+    first message is sent) or by the WebSocket handler (canonical —
+    see ``chat_websocket``). Idempotent.
+    """
+    if not session_id.startswith("coding-"):
+        raise HTTPException(status_code=400, detail="session_id must start with 'coding-'.")
+    _lock_coding_session(session_id)
+    return {
+        "success": True,
+        "session_id": session_id,
+        "locked": True,
+        "workspace_dir": _load_coding_workspace_for_session(session_id),
+    }
 
 
 @app.get("/api/health")
@@ -713,16 +1226,24 @@ async def get_config():
             })
 
     safe_config = {
-        # The config schema keeps model / max_steps / workspace_dir at
-        # the top level (not under an `agent` key), but the Settings UI
-        # reads them from `data.agent.*`. Project them under `agent` so
-        # the form is populated from the real config rather than
-        # always showing the JS-side fallbacks.
+        # The config schema keeps model / max_steps at the top level
+        # (not under an `agent` key), but the Settings UI reads them
+        # from `data.agent.*`. Project them under `agent` so the form
+        # is populated from the real config rather than always showing
+        # the JS-side fallbacks.
+        #
+        # Note (v0.5 redesign): the pre-v0.5 ``workspace_dir`` field
+        # is now ignored — each coding session has its own workspace
+        # chosen from the CodingPanel header, and non-coding sessions
+        # use the fixed app workspace. The field is kept here as
+        # ``legacy_workspace_dir`` (raw read) so we can warn users
+        # with stale configs without breaking the response shape.
         "agent": {
             "model": config.get("model", "MiniMax-M3") if isinstance(config, dict) else "MiniMax-M3",
             "max_steps": config.get("max_steps", 50) if isinstance(config, dict) else 50,
-            "workspace_dir": config.get("workspace_dir", "./workspace") if isinstance(config, dict) else "./workspace",
+            "workspace_dir": config.get("workspace_dir", "") if isinstance(config, dict) else "",
         },
+        "app_workspace_dir": str(get_app_workspace_dir()),
         "tts": config.get("tts", {}) if isinstance(config, dict) else {},
         "image": config.get("image", {}) if isinstance(config, dict) else {},
         "music": config.get("music", {}) if isinstance(config, dict) else {},
@@ -865,6 +1386,9 @@ async def set_api_key(req: ApiKeyUpdate):
 class AgentConfigUpdate(BaseModel):
     model: Optional[str] = None
     max_steps: Optional[int] = None
+    # ``workspace_dir`` was removed in v0.5 (per-session coding workspace
+    # is set via ``PUT /api/coding/workspace`` instead). Accepted for
+    # backward-compat with older frontends but ignored server-side.
     workspace_dir: Optional[str] = None
     region: Optional[str] = None  # "global" or "cn"
     api_base: Optional[str] = None  # full URL, e.g. https://api.minimax.io/anthropic or a proxy
@@ -903,9 +1427,14 @@ async def update_agent_config(req: AgentConfigUpdate):
             cfg["max_steps"] = req.max_steps
 
         if req.workspace_dir is not None:
-            if not isinstance(req.workspace_dir, str) or not req.workspace_dir.strip():
-                raise HTTPException(status_code=400, detail="workspace_dir must be a non-empty string.")
-            cfg["workspace_dir"] = req.workspace_dir.strip()
+            # v0.5 removed the global workspace_dir setting — the
+            # frontend used to write it here; we accept it (so the
+            # PUT doesn't 400) but log a one-time warning and drop it
+            # instead of persisting, so the on-disk config stays clean.
+            _logger.warning(
+                "agent.workspace_dir is deprecated as of v0.5 — ignored. "
+                "Use PUT /api/coding/workspace to set a coding session's workspace."
+            )
 
         if req.region is not None:
             if req.region not in ("global", "cn"):
@@ -1132,6 +1661,169 @@ async def rename_conversation(conv_id: str, req: dict):
     return {"success": True}
 
 
+# --- Task board REST endpoints ---
+
+class TaskCreate(BaseModel):
+    title: str
+    description: str = ""
+    status: str = "pending"
+    priority: str = "medium"
+    subtasks: list = []
+    created_by: str = "user"
+    source_session_id: str | None = None
+
+
+class TaskUpdate(BaseModel):
+    title: str | None = None
+    description: str | None = None
+    status: str | None = None
+    priority: str | None = None
+    subtasks: list | None = None
+
+
+class TaskReorder(BaseModel):
+    """Batch update of `order` for drag&drop reordering within a column.
+
+    The frontend sends the full ordered list of task IDs in their new
+    visual order — the server applies it as `order = index` so future
+    sorts can rebuild deterministically.
+    """
+    ids: list[str]
+
+
+def _validate_status(status: str):
+    if status not in VALID_TASK_STATUSES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid status '{status}'. Must be one of {sorted(VALID_TASK_STATUSES)}.",
+        )
+
+
+def _validate_priority(priority: str):
+    if priority not in VALID_TASK_PRIORITIES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid priority '{priority}'. Must be one of {sorted(VALID_TASK_PRIORITIES)}.",
+        )
+
+
+@app.get("/api/tasks")
+async def get_tasks():
+    """List all tasks, ordered by `order` ascending (then updated_at desc)."""
+    tasks = _load_tasks()
+    tasks.sort(key=lambda t: (t.get("order", 0), t.get("updated_at", "")), reverse=False)
+    # Re-sort by updated_at desc as tiebreaker when order is identical
+    # (this happens when all tasks have order=0 on first migration).
+    tasks.sort(key=lambda t: t.get("updated_at", ""), reverse=True)
+    return {"success": True, "tasks": [_serialize_task(t) for t in tasks]}
+
+
+@app.post("/api/tasks")
+async def create_task(req: TaskCreate):
+    """Create a new task.
+
+    `created_by` may be 'user' (default, from the UI) or 'agent' (when the
+    LLM-driven agent creates tasks via the tasks_create tool).
+    """
+    title = req.title.strip()
+    if not title:
+        raise HTTPException(status_code=400, detail="Task title is required.")
+    _validate_status(req.status)
+    _validate_priority(req.priority)
+
+    tasks = _load_tasks()
+    now = datetime.now().isoformat()
+    new_task = {
+        "id": _generate_task_id(),
+        "title": title,
+        "description": req.description.strip() if req.description else "",
+        "status": req.status,
+        "priority": req.priority,
+        "subtasks": req.subtasks or [],
+        "order": _next_task_order(tasks),
+        "created_at": now,
+        "updated_at": now,
+        "created_by": req.created_by if req.created_by in {"user", "agent"} else "user",
+        "source_session_id": req.source_session_id,
+    }
+    tasks.append(new_task)
+    _save_tasks(tasks)
+    _logger.info(
+        f"Task created: id={new_task['id']} by={new_task['created_by']} title={new_task['title'][:40]!r}"
+    )
+    return {"success": True, "task": _serialize_task(new_task)}
+
+
+# IMPORTANT: reorder MUST be declared BEFORE the {task_id} handlers below.
+# FastAPI matches routes in declaration order, so PATCH /api/tasks/reorder
+# would otherwise be swallowed by /api/tasks/{task_id} (with task_id="reorder")
+# and return 404 "Task 'reorder' not found".
+@app.patch("/api/tasks/reorder")
+async def reorder_tasks(req: TaskReorder):
+    """Batch update — assigns order = index for each task ID in `ids`.
+
+    Tasks NOT in `ids` are untouched (they belong to other columns / are
+    filtered out). This is intentional: the frontend only sends the IDs
+    it actually reordered.
+    """
+    tasks = _load_tasks()
+    id_to_new_order = {tid: idx for idx, tid in enumerate(req.ids)}
+    unknown = [tid for tid in req.ids if not any(t["id"] == tid for t in tasks)]
+    if unknown:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Unknown task IDs: {unknown}",
+        )
+    for t in tasks:
+        if t["id"] in id_to_new_order:
+            t["order"] = id_to_new_order[t["id"]]
+            t["updated_at"] = datetime.now().isoformat()
+    _save_tasks(tasks)
+    return {"success": True}
+
+
+@app.patch("/api/tasks/{task_id}")
+async def update_task(task_id: str, req: TaskUpdate):
+    """Partial update — only the fields you send are touched."""
+    tasks = _load_tasks()
+    target = next((t for t in tasks if t["id"] == task_id), None)
+    if not target:
+        raise HTTPException(status_code=404, detail=f"Task '{task_id}' not found.")
+
+    if req.title is not None:
+        new_title = req.title.strip()
+        if not new_title:
+            raise HTTPException(status_code=400, detail="Task title cannot be empty.")
+        target["title"] = new_title
+    if req.description is not None:
+        target["description"] = req.description.strip()
+    if req.status is not None:
+        _validate_status(req.status)
+        target["status"] = req.status
+    if req.priority is not None:
+        _validate_priority(req.priority)
+        target["priority"] = req.priority
+    if req.subtasks is not None:
+        target["subtasks"] = req.subtasks
+
+    target["updated_at"] = datetime.now().isoformat()
+    _save_tasks(tasks)
+    return {"success": True, "task": _serialize_task(target)}
+
+
+@app.delete("/api/tasks/{task_id}")
+async def delete_task(task_id: str):
+    """Delete a task by ID. Returns success=false if not found."""
+    tasks = _load_tasks()
+    before = len(tasks)
+    tasks = [t for t in tasks if t["id"] != task_id]
+    if len(tasks) == before:
+        return {"success": False, "error": "not_found"}
+    _save_tasks(tasks)
+    _logger.info(f"Task deleted: id={task_id}")
+    return {"success": True}
+
+
 @app.websocket("/ws/chat/{session_id}")
 async def chat_websocket(websocket: WebSocket, session_id: str):
     """WebSocket endpoint for streaming chat."""
@@ -1158,6 +1850,17 @@ async def chat_websocket(websocket: WebSocket, session_id: str):
                     }
                     for msg in conv["messages"]
                 ]
+            })
+
+        # Coding sessions: tell the frontend which workspace this
+        # conversation belongs to so the header picker can light up
+        # with the right path. Locked sessions get the lock icon.
+        if session_id.startswith("coding-"):
+            ws = _load_coding_workspace_for_session(session_id)
+            await websocket.send_json({
+                "type": "session_workspace",
+                "workspace_dir": ws,
+                "locked": bool(_coding_sessions.get(session_id, {}).get("locked")),
             })
 
         while True:
@@ -1244,6 +1947,31 @@ async def chat_websocket(websocket: WebSocket, session_id: str):
 
             if not full_message.strip():
                 continue
+
+            # Coding sessions: lock the workspace on the first real
+            # message so the user can't silently swap folders mid-run.
+            # Skill activations / system events don't count — only
+            # user messages with text or an attachment. The frontend
+            # also fires POST /api/coding/session/{id}/lock defensively
+            # right after sending; either path is idempotent.
+            if session_id.startswith("coding-"):
+                sess = _coding_sessions.setdefault(session_id, {"locked": False, "workspace_dir": None})
+                if not sess.get("locked"):
+                    if sess.get("workspace_dir"):
+                        sess["locked"] = True
+                        await websocket.send_json({
+                            "type": "session_workspace",
+                            "workspace_dir": sess["workspace_dir"],
+                            "locked": True,
+                        })
+                    else:
+                        # No workspace picked yet — refuse the message
+                        # so the frontend can show the picker.
+                        await websocket.send_json({
+                            "type": "error",
+                            "content": "Pick a workspace folder in the Coding header before sending your first message.",
+                        })
+                        continue
 
             # Send user message back as confirmation
             display_content = message or "📎 Attachment sent"
@@ -1421,8 +2149,12 @@ async def chat_websocket(websocket: WebSocket, session_id: str):
 
 
 @app.post("/api/tts")
-async def tts_generate(req: GenerateRequest, background_tasks: BackgroundTasks):
-    """Generate TTS audio."""
+async def tts_generate(req: GenerateRequest, background_tasks: BackgroundTasks, session_id: str = ""):
+    """Generate TTS audio (legacy /api/tts endpoint).
+
+    Output goes to ``<session_workspace>/tts/`` if a coding session is
+    attached, otherwise to ``<app-workspace>/tts/``.
+    """
     try:
         from mini_max_mcp.client import tts_sync
         minimax_config = get_minimax_config()
@@ -1432,8 +2164,8 @@ async def tts_generate(req: GenerateRequest, background_tasks: BackgroundTasks):
         if not api_key:
             raise HTTPException(status_code=400, detail="API key not configured")
 
-        output_path = PROJECT_ROOT / "workspace" / f"tts_web_{asyncio.get_event_loop().time()}.mp3"
-        output_path.parent.mkdir(exist_ok=True)
+        out_dir = _media_output_dir(session_id, "tts")
+        output_path = out_dir / f"tts_web_{asyncio.get_event_loop().time()}.mp3"
 
         tts_model = req.settings.get("model", "speech-2.8-turbo")
 
@@ -1460,35 +2192,54 @@ async def tts_generate(req: GenerateRequest, background_tasks: BackgroundTasks):
 
 
 @app.post("/api/upload")
-async def upload_file(file: UploadFile = File(...)):
-    """Upload a file to workspace/uploads/."""
+async def upload_file(file: UploadFile = File(...), session_id: str = ""):
+    """Upload a file. Coding sessions drop it in their workspace
+    (``<coding-workspace>/uploads/``); everything else uses the fixed
+    app workspace (``<app-workspace>/uploads/``)."""
     try:
-        upload_dir = PROJECT_ROOT / "workspace" / "uploads"
+        root = _resolve_session_root(session_id or None)
+        upload_dir = root / "uploads"
         upload_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # Sanitize filename
         safe_name = Path(file.filename).name.replace(" ", "_")
         file_path = upload_dir / safe_name
-        
+
         # If file exists, append timestamp
         if file_path.exists():
             stem = file_path.stem
             suffix = file_path.suffix
             file_path = upload_dir / f"{stem}_{asyncio.get_event_loop().time():.0f}{suffix}"
-        
+
         content = await file.read()
         with open(file_path, "wb") as f:
             f.write(content)
-        
-        relative_path = str(file_path.relative_to(PROJECT_ROOT))
-        return {"success": True, "path": relative_path, "filename": file_path.name}
+
+        relative_path = str(file_path.relative_to(root))
+        return {
+            "success": True,
+            "path": relative_path,
+            "filename": file_path.name,
+            "workspace_dir": str(root),
+            "session_id": session_id or None,
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/api/image")
-async def image_generate(req: ImageRequest):
-    """Generate image."""
+async def image_generate(req: ImageRequest, session_id: str = ""):
+    """Generate image (T2I or i2i).
+
+    Both modes hit ``/v1/image_generation``:
+    - T2I:   ``model="image-01"``, no ``subject_reference``.
+    - i2i:   ``model="image-01-live"``, ``subject_reference`` populated
+             with ``[{"type": "character", "image_file": <url|base64>}]``.
+
+    Output goes to the session's workspace when a coding session is
+    attached (``<coding-workspace>/outputs/images/``), otherwise to
+    the app workspace.
+    """
     try:
         from mini_max_mcp.client import image_sync
         minimax_config = get_minimax_config()
@@ -1498,10 +2249,20 @@ async def image_generate(req: ImageRequest):
         if not api_key:
             raise HTTPException(status_code=400, detail="API key not configured")
 
-        output_path = PROJECT_ROOT / "workspace" / f"image_web_{asyncio.get_event_loop().time()}.png"
-        output_path.parent.mkdir(exist_ok=True)
-
         n = max(int(req.n or 1), 1)
+
+        # i2i requires the subject_reference list to be non-empty AND
+        # switches the model to image-01-live. If the frontend sent an
+        # empty subject_reference list, fall back to T2I rather than 400
+        # — the frontend decides which mode via the segmented control.
+        subject_reference = req.subject_reference if req.subject_reference else None
+        model = req.model or "image-01"
+        if subject_reference and model == "image-01":
+            model = "image-01-live"
+
+        suffix = "image_i2i" if subject_reference else "image_web"
+        out_dir = _media_output_dir(session_id, "images")
+        output_path = out_dir / f"{suffix}_{asyncio.get_event_loop().time():.0f}.png"
 
         success, result = image_sync(
             api_key, api_base, req.prompt,
@@ -1512,17 +2273,24 @@ async def image_generate(req: ImageRequest):
             n=n,
             prompt_optimizer=req.prompt_optimizer,
             watermark=req.watermark,
-            seed=req.seed
+            seed=req.seed,
+            model=model,
+            subject_reference=subject_reference,
         )
 
         if success:
-            # Return path relative to PROJECT_ROOT for frontend
-            rel_path = str(Path(result).relative_to(PROJECT_ROOT)).replace('\\', '/')
+            # Return path relative to the session's workspace root (coding
+            # workspace if attached, else app workspace) so the frontend
+            # can fetch it back via /api/files/raw?session_id=...&path=...
+            out_root = _resolve_session_root(session_id or None)
+            rel_path = str(Path(result).relative_to(out_root)).replace('\\', '/')
             cost = calculate_image_cost(n)
             return {
                 "success": True,
                 "file_path": rel_path,
                 "count": n,
+                "model": model,
+                "workspace_dir": str(out_root),
                 **cost,
             }
         else:
@@ -1532,7 +2300,7 @@ async def image_generate(req: ImageRequest):
 
 
 @app.post("/api/image/i2i")
-async def image_i2i_generate(req: ImageRequest):
+async def image_i2i_generate(req: ImageRequest, session_id: str = ""):
     """Generate image-to-image variation."""
     try:
         from mini_max_mcp.client import image_variations_sync
@@ -1920,11 +2688,16 @@ def _resolve_speech_audio_setting(cfg: dict) -> dict:
     }
 
 
-def _save_audio_hex(hex_str: str, audio_setting: dict, filename: str = "") -> str:
-    """Decode a hex-encoded audio payload and save to workspace/tts/.
-    Returns the relative path (for /api/files/raw + /api/files/download)."""
+def _save_audio_hex(hex_str: str, audio_setting: dict, filename: str = "", session_id: str = "") -> str:
+    """Decode a hex-encoded audio payload and save it.
+
+    Output path is relative to the session's workspace root (coding
+    workspace if attached, else app workspace) so the frontend can
+    fetch it back via ``/api/files/raw?session_id=...&path=...``.
+
+    Returns the relative path string.
+    """
     import re
-    from pathlib import Path as _P
     safe = re.sub(r"[^A-Za-z0-9._-]+", "-", (filename or "").strip()).strip("-")
     if safe and "." in safe:
         stem = safe.rsplit(".", 1)[0]
@@ -1933,8 +2706,7 @@ def _save_audio_hex(hex_str: str, audio_setting: dict, filename: str = "") -> st
     else:
         stem = f"tts_{int(asyncio.get_event_loop().time())}"
     ext = audio_setting.get("format", "mp3")
-    out_dir = PROJECT_ROOT / "workspace" / "tts"
-    out_dir.mkdir(parents=True, exist_ok=True)
+    out_dir = _media_output_dir(session_id, "tts")
     out_path = out_dir / f"{stem}.{ext}"
     if out_path.exists():
         counter = 2
@@ -1942,12 +2714,15 @@ def _save_audio_hex(hex_str: str, audio_setting: dict, filename: str = "") -> st
             counter += 1
         out_path = out_dir / f"{stem}_{counter}.{ext}"
     out_path.write_bytes(bytes.fromhex(hex_str))
-    return str(out_path.relative_to(PROJECT_ROOT)).replace("\\", "/")
+    # Relative path is to the root the caller will use to fetch it back
+    # (the app workspace by default; a coding workspace when attached).
+    return str(out_path.relative_to(out_dir.parent.parent)).replace("\\", "/")
 
 
 @app.post("/api/minimax/speech/synthesize")
-async def speech_synthesize(req: SpeechSynthesizeRequest):
-    """Single-shot T2A via /v1/t2a_v2. Saves the audio to workspace/tts/."""
+async def speech_synthesize(req: SpeechSynthesizeRequest, session_id: str = ""):
+    """Single-shot T2A via /v1/t2a_v2. Saves audio to the session's
+    ``tts/`` folder (coding workspace if attached, else app workspace)."""
     try:
         minimax_config = get_minimax_config()
         api_key = minimax_config["api_key"]
@@ -2004,7 +2779,7 @@ async def speech_synthesize(req: SpeechSynthesizeRequest):
         hex_audio = data.get("audio") or ""
         if not hex_audio:
             raise HTTPException(status_code=502, detail="T2A response missing audio data")
-        rel_path = _save_audio_hex(hex_audio, audio_setting, req.filename)
+        rel_path = _save_audio_hex(hex_audio, audio_setting, req.filename, session_id=session_id)
         return {
             "success": True,
             "file_path": rel_path,
@@ -2273,7 +3048,7 @@ async def speech_clone(req: SpeechVoiceCloneRequest):
 
 
 @app.post("/api/minimax/speech/design")
-async def speech_design(req: SpeechVoiceDesignRequest):
+async def speech_design(req: SpeechVoiceDesignRequest, session_id: str = ""):
     """Design a custom voice from a text description. Returns ``voice_id`` +
     trial audio saved as hex-decoded mp3."""
     try:
@@ -2302,7 +3077,7 @@ async def speech_design(req: SpeechVoiceDesignRequest):
         if trial:
             cfg = _load_config_dict()
             audio_setting = _resolve_speech_audio_setting(cfg)
-            trial_path = _save_audio_hex(trial, audio_setting, f"design_{result.get('voice_id','voice')}")
+            trial_path = _save_audio_hex(trial, audio_setting, f"design_{result.get('voice_id','voice')}", session_id=session_id)
         return {
             "success": True,
             "voice_id": result.get("voice_id", ""),
@@ -2627,7 +3402,23 @@ async def update_music_config(req: MusicConfigUpdate):
 
 @app.post("/api/video")
 async def video_generate(req: GenerateRequest):
-    """Generate video (async task)."""
+    """Generate video (async task).
+
+    Settings (all optional, defaults shown):
+      - model             MiniMax-Hailuo-2.3 | MiniMax-Hailuo-2.3-Fast
+      - duration          6 | 10  (seconds)
+      - resolution        768P | 1080P
+      - prompt_optimizer  bool  (auto-enhance the prompt before rendering)
+      - first_frame_image str   (URL or data URL — for image2video / sef)
+      - last_frame_image  str   (URL or data URL — for sef)
+      - subject_reference list  (list of URLs/data URLs — for s2v)
+
+    Mode is implicit from which frames are provided:
+      - text2video: prompt only
+      - image2video: prompt + first_frame_image
+      - sef:         prompt + first_frame_image + last_frame_image
+      - s2v:         prompt + subject_reference
+    """
     try:
         minimax_config = get_minimax_config()
         api_key = minimax_config["api_key"]
@@ -2639,6 +3430,10 @@ async def video_generate(req: GenerateRequest):
         video_model = req.settings.get("model", "MiniMax-Hailuo-2.3")
         resolution = req.settings.get("resolution", "768P")
         duration = int(req.settings.get("duration", 6) or 6)
+        prompt_optimizer = bool(req.settings.get("prompt_optimizer", False))
+        first_frame_image = req.settings.get("first_frame_image", "") or ""
+        last_frame_image = req.settings.get("last_frame_image", "") or ""
+        subject_reference = req.settings.get("subject_reference")  # list | None
 
         client = MiniMaxSyncClient(api_key, api_base)
         success, task_id = client.video_generate(
@@ -2646,6 +3441,10 @@ async def video_generate(req: GenerateRequest):
             model=video_model,
             duration=duration,
             resolution=resolution,
+            prompt_optimizer=prompt_optimizer,
+            first_frame_image=first_frame_image,
+            last_frame_image=last_frame_image,
+            subject_reference=subject_reference,
         )
         client.close()
 
@@ -2667,7 +3466,11 @@ async def video_generate(req: GenerateRequest):
 
 @app.get("/api/video/{task_id}")
 async def video_status(task_id: str):
-    """Check video generation status."""
+    """Check video generation status.
+
+    Returns the raw `/v1/query/video_generation` response, which includes
+    `status` (Processing | Success | Failed) and `file_id` when done.
+    """
     try:
         minimax_config = get_minimax_config()
         api_key = minimax_config["api_key"]
@@ -2682,13 +3485,96 @@ async def video_status(task_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/api/files")
-async def list_files(path: str = "workspace"):
-    """List files in a directory."""
+@app.post("/api/video/download")
+async def video_download(req: dict):
+    """Download a generated video by file_id into workspace/.
+
+    Request body: { "file_id": str, "output_path"?: str }
+
+    Returns: { success, path, error? }
+    """
     try:
-        target = PROJECT_ROOT / path
+        file_id = req.get("file_id")
+        if not file_id:
+            raise HTTPException(status_code=400, detail="file_id is required")
+
+        minimax_config = get_minimax_config()
+        api_key = minimax_config["api_key"]
+        api_base = minimax_config["api_base"]
+
+        # Default to workspace/video_<ts>.mp4 so each download is unique
+        default_path = f"workspace/video_{int(time.time())}.mp4"
+        output_path = req.get("output_path") or default_path
+
+        # Make sure it's inside PROJECT_ROOT
+        target = PROJECT_ROOT / output_path
         if not str(target).startswith(str(PROJECT_ROOT)):
-            raise HTTPException(status_code=403, detail="Access denied")
+            raise HTTPException(status_code=403, detail="output_path outside project root")
+
+        client = MiniMaxSyncClient(api_key, api_base)
+        success, result = client.video_download(file_id, str(target))
+        client.close()
+
+        if success:
+            return {"success": True, "path": output_path}
+        else:
+            return {"success": False, "error": result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# --- Files / Shell / Git endpoints (v0.5 workspace redesign) ---
+#
+# These endpoints all take an optional ``session_id`` query param. When
+# present and it identifies a coding session, paths resolve against the
+# coding workspace the user picked in the CodingPanel header. When
+# absent (or for non-coding sessions), paths resolve against the fixed
+# app workspace — which is also where media outputs / uploads live, so
+# the legacy callers (image preview, file attach, etc.) keep working
+# without changes.
+#
+# All path-traversal protection is unchanged: we still verify the
+# resolved target lives inside the chosen workspace root before
+# reading/writing/executing.
+
+def _resolve_session_root(session_id: str | None) -> Path:
+    """Return the absolute root the file endpoints should resolve paths
+    against. ``session_id`` is optional — empty string means "use the
+    app workspace" (legacy behavior)."""
+    if session_id:
+        return get_session_workspace_dir(session_id)
+    return get_app_workspace_dir()
+
+
+def _safe_join(root: Path, rel_path: str) -> Path:
+    """Join ``rel_path`` under ``root`` and reject anything that
+    escapes via ``..`` / absolute paths. Returns the resolved target."""
+    if not isinstance(rel_path, str) or not rel_path:
+        rel_path = ""
+    # Treat the literal string "." / "" as "root itself" so the
+    # frontend's default `path=workspace` still works.
+    target = (root / rel_path).resolve()
+    try:
+        target.relative_to(root.resolve())
+    except ValueError:
+        raise HTTPException(status_code=403, detail="Access denied (path escapes workspace root)")
+    return target
+
+
+@app.get("/api/files")
+async def list_files(path: str = "workspace", session_id: str = ""):
+    """List files in a directory.
+
+    Without ``session_id`` (or for non-coding sessions) lists the app
+    workspace. With a coding ``session_id`` lists that session's
+    coding workspace. The returned ``path`` is relative to that root
+    so the frontend can echo it back in subsequent calls.
+    """
+    try:
+        root = _resolve_session_root(session_id)
+        target = _safe_join(root, path)
+        if not target.exists() or not target.is_dir():
+            raise HTTPException(status_code=404, detail=f"Directory not found: {path}")
 
         entries = []
         for entry in sorted(target.iterdir(), key=lambda e: (not e.is_dir(), e.name.lower())):
@@ -2696,61 +3582,63 @@ async def list_files(path: str = "workspace"):
                 continue
             entries.append({
                 "name": entry.name,
-                "path": str(entry.relative_to(PROJECT_ROOT)),
+                "path": str(entry.relative_to(root)).replace("\\", "/"),
                 "is_dir": entry.is_dir(),
             })
-        return {"entries": entries}
+        return {
+            "entries": entries,
+            "root": str(root),
+            "workspace_dir": str(root),
+        }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/files/content")
-async def get_file_content(path: str):
-    """Get file content."""
+async def get_file_content(path: str, session_id: str = ""):
+    """Read a UTF-8 text file. Resolves against the session workspace
+    when ``session_id`` is provided, otherwise the app workspace."""
     try:
-        target = PROJECT_ROOT / path
-        if not str(target).startswith(str(PROJECT_ROOT)):
-            raise HTTPException(status_code=403, detail="Access denied")
+        root = _resolve_session_root(session_id)
+        target = _safe_join(root, path)
         if not target.is_file():
             raise HTTPException(status_code=404, detail="File not found")
-
         with open(target, 'r', encoding='utf-8') as f:
             content = f.read()
         return {"content": content, "path": path}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/files/download")
-async def download_file(path: str):
-    """Download/serve a file (for images, etc.)."""
+async def download_file(path: str, session_id: str = ""):
+    """Serve a file as an attachment (download)."""
     try:
-        target = PROJECT_ROOT / path
-        if not str(target).startswith(str(PROJECT_ROOT)):
-            raise HTTPException(status_code=403, detail="Access denied")
+        root = _resolve_session_root(session_id)
+        target = _safe_join(root, path)
         if not target.is_file():
             raise HTTPException(status_code=404, detail="File not found")
-
         import mimetypes
         media_type = mimetypes.guess_type(str(target))[0] or "application/octet-stream"
         return FileResponse(str(target), media_type=media_type, filename=target.name)
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/files/raw")
-async def get_file_raw(path: str):
-    """Serve raw file content with proper MIME type for inline display."""
+async def get_file_raw(path: str, session_id: str = ""):
+    """Serve a file inline (image/audio/video previews)."""
     try:
-        root = PROJECT_ROOT.resolve()
-        target = (PROJECT_ROOT / path).resolve()
-        try:
-            target.relative_to(root)
-        except ValueError:
-            raise HTTPException(status_code=403, detail="Access denied")
+        root = _resolve_session_root(session_id)
+        target = _safe_join(root, path)
         if not target.is_file():
             raise HTTPException(status_code=404, detail="File not found")
-
         import mimetypes
         media_type = mimetypes.guess_type(str(target))[0] or "application/octet-stream"
         return FileResponse(str(target), media_type=media_type)
@@ -2790,41 +3678,46 @@ async def list_generations():
 
 @app.post("/api/files/save")
 async def save_file(data: dict):
-    """Save file content."""
+    """Save file content into the workspace that owns this session."""
     try:
         path = data.get("path", "")
         content = data.get("content", "")
-        target = PROJECT_ROOT / path
-        if not str(target).startswith(str(PROJECT_ROOT)):
-            raise HTTPException(status_code=403, detail="Access denied")
-
+        session_id = data.get("session_id", "") or ""
+        root = _resolve_session_root(session_id)
+        target = _safe_join(root, path)
+        target.parent.mkdir(parents=True, exist_ok=True)
         with open(target, 'w', encoding='utf-8') as f:
             f.write(content)
         return {"success": True}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/api/shell")
 async def shell_command(data: dict):
-    """Execute a shell command."""
+    """Execute a shell command in the session's workspace (cwd)."""
     import subprocess
     try:
         cmd = data.get("command", "")
         if not cmd:
             return {"output": "", "error": "No command provided"}
+        session_id = data.get("session_id", "") or ""
+        cwd = str(_resolve_session_root(session_id))
         result = subprocess.run(
             cmd,
             shell=True,
             capture_output=True,
             text=True,
-            cwd=str(PROJECT_ROOT),
-            timeout=30
+            cwd=cwd,
+            timeout=30,
         )
         return {
             "output": result.stdout,
             "error": result.stderr if result.returncode != 0 else None,
-            "returncode": result.returncode
+            "returncode": result.returncode,
+            "cwd": cwd,
         }
     except subprocess.TimeoutExpired:
         return {"output": "", "error": "Command timed out"}
@@ -2833,39 +3726,42 @@ async def shell_command(data: dict):
 
 
 @app.get("/api/git/status")
-async def git_status():
-    """Get git status."""
+async def git_status(session_id: str = ""):
+    """Git status of the session's workspace (defaults to app workspace)."""
     import subprocess
     try:
+        cwd = str(_resolve_session_root(session_id))
         branch = subprocess.run(
             ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-            capture_output=True, text=True, cwd=str(PROJECT_ROOT)
+            capture_output=True, text=True, cwd=cwd,
         )
         status = subprocess.run(
             ["git", "status", "--short"],
-            capture_output=True, text=True, cwd=str(PROJECT_ROOT)
+            capture_output=True, text=True, cwd=cwd,
         )
         log = subprocess.run(
             ["git", "log", "--oneline", "-10"],
-            capture_output=True, text=True, cwd=str(PROJECT_ROOT)
+            capture_output=True, text=True, cwd=cwd,
         )
         return {
             "branch": branch.stdout.strip() if branch.returncode == 0 else None,
             "status": status.stdout.strip() if status.returncode == 0 else None,
             "log": log.stdout.strip().split("\n") if log.returncode == 0 else [],
+            "cwd": cwd,
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/git/branches")
-async def git_branches():
-    """Get all git branches."""
+async def git_branches(session_id: str = ""):
+    """List git branches in the session's workspace."""
     import subprocess
     try:
+        cwd = str(_resolve_session_root(session_id))
         result = subprocess.run(
             ["git", "branch", "-a"],
-            capture_output=True, text=True, cwd=str(PROJECT_ROOT)
+            capture_output=True, text=True, cwd=cwd,
         )
         branches = []
         if result.returncode == 0:
@@ -2877,7 +3773,7 @@ async def git_branches():
                     branches.append(line)
                 else:
                     branches.append(line)
-        return {"branches": branches}
+        return {"branches": branches, "cwd": cwd}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

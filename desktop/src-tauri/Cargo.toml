@@ -16,6 +16,10 @@ tauri-build = { version = "2.0", features = [] }
 [dependencies]
 tauri = { version = "2.1", features = [] }
 tauri-plugin-shell = "2.0"
+# Native folder picker for the CodingPanel header (v0.5 redesign).
+# Frontend calls `open({ directory: true })` from
+# `@tauri-apps/plugin-dialog` to pick a coding workspace folder.
+tauri-plugin-dialog = "2.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 

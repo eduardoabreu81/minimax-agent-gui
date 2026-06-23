@@ -61,7 +61,15 @@
     "create": "Criar",
     "cancel": "Cancelar",
     "workingTreeClean": "Árvore de trabalho limpa",
-    "noCommits": "Nenhum commit ainda"
+    "noCommits": "Nenhum commit ainda",
+    "workspace": {
+      "openFolder": "Abrir pasta…",
+      "pickFolder": "Escolha a pasta do projeto que o agente vai ler/escrever",
+      "changeFolder": "Trocar pasta…",
+      "opening": "Abrindo…",
+      "recent": "Recentes",
+      "removeFromRecent": "Remover dos recentes"
+    }
   },
   "tasks": {
     "title": "Quadro de Tarefas",
@@ -92,7 +100,11 @@
     "descriptionPlaceholder": "Descrição...",
     "save": "Salvar",
     "create": "Criar",
-    "cancel": "Cancelar"
+    "cancel": "Cancelar",
+    "agentBadge": "Criada pelo agente",
+    "loading": "Carregando...",
+    "errorLoad": "Falha ao carregar tarefas",
+    "retry": "Tentar novamente"
   },
   "settings": {
     "title": "Configurações",
@@ -148,7 +160,9 @@
     "matrixRainDesc": "Fundo animado de chuva de código",
     "maxStepsLabel": "Máximo de passos por requisição",
     "maxStepsHint": "Número máximo de passos de raciocínio por requisição",
-    "workspaceDir": "Diretório do workspace",
+    "appWorkspaceDir": "Local dos dados do app",
+    "appWorkspaceHint": "Onde o MiniMax Studio guarda conversas, quadro de tarefas, gerações de mídia e configurações. As sessões de coding escolhem a própria pasta do projeto no header — esta aqui é fixa.",
+    "appWorkspaceLoading": "carregando…",
     "apiBase": "URL base da API",
     "apiBaseHint": "Deixe vazio para usar o endpoint MiniMax padrão da região selecionada. Defina uma URL customizada apenas se estiver roteando por um proxy compatível com Anthropic.",
     "systemPrompt": "Prompt do sistema",

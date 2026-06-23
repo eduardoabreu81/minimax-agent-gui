@@ -3,12 +3,19 @@ import { useTranslation } from 'react-i18next'
 import { Music, Loader2, Save, Wand2, Guitar, AudioLines, Check, Coins, FileAudio, Upload, Disc3, X, Link2, AlertCircle, Mic, NotebookPen, Copy, Sparkles } from 'lucide-react'
 import { useSessionProtection } from '../../hooks/useSessionProtection'
 import RecentGenerations from './RecentGenerations'
+import ModeTabBar from '../shared/ModeTabBar'
 import { apiFetch } from '../../lib/api.js'
 
 // Phase 1: only the two music-2.6 variants. Cover (music-cover / -free)
 // and lyrics generation come in Phase 2/3 and live on separate panels.
 // Dropdown keeps the row compact — see how the chat model picker is
 // laid out in SettingsPanel.
+const MUSIC_MODES = [
+  { id: 'generate', label: 'Compose', icon: Music },
+  { id: 'cover',    label: 'Cover',   icon: Disc3 },
+  { id: 'lyrics',   label: 'Lyrics',  icon: NotebookPen },
+]
+
 const MUSIC_MODELS = [
   { id: 'music-2.6', label: 'Music 2.6', descKey: 'music.bestQuality' },
   { id: 'music-2.6-free', label: 'Music 2.6 Free', descKey: 'music.unlimitedDefault' },
@@ -533,57 +540,35 @@ export default function MusicPanel() {
   }
 
   return (
-    // Two-column layout (form-left 380px + tracks-right flex-1). The mockup
-    // is the visual source for the panel shape; the field set (model,
-    // filename, prompt, lyrics + 2 checkboxes) is from our own Phase 1 spec
-    // because the API requires prompt/model and the user wants the
-    // Instrumental as a checkbox (not a toggle button). All state, fetch
+    // Two-column layout: full-width top bar (icon + title + ModeTabBar)
+    // at the very top, then form-left 380px + tracks-right flex-1 below.
+    // The mockup is the visual source for the panel shape; the field set
+    // is from our own Phase 1 spec because the API requires prompt/model
+    // and the user wants the Instrumental as a checkbox. All state, fetch
     // and validation logic above stays untouched.
-    <div className="flex h-full bg-card">
+    <div className="flex flex-col h-full bg-card">
+      {/* ============ TOP BAR (full-width) ============ */}
+      <div className="h-[56px] shrink-0 flex items-center justify-between px-[22px] border-b border-border">
+        {/* Left: icon + title (mockup L622-628) */}
+        <div className="flex items-center gap-[11px] min-w-0">
+          <div className="w-[34px] h-[34px] rounded-[9px] bg-primary/14 flex items-center justify-center text-primary shrink-0">
+            <Music size={18} />
+          </div>
+          <div className="min-w-0">
+            <div className="text-[15px] font-semibold truncate">Music</div>
+            <div className="text-[11.5px] text-muted-foreground truncate">Lyrics &amp; prompt to song</div>
+          </div>
+        </div>
+        {/* Right: sub-mode pills (mockup L629-633) */}
+        <div className="shrink-0">
+          <ModeTabBar modes={MUSIC_MODES} active={mode} onChange={setMode} />
+        </div>
+      </div>
+
+      {/* ============ COLUMNS (form-left 380px + tracks-right flex-1) ============ */}
+      <div className="flex flex-1 min-h-0">
       {/* ============ FORM COLUMN (left, 380px) ============ */}
       <div className="w-[380px] flex-none flex flex-col border-r border-border overflow-y-auto">
-        {/* Per-panel header — icon tile + title + short subtitle, matches
-            the mockup's per-panel header pattern (34px icon box, 15px
-            title, 11.5px muted-foreground subtitle). */}
-        <div className="px-[22px] pt-[22px] pb-0 shrink-0">
-          <div className="flex items-center gap-[10px]">
-            <div className="w-[34px] h-[34px] rounded-[9px] bg-primary/14 flex items-center justify-center text-primary">
-              <Music size={18} />
-            </div>
-            <div>
-              <div className="text-[15px] font-semibold">Music</div>
-              <div className="text-[11.5px] text-muted-foreground">Lyrics &amp; prompt to song</div>
-            </div>
-          </div>
-        </div>
-
-        {/* Mode toggle — Generate vs Cover. Peer buttons matching the
-            Tabs pattern used elsewhere (e.g. chat/code panel). Cover
-            shares the same audio_setting / filename / tracks column
-            but switches the form fields below. */}
-        <div className="px-[22px] pt-[18px] shrink-0">
-          <div className="flex items-center bg-surface rounded-lg border border-border p-0.5">
-            <button
-              onClick={() => setMode('generate')}
-              className={`flex-1 px-3 py-1.5 rounded text-[12px] font-medium transition-colors flex items-center justify-center gap-1.5 ${mode === 'generate' ? 'bg-primary text-white' : 'text-muted-foreground hover:text-foreground'}`}
-            >
-              <Music size={12} /> {t('music.modeGenerate') || 'Generate'}
-            </button>
-            <button
-              onClick={() => setMode('cover')}
-              className={`flex-1 px-3 py-1.5 rounded text-[12px] font-medium transition-colors flex items-center justify-center gap-1.5 ${mode === 'cover' ? 'bg-primary text-white' : 'text-muted-foreground hover:text-foreground'}`}
-            >
-              <Disc3 size={12} /> {t('music.modeCover') || 'Cover'}
-            </button>
-            <button
-              onClick={() => setMode('lyrics')}
-              className={`flex-1 px-3 py-1.5 rounded text-[12px] font-medium transition-colors flex items-center justify-center gap-1.5 ${mode === 'lyrics' ? 'bg-primary text-white' : 'text-muted-foreground hover:text-foreground'}`}
-            >
-              <NotebookPen size={12} /> {t('music.modeLyrics') || 'Lyrics'}
-            </button>
-          </div>
-        </div>
-
         {/* Form fields — vertical stack, gap 18px, padding 18px 22px */}
         <div className="px-[22px] py-[18px] flex flex-col gap-[18px]">
           {/* ============ Generate (Phase 1) fields ============ */}
@@ -1152,6 +1137,7 @@ export default function MusicPanel() {
             emptyMessage={t('music.noGenerated')}
           />
         </div>
+      </div>
       </div>
     </div>
   )

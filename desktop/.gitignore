@@ -23,6 +23,10 @@ src-tauri/gen/
 # PyInstaller bundles (built by backend scripts)
 src-tauri/binaries/
 
+# Design reference working material (mockups, screenshots, support.js)
+# Kept locally as visual reference for panel layouts; not part of the installable app.
+design-reference/
+
 # TypeScript build cache
 *.tsbuildinfo
 vite.config.d.ts

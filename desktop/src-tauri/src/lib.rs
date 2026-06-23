@@ -453,6 +453,9 @@ fn shutdown_backend(app: &AppHandle) {
 pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        // Native folder picker used by the CodingPanel header to pick a
+        // per-session coding workspace. See WorkspacePicker.jsx.
+        .plugin(tauri_plugin_dialog::init())
         .manage(BackendProcess(Mutex::new(None)))
         .manage(BackendJob(Mutex::new(None)))
         .invoke_handler(tauri::generate_handler![

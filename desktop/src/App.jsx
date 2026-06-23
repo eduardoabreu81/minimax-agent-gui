@@ -4,8 +4,10 @@ import { useTheme } from './context/ThemeContext'
 import { AgentActivityProvider } from './context/AgentActivityContext'
 import { SessionTokensProvider } from './context/SessionTokensContext'
 import { hasAnyRisk } from './hooks/useSessionProtection'
+import { useBackendReady } from './hooks/useBackendReady'
 import Sidebar from './components/Sidebar'
 import Titlebar from './components/shell/Titlebar'
+import BackendLoader from './components/shell/BackendLoader'
 import ChatPanel from './components/chat/ChatPanel'
 import MatrixRain from './components/effects/MatrixRain'
 import SpeechPanel from './components/media/SpeechPanel'
@@ -20,7 +22,43 @@ import Onboarding from './components/onboarding/Onboarding'
 import CommandPalette from './components/command-palette/CommandPalette'
 import StatusBar from './components/shared/StatusBar'
 
+// App — healthcheck gate.
+//
+// During `npm run tauri:dev` Vite serves the page in ~300ms but
+// backend.exe takes 1-2s to bind :8765. If the real app shell mounts
+// immediately, every panel fires off `fetch('/api/...')` calls that hit
+// a closed port. So we show <BackendLoader /> until `/api/config`
+// responds 2xx (see useBackendReady.js — timeout matches lib.rs
+// HEALTHCHECK_TIMEOUT = 30s).
+//
+// IMPORTANT: this component must call the SAME number of hooks on every
+// render — that's why we extract the rest into <AppShell /> below. If
+// we'd inlined `useState(activeTab)` etc. behind an early return here,
+// React would explode with "Rendered more hooks than during the previous
+// render" on the render where `backend.ready` flips true.
 function App() {
+  const backend = useBackendReady()
+
+  if (!backend.ready) {
+    return (
+      <BackendLoader
+        status={backend.status}
+        error={backend.error}
+        attempt={backend.attempt}
+        onRetry={backend.retry}
+      />
+    )
+  }
+
+  return <AppShell />
+}
+
+// AppShell — the real application tree.
+//
+// Only mounts once `backend.ready` is true, so all hooks below are
+// called for the first time at that moment and consistently on every
+// subsequent render. Splitting this out keeps `App` hook-count-stable.
+function AppShell() {
   const { t } = useTranslation()
   const { isDark, toggleDark, theme, matrixEffect } = useTheme()
   const [activeTab, setActiveTab] = useState('chat')

@@ -61,7 +61,15 @@
     "create": "생성",
     "cancel": "취소",
     "workingTreeClean": "작업 트리가 깨끗함",
-    "noCommits": "커밋이 없습니다"
+    "noCommits": "커밋이 없습니다",
+    "workspace": {
+      "openFolder": "폴더 열기…",
+      "pickFolder": "에이전트가 읽고 쓸 프로젝트 폴더 선택",
+      "changeFolder": "폴더 변경…",
+      "opening": "여는 중…",
+      "recent": "최근 사용",
+      "removeFromRecent": "최근 사용에서 제거"
+    }
   },
   "tasks": {
     "title": "작업 보드",
@@ -87,12 +95,16 @@
     "addSubtask": "하위 작업 추가...",
     "delete": "삭제",
     "tasksCount": "작업 {count}개",
-    "toggleSort": "정렬 순서 전환",
+"toggleSort": "정렬 순서 전환",
     "taskTitlePlaceholder": "작업 제목...",
     "descriptionPlaceholder": "설명...",
     "save": "저장",
-    "create": "생성",
-    "cancel": "취소"
+    "create": "만들기",
+    "cancel": "취소",
+    "agentBadge": "에이전트가 생성",
+    "loading": "불러오는 중...",
+    "errorLoad": "작업을 불러오지 못했습니다",
+    "retry": "다시 시도"
   },
   "settings": {
     "title": "설정",
@@ -140,7 +152,9 @@
     "matrixRainDesc": "코드 비의 애니메이션 배경",
     "maxStepsLabel": "요청당 최대 단계 수",
     "maxStepsHint": "요청당 추론 단계의 최대 수",
-    "workspaceDir": "워크스페이스 디렉터리",
+    "appWorkspaceDir": "앱 데이터 위치",
+    "appWorkspaceHint": "MiniMax Studio가 대화, 작업 보드, 미디어 생성 및 설정을 저장하는 위치입니다. 코딩 세션은 헤더에서 자체 프로젝트 폴더를 선택합니다 — 여기는 고정되어 있습니다.",
+    "appWorkspaceLoading": "불러오는 중…",
     "apiBase": "API 기본 URL",
     "apiBaseHint": "선택한 지역의 기본 MiniMax 엔드포인트를 사용하려면 비워 두세요. Anthropic 호환 프록시를 통해 라우팅하는 경우에만 사용자 지정 URL을 설정하세요.",
     "systemPrompt": "시스템 프롬프트",
