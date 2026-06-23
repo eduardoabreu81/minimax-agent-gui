@@ -4,7 +4,7 @@ import {
   Globe, Moon, Sun, Key, Cpu, Shield, Keyboard,
   Info, Check, AlertCircle, Save, RotateCcw, Eye, EyeOff,
   MapPin, BarChart3, Lock, Unlock, Search, Monitor, Palette, User, Trash2, Pencil, Activity, Server,
-  Boxes, Sparkles, Github, Sliders, Loader2, Brain
+  Boxes, Sparkles, Github, Sliders, Loader2, Brain, ExternalLink
 } from 'lucide-react'
 import { useTheme } from '../../context/ThemeContext'
 import { apiFetch } from '../../lib/api.js'
@@ -470,8 +470,14 @@ export default function SettingsPanel() {
   // rail entry "Context" that opens a fullscreen modal (see
   // components/agent-context/ContextModal.jsx). This keeps the
   // Settings page compact and the two related concerns together.
+  //
+  // The `appearance: 'button'` field marks entries that LOOK like
+  // menu items but are actually actions (open a modal, navigate
+  // elsewhere). The rail renderer gives them a slight border + tint
+  // + trailing ExternalLink icon so the user can tell at a glance
+  // "this opens something, it doesn't just scroll".
   const railSections = [
-    { id: 'context',             label: t('agentContext.contextLabel') || 'Context', icon: Brain, action: 'openContextModal' },
+    { id: 'context', label: t('agentContext.contextLabel') || 'Context', icon: Brain, action: 'openContextModal', appearance: 'button' },
     { id: 'appearance',          label: t('settings.appearance'),          icon: Palette },
     { id: 'default-model',       label: t('settings.defaultModel'),        icon: Cpu },
     { id: 'agent',               label: t('settings.agent'),               icon: Shield },
@@ -519,21 +525,46 @@ export default function SettingsPanel() {
           const Icon = s.icon
           // Sections with `action` (currently only Context) don't
           // participate in scroll-spy — they open a modal instead.
-          const active = !s.action && activeSection === s.id
+          // The `appearance: 'button'` flag gives them a slight
+          // visual lift (tinted bg + border + ExternalLink icon) so
+          // the user can tell they're actions, not scroll targets,
+          // while still keeping the same layout as menu items.
+          const isAction = !!s.action
+          const isButton = s.appearance === 'button'
+          const active = !isAction && activeSection === s.id
           return (
             <button
               key={s.id}
               type="button"
               onClick={() => handleRailClick(s)}
-              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-[8px] text-[12.5px] transition-colors text-left ${
-                active
-                  ? 'bg-primary/10 text-primary font-medium'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-surface'
-              }`}
+              className={
+                isButton
+                  ? `
+                      w-full flex items-center gap-2.5 px-3 py-2 rounded-[8px]
+                      text-[12.5px] transition-colors text-left
+                      bg-primary/5 border border-primary/20
+                      text-foreground font-medium
+                      hover:bg-primary/10 hover:border-primary/40
+                    `
+                  : `w-full flex items-center gap-2.5 px-3 py-2 rounded-[8px] text-[12.5px] transition-colors text-left ${
+                      active
+                        ? 'bg-primary/10 text-primary font-medium'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-surface'
+                    }`
+              }
             >
               {Icon && <Icon size={14} aria-hidden="true" />}
               <span className="truncate flex-1">{s.label}</span>
-              {active && <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" aria-hidden="true" />}
+              {isButton && (
+                <ExternalLink
+                  size={12}
+                  className="text-muted-foreground shrink-0"
+                  aria-hidden="true"
+                />
+              )}
+              {!isButton && active && (
+                <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" aria-hidden="true" />
+              )}
             </button>
           )
         })}
