@@ -169,3 +169,106 @@ describe('StatusBar ContextChip — gradient + plan bar', () => {
     expect(screen.getByTitle('Context window & plan')).toBeInTheDocument()
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Per-source token breakdown — renders "Breakdown by source" sub-section
+// when bucket.lastBySource is present (sent by the backend in the WS
+// `usage` event's `by_source` field).
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('StatusBar ContextChip — per-source breakdown', () => {
+  it('hides the breakdown when bucket has no lastBySource', async () => {
+    mockUseSessionTokens.mockReturnValue({
+      sessions: {
+        'sess-1': {
+          lastModel: 'MiniMax-M3',
+          lastTurnInput: 50_000,
+          input_tokens: 50_000,
+          output_tokens: 0,
+          turnCount: 3,
+          lastBySource: null,
+        },
+      },
+      activeSessionId: 'sess-1',
+    })
+    render(<StatusBar model="MiniMax-M3" setModel={vi.fn()} thinkingEnabled={false} setThinkingEnabled={vi.fn()} supportsThinking={true} />)
+    // Open the popover (the popover renders async, so use findAllByText)
+    screen.getByTitle('Context window & plan').click()
+    // Wait for the popover to render (Plan usage is the second
+    // section, always present when open).
+    await screen.findByText('Plan usage')
+    expect(screen.queryByText(/Breakdown by source/i)).toBeNull()
+  })
+
+  it('renders the breakdown when bucket.lastBySource is present', async () => {
+    mockUseSessionTokens.mockReturnValue({
+      sessions: {
+        'sess-1': {
+          lastModel: 'MiniMax-M3',
+          lastTurnInput: 50_000,
+          input_tokens: 50_000,
+          output_tokens: 0,
+          turnCount: 3,
+          lastBySource: {
+            system: 1000,
+            skills: 80,
+            tools: 200,
+            messages: 3720,
+            mcp_deferred: 0,
+            total: 5000,
+          },
+        },
+      },
+      activeSessionId: 'sess-1',
+    })
+    render(<StatusBar model="MiniMax-M3" setModel={vi.fn()} thinkingEnabled={false} setThinkingEnabled={vi.fn()} supportsThinking={true} />)
+    // Open the popover
+    screen.getByTitle('Context window & plan').click()
+    // Wait for the popover to render
+    await screen.findByText('Plan usage')
+    // Section header + all 5 row labels
+    expect(screen.getByText(/Breakdown by source/i)).toBeInTheDocument()
+    expect(screen.getByText('Messages')).toBeInTheDocument()
+    expect(screen.getByText('System')).toBeInTheDocument()
+    expect(screen.getByText('Skills')).toBeInTheDocument()
+    expect(screen.getByText('Tools')).toBeInTheDocument()
+    expect(screen.getByText('MCP deferred')).toBeInTheDocument()
+  })
+
+  it('computes correct percentages for each source', async () => {
+    mockUseSessionTokens.mockReturnValue({
+      sessions: {
+        'sess-1': {
+          lastModel: 'MiniMax-M3',
+          lastTurnInput: 50_000,
+          input_tokens: 50_000,
+          output_tokens: 0,
+          turnCount: 3,
+          lastBySource: {
+            system: 100,    // 10%
+            skills: 50,     // 5%
+            tools: 50,      // 5%
+            messages: 800,  // 80%
+            mcp_deferred: 0,
+            total: 1000,
+          },
+        },
+      },
+      activeSessionId: 'sess-1',
+    })
+    render(<StatusBar model="MiniMax-M3" setModel={vi.fn()} thinkingEnabled={false} setThinkingEnabled={vi.fn()} supportsThinking={true} />)
+    screen.getByTitle('Context window & plan').click()
+    // Wait for popover + breakdown
+    await screen.findByText(/Breakdown by source/i)
+
+    // Each row shows "NN%". Messages 80%, System 10%, Skills/Tools 5%,
+    // MCP deferred 0%. Assert by reading the document text.
+    const breakdown = screen.getByText(/Breakdown by source/i).parentElement
+    expect(breakdown).toBeTruthy()
+    const text = breakdown.parentElement.textContent
+    expect(text).toMatch(/80%/)     // Messages
+    expect(text).toMatch(/10%/)     // System
+    expect(text).toMatch(/5%/)      // Skills + Tools
+    expect(text).toMatch(/0%/)      // MCP deferred
+  })
+})
