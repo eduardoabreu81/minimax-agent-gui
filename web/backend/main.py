@@ -1006,6 +1006,13 @@ Be concise, friendly, and helpful."""
             tools=tools,
             max_steps=self.config.get("agent", {}).get("max_steps", 50),
             workspace_dir=str(workspace_path),
+            # Auto-compact thresholds — passed through from config.yaml
+            # `agent:` block. Defaults match the spec (warn 50 / auto 80 /
+            # force 90) so callers that don't set them still get sensible
+            # behavior. 90% safety net is never overridable by the toggle.
+            auto_compact=self.config.get("agent", {}).get("auto_compact", True),
+            compact_at_pct=float(self.config.get("agent", {}).get("compact_at_pct", 0.8)),
+            force_compact_at_pct=float(self.config.get("agent", {}).get("force_compact_at_pct", 0.9)),
         )
 
         # Restore prior conversation context from the persisted JSON so
@@ -1263,6 +1270,15 @@ async def get_config():
             "model": config.get("model", "MiniMax-M3") if isinstance(config, dict) else "MiniMax-M3",
             "max_steps": config.get("max_steps", 50) if isinstance(config, dict) else 50,
             "workspace_dir": config.get("workspace_dir", "") if isinstance(config, dict) else "",
+            # Context-window auto-compact thresholds — exposed to
+            # frontend so the warning banner can show the right tier
+            # (50/80/90) and reflect the toggle state. Defaults match
+            # the spec; Advanced Settings modal will let users override
+            # auto_compact + compact_at_pct but force_compact_at_pct is
+            # server-enforced safety net and not user-editable.
+            "auto_compact": config.get("auto_compact", True) if isinstance(config, dict) else True,
+            "compact_at_pct": float(config.get("compact_at_pct", 0.8)) if isinstance(config, dict) else 0.8,
+            "force_compact_at_pct": float(config.get("force_compact_at_pct", 0.9)) if isinstance(config, dict) else 0.9,
         },
         "app_workspace_dir": str(get_app_workspace_dir()),
         "tts": config.get("tts", {}) if isinstance(config, dict) else {},
@@ -2595,6 +2611,43 @@ async def chat_websocket(websocket: WebSocket, session_id: str):
         while True:
             data = await websocket.receive_json()
 
+            # Handle manual context-compact request from the frontend
+            # (triggered by the [Compact] button in the warning banner).
+            # Runs _summarize_messages synchronously, then re-emits a
+            # `usage` event with the post-compact totals so the StatusBar
+            # updates without waiting for the next LLM call.
+            if data.get("type") == "compact":
+                try:
+                    before = agent.api_total_tokens or 0
+                    await agent._summarize_messages()
+                    after = agent.api_total_tokens or 0
+                    last_usage = getattr(agent, "last_usage", None)
+                    effective_model = (
+                        data.get("model")
+                        or getattr(agent.llm, "model", None)
+                    )
+                    await websocket.send_json({
+                        "type": "compact_done",
+                        "before_tokens": before,
+                        "after_tokens": after,
+                        "model": effective_model,
+                    })
+                    # Re-emit usage so the StatusBar reflects the drop
+                    if last_usage:
+                        await websocket.send_json({
+                            "type": "usage",
+                            "usage": last_usage,
+                            "model": effective_model,
+                        })
+                    _logger.info(f"[compact] session={session_id} {before}->{after} model={effective_model}")
+                except Exception as compact_err:
+                    _logger.error(f"[compact] session={session_id} failed: {compact_err}")
+                    await websocket.send_json({
+                        "type": "compact_failed",
+                        "detail": str(compact_err),
+                    })
+                continue
+
             # Handle skill activation
             if data.get("type") == "activate_skill":
                 skill_name = data.get("skill")
@@ -2734,11 +2787,22 @@ async def chat_websocket(websocket: WebSocket, session_id: str):
             try:
                 agent_dir_daily = get_app_workspace_dir() / ".agent"
                 if display_content and display_content.strip():
-                    append_daily_turn(
+                    daily_path = append_daily_turn(
                         agent_dir_daily,
                         "user",
                         display_content,
                     )
+                    # Tell the frontend the daily log changed so any open
+                    # ContextModal / DocViewer / status widget can refresh
+                    # without the user re-opening it. date comes from the
+                    # filename (YYYY-MM-DD.md) so the client can match the
+                    # exact doc it's displaying.
+                    if daily_path and daily_path.name:
+                        await websocket.send_json({
+                            "type": "daily_updated",
+                            "date": daily_path.stem,
+                            "path": str(daily_path),
+                        })
             except Exception as e:
                 _logger.warning(f"Daily append (user) failed: {e}")
 
@@ -2908,12 +2972,20 @@ async def chat_websocket(websocket: WebSocket, session_id: str):
                     # `display_content` is known), so each user/agent
                     # pair becomes two blocks separated by `---`.
                     if result and result.strip():
-                        append_daily_turn(
+                        daily_path = append_daily_turn(
                             agent_dir_daily,
                             "assistant",
                             result,
                             thinking=full_thinking,
                         )
+                        # Companion event to the user-block emit above.
+                        # Frontend coalesces the two into a single refresh.
+                        if daily_path and daily_path.name:
+                            await websocket.send_json({
+                                "type": "daily_updated",
+                                "date": daily_path.stem,
+                                "path": str(daily_path),
+                            })
                 except Exception as e:
                     _logger.warning(f"Daily append (assistant) failed: {e}")
             except Exception as e:
@@ -4332,8 +4404,15 @@ def _safe_join(root: Path, rel_path: str) -> Path:
     escapes via ``..`` / absolute paths. Returns the resolved target."""
     if not isinstance(rel_path, str) or not rel_path:
         rel_path = ""
-    # Treat the literal string "." / "" as "root itself" so the
-    # frontend's default `path=workspace` still works.
+    # Treat the literal string "." / "" / root's own basename as
+    # "root itself" so the frontend's default `path=workspace` (and
+    # equivalent) resolve to root instead of ``root/workspace`` — which
+    # would 404. The basename match is scoped to the resolved root, so
+    # a coding-session subfolder named the same as its own root is also
+    # covered; users can't accidentally escape because the resulting
+    # rel_path is empty and resolves to root exactly.
+    if rel_path == "." or rel_path == root.name:
+        rel_path = ""
     target = (root / rel_path).resolve()
     try:
         target.relative_to(root.resolve())
