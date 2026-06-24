@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+import uuid
 from pathlib import Path
 from time import perf_counter
 from typing import Optional
@@ -60,6 +61,7 @@ class Agent:
         auto_compact: bool = True,
         compact_at_pct: float = 0.8,
         force_compact_at_pct: float = 0.9,
+        session_id: Optional[str] = None,
     ):
         self.llm = llm_client
         self.tools = {tool.name: tool for tool in tools}
@@ -68,6 +70,11 @@ class Agent:
         self.auto_compact = auto_compact
         self.compact_at_pct = compact_at_pct
         self.force_compact_at_pct = force_compact_at_pct
+        # Optional session identifier — used for structured logging of
+        # auto-compact events so we can correlate them with the WS
+        # session. Set externally by SessionManager (main.py) when the
+        # agent is bound to a WebSocket.
+        self.session_id = session_id
         # Resolve the model's context window from the LLM client so pct
         # checks are model-aware. Falls back to token_limit if the client
         # doesn't expose the map (e.g. OpenAI client — it doesn't track
@@ -216,6 +223,12 @@ class Agent:
         - API reported total_tokens / model_context_limit >= force_compact_at_pct
           (90% safety net — ALWAYS triggers, even if user disabled the toggle)
         - Legacy absolute-token floor (token_limit=80K default) for back-compat
+
+        Emits structured log events via `_log_compact_event` (JSON-encoded,
+        one line per state transition) so we can dashboard / post-process
+        compact history without grep-parsing f-strings. Each call gets a
+        unique `compact_id` shared by the `started` and `completed` (or
+        `failed`) events for correlation.
         """
         # Skip check if we just completed a summary (wait for next LLM call to update api_total_tokens)
         if self._skip_next_token_check:
@@ -250,12 +263,34 @@ class Agent:
 
         should_summarize = force_compact or auto_compact_due or legacy_floor
 
-        # If neither exceeded, no summary needed
+        # If neither exceeded, no summary needed — no log either, so
+        # silent sessions don't generate noise.
         if not should_summarize:
             return
 
-        _logger.debug(f"Token usage - Local estimate: {estimated_tokens} ({estimated_pct:.1%}), API reported: {self.api_total_tokens} ({api_pct:.1%}), Limit: {limit} | auto={self.auto_compact} compact_at={self.compact_at_pct:.0%} force_at={self.force_compact_at_pct:.0%}")
-        _logger.debug("Triggering message history summarization...")
+        # Determine *which* trigger fired so the log explains the reason
+        # (force wins over auto wins over legacy when multiple are true).
+        if force_compact:
+            compact_reason = "force"
+        elif auto_compact_due:
+            compact_reason = "auto"
+        else:
+            compact_reason = "legacy"
+
+        # Capture pre-summary state for the log + delta math.
+        before_tokens = self.api_total_tokens
+        pct_before = api_pct
+        compact_id = uuid.uuid4().hex[:12]
+
+        self._log_compact_event(
+            "started",
+            compact_id=compact_id,
+            triggered_by="backend",
+            compact_reason=compact_reason,
+            before_tokens=before_tokens,
+            pct_before=round(pct_before, 4),
+            model_context_limit=limit,
+        )
 
         # Find all user message indices (skip system prompt)
         user_indices = [i for i, msg in enumerate(self.messages) if msg.role == "user" and i > 0]
@@ -263,49 +298,103 @@ class Agent:
         # Need at least 1 user message to perform summary
         if len(user_indices) < 1:
             _logger.warning("Insufficient messages, cannot summarize")
+            self._log_compact_event(
+                "skipped",
+                compact_id=compact_id,
+                triggered_by="backend",
+                reason="insufficient_messages",
+            )
             return
 
         # Build new message list
         new_messages = [self.messages[0]]  # Keep system prompt
         summary_count = 0
 
-        # Iterate through each user message and summarize the execution process after it
-        for i, user_idx in enumerate(user_indices):
-            # Add current user message
-            new_messages.append(self.messages[user_idx])
+        try:
+            # Iterate through each user message and summarize the execution process after it
+            for i, user_idx in enumerate(user_indices):
+                # Add current user message
+                new_messages.append(self.messages[user_idx])
 
-            # Determine message range to summarize
-            # If last user, go to end of message list; otherwise to before next user
-            if i < len(user_indices) - 1:
-                next_user_idx = user_indices[i + 1]
-            else:
-                next_user_idx = len(self.messages)
+                # Determine message range to summarize
+                # If last user, go to end of message list; otherwise to before next user
+                if i < len(user_indices) - 1:
+                    next_user_idx = user_indices[i + 1]
+                else:
+                    next_user_idx = len(self.messages)
 
-            # Extract execution messages for this round
-            execution_messages = self.messages[user_idx + 1 : next_user_idx]
+                # Extract execution messages for this round
+                execution_messages = self.messages[user_idx + 1 : next_user_idx]
 
-            # If there are execution messages in this round, summarize them
-            if execution_messages:
-                summary_text = await self._create_summary(execution_messages, i + 1)
-                if summary_text:
-                    summary_message = Message(
-                        role="user",
-                        content=f"[Assistant Execution Summary]\n\n{summary_text}",
-                    )
-                    new_messages.append(summary_message)
-                    summary_count += 1
+                # If there are execution messages for this round, summarize them
+                if execution_messages:
+                    summary_text = await self._create_summary(execution_messages, i + 1)
+                    if summary_text:
+                        summary_message = Message(
+                            role="user",
+                            content=f"[Assistant Execution Summary]\n\n{summary_text}",
+                        )
+                        new_messages.append(summary_message)
+                        summary_count += 1
 
-        # Replace message list
-        self.messages = new_messages
+            # Replace message list
+            self.messages = new_messages
 
-        # Skip next token check to avoid consecutive summary triggers
-        # (api_total_tokens will be updated after next LLM call)
-        self._skip_next_token_check = True
+            # Skip next token check to avoid consecutive summary triggers
+            # (api_total_tokens will be updated after next LLM call)
+            self._skip_next_token_check = True
 
-        new_tokens = self._estimate_tokens()
-        _logger.info(f"Summary completed, local tokens: {estimated_tokens} to {new_tokens}")
-        _logger.debug(f"Structure: system + {len(user_indices)} user messages + {summary_count} summaries")
-        _logger.debug("Note: API token count will update on next LLM call")
+            after_tokens = self.api_total_tokens
+            pct_after = (after_tokens / limit) if limit > 0 else 0
+            self._log_compact_event(
+                "completed",
+                compact_id=compact_id,
+                triggered_by="backend",
+                compact_reason=compact_reason,
+                before_tokens=before_tokens,
+                after_tokens=after_tokens,
+                pct_before=round(pct_before, 4),
+                pct_after=round(pct_after, 4),
+                delta_tokens=before_tokens - after_tokens,
+                delta_pct=round(pct_before - pct_after, 4),
+                summaries_created=summary_count,
+            )
+
+            new_tokens = self._estimate_tokens()
+            _logger.debug(f"Structure: system + {len(user_indices)} user messages + {summary_count} summaries")
+            _logger.debug("Note: API token count will update on next LLM call")
+            _logger.debug(f"Local tokens: {estimated_tokens} → {new_tokens}")
+        except Exception as exc:
+            self._log_compact_event(
+                "failed",
+                compact_id=compact_id,
+                triggered_by="backend",
+                compact_reason=compact_reason,
+                before_tokens=before_tokens,
+                pct_before=round(pct_before, 4),
+                error=str(exc),
+                error_type=type(exc).__name__,
+            )
+            raise
+
+    def _log_compact_event(self, event, **fields):
+        """Emit a structured compact log line (JSON-encoded, one line).
+
+        The frontend (WS `compact` handler in main.py) and the backend
+        (this method's auto-compact path) both trigger summarization. This
+        helper unifies the log format so dashboards can ingest compact
+        history without grep-parsing f-strings. `event` is one of
+        ``started`` / ``completed`` / ``failed`` / ``skipped``.
+        ``compact_id`` is always echoed (when present) so the two events
+        for the same call can be correlated downstream.
+        """
+        payload = {
+            "event": event,
+            "session_id": self.session_id,
+            "model": getattr(self.llm, "model", None),
+            **{k: v for k, v in fields.items() if k != "event"},
+        }
+        _logger.info(json.dumps(payload))
 
     async def _create_summary(self, messages: list[Message], round_num: int) -> str:
         """Create summary for one execution round
