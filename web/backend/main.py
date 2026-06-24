@@ -1147,8 +1147,17 @@ class SessionManager:
         # then, the agent writes freely (mirrors Hermes default).
         try:
             from mini_agent.tools import MemoryTool
-            from mini_agent.config import get_minimax_config
-            cfg = get_minimax_config()
+            # NOTE: we deliberately import as ``get_minimax_config_from_module``
+            # instead of ``get_minimax_config``. The local ``get_minimax_config``
+            # function in this file (defined earlier) would be SHADOWED by
+            # the same-named import — and the local name becomes a local
+            # variable once any import statement targets it. That's the
+            # classic "local variable 'get_minimax_config' referenced
+            # before assignment" UnboundLocalError that crashes the
+            # WebSocket handler. Renaming the import alias is the
+            # minimal-blast-radius fix.
+            from mini_agent.config import get_minimax_config as get_minimax_config_from_module
+            cfg = get_minimax_config_from_module()
             write_approval = bool(
                 cfg.get("minimax", {}).get("memory", {}).get("write_approval", False)
             )
