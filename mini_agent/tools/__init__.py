@@ -3,6 +3,7 @@
 from .base import Tool, ToolResult
 from .bash_tool import BashTool
 from .file_tools import EditTool, ReadTool, WriteTool
+from .memory_tool import MemoryTool
 from .note_tool import RecallNoteTool, SessionNoteTool
 from .tasks_tool import TasksCreateTool, TasksListTool, TasksUpdateTool
 
@@ -13,6 +14,7 @@ __all__ = [
     "WriteTool",
     "EditTool",
     "BashTool",
+    "MemoryTool",
     "SessionNoteTool",
     "RecallNoteTool",
     "TasksCreateTool",

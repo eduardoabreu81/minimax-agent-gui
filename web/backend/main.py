@@ -1027,6 +1027,36 @@ class SessionManager:
         except ImportError as exc:
             _logger.warning(f"Task board tools not registered: {exc}")
 
+        # Memory tool — Hermes spec. Lets the agent manage MEMORY.md
+        # (2,200 chars) and USER.md (1,375 chars) with add/replace/
+        # remove actions + substring matching + capacity check +
+        # security scan. The files live in <app_workspace>/.agent/ —
+        # the same dir used by the context-files loader. The tool
+        # reads from and writes to disk directly (no HTTP round-trip)
+        # since the agent runs in-process with the FastAPI backend.
+        #
+        # write_approval defaults to False. The hermes-spec'd gate
+        # (which would stage writes for user approval) is not yet
+        # plumbed through to the UI — that's a future batch. Until
+        # then, the agent writes freely (mirrors Hermes default).
+        try:
+            from mini_agent.tools import MemoryTool
+            from mini_agent.config import get_minimax_config
+            cfg = get_minimax_config()
+            write_approval = bool(
+                cfg.get("minimax", {}).get("memory", {}).get("write_approval", False)
+            )
+            agent_dir = str(get_app_workspace_dir() / ".agent")
+            tools.append(
+                MemoryTool(agent_dir=agent_dir, write_approval=write_approval)
+            )
+            _logger.info(
+                f"Memory tool registered (agent_dir={agent_dir}, "
+                f"write_approval={write_approval})"
+            )
+        except ImportError as exc:
+            _logger.warning(f"Memory tool not registered: {exc}")
+
         # Load external MCP tools from user-configured servers
         mcp_tools: list = []
         try:
