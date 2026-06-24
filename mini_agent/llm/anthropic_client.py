@@ -118,13 +118,23 @@ class AnthropicClient(LLMClientBase):
             params["tools"] = self._convert_tools(tools)
 
         # Thinking param: explicit override wins, otherwise auto for M3.
-        # Use `enabled` with a budget (not `adaptive`) so the model ALWAYS
-        # emits thinking blocks — `adaptive` lets the model skip thinking
-        # on simple turns, which makes the ThinkingBlock UI inconsistent
-        # (appears with M2.7, sometimes vanishes with M3). Forcing enabled
-        # guarantees the reasoning shows up above every M3 response.
+        # Per the MiniMax Anthropic-compatible API spec, only two values
+        # are valid for M3:
+        #   - {"type": "adaptive"}  → thinking on (the model decides how
+        #     much reasoning to spend per turn)
+        #   - {"type": "disabled"}  → thinking explicitly off
+        # M3's `adaptive` is equivalent to "thinking on"; the model can
+        # still skip reasoning on trivial turns (e.g. greetings) which
+        # makes the ThinkingBlock UI inconsistent — but that is the
+        # documented behavior, not a bug. The user's ThinkingToggle
+        # controls this: ON sends `adaptive`, OFF sends `disabled`
+        # (or omits the param entirely for M2.x, where thinking is
+        # always on and the param is ignored).
         if thinking is True or (thinking is None and effective_model in self.THINKING_SUPPORTED):
-            params["thinking"] = {"type": "enabled", "budget_tokens": 4096}
+            params["thinking"] = {"type": "adaptive"}
+        elif thinking is False and effective_model in self.THINKING_SUPPORTED:
+            # Explicit OFF — only meaningful for M3 (M2.x ignores the param).
+            params["thinking"] = {"type": "disabled"}
 
         # Use Anthropic SDK's streaming API. The non-streaming
         # ``messages.create`` is hard-blocked by the SDK for any
