@@ -187,7 +187,8 @@ function ConnectionChip() {
 // the bar goes red when the user is about to run out rather than
 // after they're already at 90% used. Thresholds match the daily
 // wrap decision: 5% left = critical, 20% left = warning.
-const planBarColor = (pct) => {
+// Exported for unit testing (see StatusBar.test.jsx).
+export const planBarColor = (pct) => {
   if (pct === null) return 'bg-muted'
   const remaining = 100 - pct
   if (remaining <= 5) return 'bg-error'
@@ -197,7 +198,8 @@ const planBarColor = (pct) => {
 
 // Plan usage text state — mirrors the bar color. The popover
 // renderer uses this to pick the bold/weight + icon treatment.
-const planTextState = (pct) => {
+// Exported for unit testing.
+export const planTextState = (pct) => {
   if (pct === null) return 'normal'
   const remaining = 100 - pct
   if (remaining <= 5) return 'critical'
@@ -211,7 +213,8 @@ const planTextState = (pct) => {
 // with the bar so the visible color at the leading edge always
 // reflects the current fill level (50% filled shows ~amber at the
 // edge, 95% filled shows ~red).
-const contextBarGradient = 'linear-gradient(to right, hsl(142 71% 45%) 0%, hsl(48 96% 53%) 50%, hsl(0 84% 60%) 100%)'
+// Exported for unit testing.
+export const contextBarGradient = 'linear-gradient(to right, hsl(142 71% 45%) 0%, hsl(48 96% 53%) 50%, hsl(0 84% 60%) 100%)'
 
 function ContextChip() {
   const { sessions, activeSessionId } = useSessionTokens()
