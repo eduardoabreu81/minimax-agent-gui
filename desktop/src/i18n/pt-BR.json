@@ -330,6 +330,14 @@
   "common": {
     "statusSummary": "Pendentes: {pending} · Em andamento: {progress} · Em revisão: {review} · Concluídas: {done}"
   },
+  "contextWindow": {
+    "warnText": "Contexto em {pct}%. Compacte agora para liberar espaço.",
+    "autoText": "Contexto em {pct}%. Compactando automaticamente.",
+    "maxText": "Contexto em {pct}%. Forçando compactação — input libera quando cair abaixo de 90%.",
+    "compactNow": "Compactar agora",
+    "compacting": "Compactando…",
+    "dismiss": "Dispensar"
+  },
   "agentContext": {
     "title": "Contexto do agente",
     "contextLabel": "Contexto",
@@ -341,7 +349,6 @@
     "charCount": "{used} / {limit} caracteres",
     "percent": "{pct}% usado",
     "gracefulDegradation": "Qualquer combinação de arquivos vazios funciona — o agente degrada com elegância e o banner avisa quando algo essencial está faltando.",
-
     "banner": {
       "incomplete": "Contexto do agente incompleto",
       "missingFile": "{file} ausente — o agente tem conhecimento limitado sobre você.",
@@ -349,7 +356,6 @@
       "openSettings": "Abrir Settings",
       "dismiss": "Descartar"
     },
-
     "wizard": {
       "title": "Vamos configurar seu MiniMax Studio",
       "subtitle": "4 passos rápidos. Você pode pular e configurar depois.",
@@ -374,31 +380,26 @@
       "levelMid": "Intermediário",
       "levelSenior": "Avançado"
     },
-
     "personality": {
       "preset": "Preset",
       "reset": "Restaurar padrão",
       "customPlaceholder": "Personalidade customizada…"
     },
-
     "identity": {
       "quickSwitch": "Trocar papel",
       "customPlaceholder": "Descrição do papel customizado…"
     },
-
     "memory": {
       "view": "Ver",
       "edit": "Editar",
       "revert": "Restaurar template"
     },
-
     "daily": {
       "empty": "Nenhum registro ainda.",
       "today": "Hoje",
       "yesterday": "Ontem",
       "turns": "{n} turnos"
     },
-
     "viewer": {
       "memory": {
         "title": "Memória do agente",
@@ -411,15 +412,12 @@
         "appendOnly": "Append-only · gerado pelo agente a cada turno"
       }
     },
-
     "rerunOnboarding": "Refazer onboarding",
-
     "common": {
       "save": "Salvar",
       "cancel": "Cancelar",
       "delete": "Excluir"
     },
-
     "presets": {
       "concise": "Conciso",
       "friendly": "Amigável",
@@ -427,14 +425,12 @@
       "expert": "Especialista",
       "creative": "Criativo"
     },
-
     "roles": {
       "eng": "Engineering partner",
       "reviewer": "Code reviewer",
       "pm": "Project manager",
       "custom": "Customizado"
     },
-
     "file": {
       "soul": "Personalidade",
       "identity": "Papel atual",
