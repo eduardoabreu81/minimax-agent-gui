@@ -11,7 +11,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
-import OnboardingWizard, { WIZARD_SEEN_KEY } from './OnboardingWizard.jsx'
+import OnboardingWizard, { WIZARD_SEEN_KEY, TimezoneSelect } from './OnboardingWizard.jsx'
 
 // The wizard uses the useAgentContext hook internally. Mock it so
 // the test doesn't have to deal with a real backend roundtrip.
@@ -73,11 +73,21 @@ describe('OnboardingWizard', () => {
     expect(screen.getByText('agentContext.wizard.name')).toBeInTheDocument()
   })
 
-  it('renders the timezone field with the browser default', () => {
+  it('renders the timezone field as a scrollable select with the browser default', () => {
     renderWizard()
-    const tzInput = screen.getByPlaceholderText('America/Sao_Paulo')
-    expect(tzInput).toBeInTheDocument()
-    expect(tzInput.value).toMatch(/.+/)  // jsdom provides a tz
+    // TimezoneSelect replaces the old text input. It's a native
+    // <select data-testid="wizard-timezone-select"> populated with
+    // every IANA timezone, grouped by region.
+    const select = screen.getByTestId('wizard-timezone-select')
+    expect(select).toBeInTheDocument()
+    expect(select.tagName).toBe('SELECT')
+    // The select has a value (jsdom provides a default tz); the
+    // option matching that value should exist in the list.
+    expect(select.value).toMatch(/.+/)
+    const matchingOption = Array.from(select.options).find(
+      (o) => o.value === select.value,
+    )
+    expect(matchingOption).toBeTruthy()
   })
 
   it('shows 3 level buttons (beginner / mid / senior)', () => {
@@ -194,5 +204,104 @@ describe('OnboardingWizard', () => {
     fireEvent.click(screen.getByText('Custom'))
     expect(screen.getByPlaceholderText('agentContext.identity.customPlaceholder'))
       .toBeInTheDocument()
+  })
+})
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TimezoneSelect — scrollable, universal IANA timezone picker.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('TimezoneSelect', () => {
+  // jsdom (Vitest default) provides Intl.supportedValuesOf in
+  // Node 18+, so the select falls through to the full list.
+  // The test mocks don't need any extra setup beyond the import.
+
+  it('renders a <select> with at least 100 IANA options', () => {
+    render(<TimezoneSelect value="UTC" onChange={() => {}} />)
+    const select = screen.getByTestId('wizard-timezone-select')
+    expect(select.tagName).toBe('SELECT')
+    // IANA database has ~400 zones. Be lenient — some runtimes
+    // bundle fewer.
+    expect(select.options.length).toBeGreaterThanOrEqual(100)
+  })
+
+  it('groups options under <optgroup> labels by region', () => {
+    const { container } = render(<TimezoneSelect value="UTC" onChange={() => {}} />)
+    const groups = container.querySelectorAll('optgroup')
+    expect(groups.length).toBeGreaterThan(0)
+    // Each region label should be one of the known regions.
+    const labels = [...groups].map((g) => g.label)
+    for (const l of labels) {
+      expect(['Africa', 'America', 'Antarctica', 'Asia', 'Atlantic',
+              'Australia', 'Europe', 'Indian', 'Pacific', 'Other'])
+        .toContain(l)
+    }
+  })
+
+  it('every option label includes the IANA id and a UTC offset', () => {
+    render(<TimezoneSelect value="UTC" onChange={() => {}} />)
+    const select = screen.getByTestId('wizard-timezone-select')
+    for (const opt of select.options) {
+      // option text is "IANA/Tz (UTC±HH:MM)"
+      expect(opt.textContent).toMatch(/^[A-Za-z][\w/_+-]+ \(UTC[+\-]?\d/)
+    }
+  })
+
+  it('America/Sao_Paulo is in the list (sanity for the user)', () => {
+    render(<TimezoneSelect value="UTC" onChange={() => {}} />)
+    const select = screen.getByTestId('wizard-timezone-select')
+    const sp = [...select.options].find((o) => o.value === 'America/Sao_Paulo')
+    expect(sp).toBeTruthy()
+    expect(sp.textContent).toMatch(/UTC-0?3:00|UTC-0?2:00/)  // BRT or BRST
+  })
+
+  it('passes the current value through to the underlying <select>', () => {
+    render(<TimezoneSelect value="America/Sao_Paulo" onChange={() => {}} />)
+    const select = screen.getByTestId('wizard-timezone-select')
+    expect(select.value).toBe('America/Sao_Paulo')
+  })
+
+  it('calls onChange when the user picks a different timezone', () => {
+    const onChange = vi.fn()
+    render(<TimezoneSelect value="UTC" onChange={onChange} />)
+    const select = screen.getByTestId('wizard-timezone-select')
+    fireEvent.change(select, { target: { value: 'Europe/Lisbon' } })
+    expect(onChange).toHaveBeenCalledWith('Europe/Lisbon')
+  })
+
+  it('shows a "Use detected" button when detectedTz differs from value', () => {
+    render(
+      <TimezoneSelect
+        value="UTC"
+        onChange={() => {}}
+        detectedTz="America/Sao_Paulo"
+      />,
+    )
+    expect(screen.getByText(/Use detected/)).toBeInTheDocument()
+  })
+
+  it('hides the "Use detected" button when value already matches detectedTz', () => {
+    render(
+      <TimezoneSelect
+        value="America/Sao_Paulo"
+        onChange={() => {}}
+        detectedTz="America/Sao_Paulo"
+      />,
+    )
+    expect(screen.queryByText(/Use detected/)).toBeNull()
+  })
+
+  it('clicking "Use detected" fires onChange with the detected tz', () => {
+    const onChange = vi.fn()
+    render(
+      <TimezoneSelect
+        value="UTC"
+        onChange={onChange}
+        detectedTz="America/Sao_Paulo"
+      />,
+    )
+    fireEvent.click(screen.getByText(/Use detected/))
+    expect(onChange).toHaveBeenCalledWith('America/Sao_Paulo')
   })
 })

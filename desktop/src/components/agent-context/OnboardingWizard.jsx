@@ -19,7 +19,7 @@
 // Open the wizard via the banner's "Set up now" button or by
 // deleting the localStorage flag.
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { X, ChevronLeft, ChevronRight, Check, Sparkles, User, Briefcase } from 'lucide-react'
 import { useAgentContext, buildUserBody, buildMemoryBody } from '../../hooks/useAgentContext.js'
@@ -29,6 +29,148 @@ import { useAgentContext, buildUserBody, buildMemoryBody } from '../../hooks/use
 const SEEN_KEY = 'agent-context-wizard-seen'
 
 const STEP_IDS = ['about', 'personality', 'identity', 'review']
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TimezoneSelect — scrollable, universal IANA timezone picker.
+//
+// Replaces the old text input for the wizard's timezone field. Uses
+// `Intl.supportedValuesOf('timeZone')` (Node 18+ / all evergreen
+// browsers) to enumerate every IANA timezone the runtime knows about —
+// usually ~400. Each entry shows the IANA id plus its current UTC
+// offset (computed live so DST shifts reflect automatically).
+//
+// Grouped by leading region segment ("America/", "Europe/", etc.) with
+// <optgroup> headers so the user can scan their continent first. Sorted
+// by current UTC offset within each group, then alphabetically — so
+// nearby zones cluster together (e.g. all of America at UTC-03 to
+// UTC-08 stay adjacent, regardless of alphabetical id order).
+//
+// Exported for unit testing (see OnboardingWizard.test.jsx).
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Compute the current UTC offset for an IANA timezone. Returns a
+// string like "UTC-03:00" or "UTC+05:30". Stable across DST shifts
+// because we format the current instant, not a fixed one.
+function formatOffset(tz) {
+  try {
+    const fmt = new Intl.DateTimeFormat('en-US', {
+      timeZone: tz,
+      timeZoneName: 'longOffset',
+    })
+    const parts = fmt.formatToParts(new Date())
+    const offsetPart = parts.find((p) => p.type === 'timeZoneName')?.value || ''
+    // longOffset comes back as "GMT-03:00" — normalize to "UTC-03:00".
+    return offsetPart.replace(/^GMT/, 'UTC') || 'UTC'
+  } catch {
+    return 'UTC'
+  }
+}
+
+// Compare two "UTC±HH:MM" strings numerically so similar offsets
+// cluster together. Returns a stable integer sort key.
+function offsetSortKey(offsetStr) {
+  // "UTC-03:00" → -180, "UTC+05:30" → 330, "UTC" → 0.
+  const m = offsetStr.match(/^UTC([+-])(\d{1,2})(?::(\d{2}))?$/)
+  if (!m) return 0
+  const sign = m[1] === '-' ? -1 : 1
+  const hours = parseInt(m[2], 10)
+  const mins = parseInt(m[3] || '0', 10)
+  return sign * (hours * 60 + mins)
+}
+
+// Group a list of {tz, offset} objects by leading region ("America",
+// "Europe", etc.). Anything that doesn't start with a known continent
+// prefix falls into "Other" (UTC, GMT, Antarctica, Indian, Pacific
+// without a /country subtag, etc.).
+function groupByRegion(entries) {
+  const REGIONS = ['Africa', 'America', 'Antarctica', 'Asia', 'Atlantic',
+                   'Australia', 'Europe', 'Indian', 'Pacific']
+  const groups = new Map()
+  for (const e of entries) {
+    const seg = e.tz.split('/')[0]
+    const region = REGIONS.includes(seg) ? seg : 'Other'
+    if (!groups.has(region)) groups.set(region, [])
+    groups.get(region).push(e)
+  }
+  // Sort each group's entries: by offset first, then by IANA name.
+  for (const list of groups.values()) {
+    list.sort((a, b) => {
+      const oa = offsetSortKey(a.offset)
+      const ob = offsetSortKey(b.offset)
+      if (oa !== ob) return oa - ob
+      return a.tz.localeCompare(b.tz)
+    })
+  }
+  // Sort the groups themselves by their first entry's offset — keeps
+  // the most "negative" regions (Americas) at the top, "Other" at
+  // the bottom.
+  const ordered = [...groups.entries()].sort((a, b) => {
+    if (!a[1].length) return 1
+    if (!b[1].length) return -1
+    return offsetSortKey(a[1][0].offset) - offsetSortKey(b[1][0].offset)
+  })
+  return ordered
+}
+
+export function TimezoneSelect({ value, onChange, detectedTz }) {
+  // Build the full list once per mount (the IANA database doesn't
+  // change at runtime). Detected timezone is shown first as a hint
+  // for the user — they can confirm or pick a different one.
+  const groups = useMemo(() => {
+    let zones = []
+    try {
+      if (typeof Intl.supportedValuesOf === 'function') {
+        zones = Intl.supportedValuesOf('timeZone') || []
+      }
+    } catch { /* old runtime — fall through to empty list */ }
+    const entries = zones.map((tz) => ({ tz, offset: formatOffset(tz) }))
+    return groupByRegion(entries)
+  }, [])
+
+  if (groups.length === 0) {
+    // Runtime doesn't expose Intl.supportedValuesOf (very old). Fall
+    // back to a free-text input so the wizard still works.
+    return (
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="America/Sao_Paulo"
+        className="w-full px-3 py-2 bg-surface border border-border rounded-lg text-sm focus:outline-none focus:border-primary font-mono"
+      />
+    )
+  }
+
+  return (
+    <div className="space-y-1">
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full px-3 py-2 bg-surface border border-border rounded-lg text-sm focus:outline-none focus:border-primary font-mono"
+        data-testid="wizard-timezone-select"
+      >
+        {groups.map(([region, entries]) => (
+          <optgroup key={region} label={region}>
+            {entries.map(({ tz, offset }) => (
+              <option key={tz} value={tz}>
+                {tz} ({offset})
+              </option>
+            ))}
+          </optgroup>
+        ))}
+      </select>
+      {detectedTz && detectedTz !== value && (
+        <button
+          type="button"
+          onClick={() => onChange(detectedTz)}
+          className="text-[11px] text-primary hover:underline"
+        >
+          Use detected: <span className="font-mono">{detectedTz}</span>
+        </button>
+      )}
+    </div>
+  )
+}
 
 export default function OnboardingWizard({ open, onClose }) {
   const { t, i18n } = useTranslation()
@@ -200,12 +342,13 @@ export default function OnboardingWizard({ open, onClose }) {
                 />
 
                 <h3 className="text-sm font-medium pt-2">{t('agentContext.wizard.timezone')}</h3>
-                <input
-                  type="text"
+                <TimezoneSelect
                   value={timezone}
-                  onChange={(e) => setTimezone(e.target.value)}
-                  placeholder="America/Sao_Paulo"
-                  className="w-full px-3 py-2 bg-surface border border-border rounded-lg text-sm focus:outline-none focus:border-primary font-mono"
+                  onChange={setTimezone}
+                  detectedTz={(() => {
+                    try { return Intl.DateTimeFormat().resolvedOptions().timeZone || '' }
+                    catch { return '' }
+                  })()}
                 />
 
                 <h3 className="text-sm font-medium pt-2">{t('agentContext.wizard.level')}</h3>
