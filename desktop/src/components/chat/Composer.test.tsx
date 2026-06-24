@@ -629,4 +629,81 @@ describe("Composer — @-ref autocomplete (spacious popover)", () => {
     await u.keyboard("{Enter}");
     expect(textarea.value).toBe("@folder:");
   });
+
+  it("does not duplicate the prefix when Enter is pressed twice (regression: cursor state must update with text)", async () => {
+    // After clicking "File" in the type picker, the textarea becomes
+    // "@file:" and the popover reopens — but with what?
+    //
+    //   - If the React `cursor` state is updated to the new cursor
+    //     position (6, after the colon), `partialRefAt` returns
+    //     type="file" and the popover reopens as the path
+    //     suggestions / empty state. The empty state row is
+    //     disabled, so a second Enter is a no-op.
+    //   - If `cursor` is stale (still 1, the position right after
+    //     the "@"), `partialRefAt("@file:", 1)` returns
+    //     type=undefined and the popover reopens as the TYPE
+    //     PICKER. Pressing Enter again calls `onSelect("@file:")`
+    //     on the stale partial { value: "", start: 0, end: 1 },
+    //     and `setText` slices the WRONG window — producing
+    //     "@file:file:" instead of "@file:".
+    //
+    // We mock /api/context-refs/list to return no entries so the
+    // reopened popover shows the disabled empty-state row. If the
+    // cursor state is stale, the popover reopens as the type
+    // picker instead and the second Enter duplicates the prefix.
+    mockApiFetch.mockImplementation(async (url: string) => {
+      if (url.endsWith("/api/context-refs/list")) {
+        return {
+          ok: true,
+          json: async () => ({ entries: [] }),
+        };
+      }
+      // Default for /api/context-refs/expand (called when sending).
+      return {
+        ok: true,
+        json: async () => ({
+          results: [],
+          total_bytes: 0,
+          soft_warning: "",
+          refused: false,
+          refusal_reason: "",
+          parsed_refs: [],
+        }),
+      };
+    });
+
+    const u = userEvent.setup();
+    render(
+      <Composer
+        onSend={vi.fn()}
+        status="idle"
+        expertLabel="M3"
+        sessionId="test-session"
+      />
+    );
+    const textarea = screen.getByTestId("composer-textarea") as HTMLTextAreaElement;
+    await u.type(textarea, "@");
+    await waitFor(() => {
+      expect(screen.getByTestId("autocomplete-item-file")).toBeInTheDocument();
+    });
+
+    // First Enter: type picker → "@file:"
+    await u.keyboard("{Enter}");
+    await waitFor(() => {
+      expect(textarea.value).toBe("@file:");
+    });
+
+    // Wait long enough for the list debounce (150ms) to fire and
+    // for the popover to settle on the empty state row.
+    await new Promise((r) => setTimeout(r, 250));
+
+    // Second Enter: with the fix, the popover is on the disabled
+    // empty-state row (insertion=""), so Enter is a no-op and the
+    // textarea stays at "@file:". Without the fix, the popover
+    // reopens as the type picker and the second Enter produces
+    // "@file:file:".
+    await u.keyboard("{Enter}");
+    expect(textarea.value).toBe("@file:");
+    expect(textarea.value).not.toContain("@file:file:");
+  });
 });

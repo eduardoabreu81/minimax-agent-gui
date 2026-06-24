@@ -189,24 +189,31 @@ export function Composer({
 
   // When the user picks an item from the autocomplete popover,
   // replace the partial @-ref in the text with the inserted string
-  // (which already includes the "@type:" prefix).
+  // (which already includes the "@type:" prefix). We must update
+  // BOTH the React text state AND the React cursor state together,
+  // otherwise `partialRefAt` (which uses `cursor` to find the
+  // partial) computes the wrong range — and the popover reopens
+  // as the type picker with the cursor stuck at the old position,
+  // causing the next click to duplicate the prefix instead of
+  // inserting the file path.
   const handleAutocompleteSelect = useCallback(
     (insertion: string) => {
       if (!partial) return;
+      let newCursor = 0;
       setText((prev) => {
         const before = prev.slice(0, partial.start);
         const after = prev.slice(partial.end);
-        const next = before + insertion + after;
-        const newCursor = before.length + insertion.length;
-        setTimeout(() => {
-          if (textareaRef.current) {
-            textareaRef.current.focus();
-            textareaRef.current.setSelectionRange(newCursor, newCursor);
-          }
-        }, 0);
-        return next;
+        newCursor = before.length + insertion.length;
+        return before + insertion + after;
       });
+      setCursor(newCursor);
       setAutocompleteOpen(false);
+      setTimeout(() => {
+        if (textareaRef.current) {
+          textareaRef.current.focus();
+          textareaRef.current.setSelectionRange(newCursor, newCursor);
+        }
+      }, 0);
     },
     [partial]
   );
@@ -255,9 +262,17 @@ export function Composer({
       }
       if (e.key === "Enter" && !e.shiftKey) {
         // The autocomplete popover has its own Enter handler
-        // (document-level). When the popover is open, let it
-        // pick the item and skip the send.
-        if (autocompleteOpen) return;
+        // (document-level, capture phase). When the popover is
+        // open, we ALWAYS preventDefault here so the textarea
+        // doesn't insert a newline — even when the popover's
+        // handler is a no-op (empty-state row with insertion="",
+        // or any other "nothing to select" condition). Without
+        // this, pressing Enter on the empty-state row would
+        // silently insert a newline and corrupt the partial.
+        if (autocompleteOpen) {
+          e.preventDefault();
+          return;
+        }
         e.preventDefault();
         submit();
       }
