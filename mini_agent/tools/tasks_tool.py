@@ -38,10 +38,26 @@ class TasksBaseTool(Tool):
     The agent runs in-process with the FastAPI backend during dev, so we
     hit the JSON file directly instead of going through HTTP. This keeps
     the tool fast and avoids an httpx dependency for an internal API.
+
+    Optional ``on_change`` callback — when set, the tool fires it after
+    a successful write with ``(task_dict, action_string)``. The FastAPI
+    backend wires this to the WebSocket broadcast so the frontend's
+    Live Todo Progress component can update in real-time when the
+    agent creates/updates tasks during a turn. Signature:
+
+        on_change(task: dict, action: Literal["create", "update"]) -> None
     """
 
-    def __init__(self, tasks_file: str = "./workspace/tasks.json"):
+    def __init__(
+        self,
+        tasks_file: str = "./workspace/tasks.json",
+        on_change=None,
+    ):
         self.tasks_file = Path(tasks_file)
+        # Callable or None. If None, the tool writes silently (no
+        # broadcast). The backend sets this when instantiating the
+        # agent's tools.
+        self._on_change = on_change
 
     def _load(self) -> list:
         if not self.tasks_file.exists():
@@ -67,6 +83,27 @@ class TasksBaseTool(Tool):
         import time
         import uuid as _uuid
         return f"task-{int(time.time() * 1000)}-{_uuid.uuid4().hex[:6]}"
+
+    def _fire_change(self, task: dict, action: str) -> None:
+        """Notify the on_change callback (if set) that a task changed.
+
+        The callback signature is ``(task_dict, action_string)``
+        where action is one of "create" or "update". Errors from
+        the callback are logged but don't fail the tool — the
+        write to disk already succeeded, the broadcast is a
+        best-effort notification.
+        """
+        if self._on_change is None:
+            return
+        try:
+            self._on_change(task, action)
+        except Exception as e:
+            # Broadcast failures must NOT roll back the disk write
+            # — the task is already saved. Just log so we can
+            # investigate if the WS path breaks.
+            _logger.warning(
+                f"tasks_tool on_change callback raised (action={action}): {e}"
+            )
 
 
 class TasksCreateTool(TasksBaseTool):
@@ -118,6 +155,7 @@ class TasksCreateTool(TasksBaseTool):
         description: str = "",
         status: str = "pending",
         priority: str = "medium",
+        source_session_id: str | None = None,
         **_: Any,
     ) -> ToolResult:
         title = title.strip()
@@ -148,11 +186,13 @@ class TasksCreateTool(TasksBaseTool):
                 "created_at": now,
                 "updated_at": now,
                 "created_by": "agent",
-                "source_session_id": None,
+                "source_session_id": source_session_id,
             }
             tasks.append(new_task)
             self._save(tasks)
             _logger.info(f"tasks_create: id={new_task['id']} title={title!r}")
+            # Notify listeners (WebSocket broadcast, audit log, etc.)
+            self._fire_change(new_task, "create")
             return ToolResult(
                 success=True,
                 content=(
@@ -333,6 +373,8 @@ class TasksUpdateTool(TasksBaseTool):
             target["updated_at"] = datetime.now().isoformat()
             self._save(tasks)
             _logger.info(f"tasks_update: id={task_id} fields={changes}")
+            # Notify listeners (WebSocket broadcast, audit log, etc.)
+            self._fire_change(target, "update")
             return ToolResult(
                 success=True,
                 content=f"Updated task #{task_id} ({', '.join(changes)}): '{target['title']}'",

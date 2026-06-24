@@ -753,6 +753,77 @@ VALID_TASK_STATUSES = {"pending", "in-progress", "review", "done"}
 VALID_TASK_PRIORITIES = {"high", "medium", "low"}
 
 
+# --- WebSocket registry for cross-session broadcasts (PR C: Live Todo) ---
+# Maps session_id -> set of currently-connected WebSockets. Used by
+# the Live Todo Progress feature in CodingPanel: when a task is
+# created/updated (via the UI endpoint OR the agent's tasks tool),
+# we broadcast a ``task_updated`` event to every connected WebSocket
+# whose session_id matches the task's ``source_session_id`` (or
+# ALL sessions if the task has no source_session_id, which is the
+# case for tasks created from the standalone TaskBoard panel).
+#
+# The registry is module-level because chat_websocket is a
+# per-session handler — without a shared registry we couldn't
+# broadcast to other sessions.
+_ws_registry: dict[str, set] = {}
+
+
+def register_ws(session_id: str, ws) -> None:
+    """Add a WebSocket to the per-session registry."""
+    _ws_registry.setdefault(session_id, set()).add(ws)
+
+
+def unregister_ws(session_id: str, ws) -> None:
+    """Remove a WebSocket from the per-session registry. Safe
+    even if the session_id is unknown (e.g. disconnect race)."""
+    bucket = _ws_registry.get(session_id)
+    if bucket is None:
+        return
+    bucket.discard(ws)
+    if not bucket:
+        _ws_registry.pop(session_id, None)
+
+
+async def broadcast_task_event(task: dict, action: str) -> None:
+    """Send a ``task_updated`` event to every WebSocket subscribed
+    to the task's source_session_id. Tasks without a
+    source_session_id (created from the TaskBoard panel) go to
+    ALL connected sessions.
+
+    Errors are swallowed (best-effort broadcast). A dead
+    WebSocket just means we fail to deliver to it; the task
+    itself is already persisted to disk.
+
+    Async because the underlying ``ws.send_json()`` is async. The
+    HTTP ``/api/tasks`` endpoints await this directly; the
+    agent's task tool wraps it via ``asyncio.create_task`` in
+    the on_change callback (see the registration block).
+    """
+    source = task.get("source_session_id")
+    payload = {
+        "type": "task_updated",
+        "action": action,  # "create" | "update"
+        "task": task,
+    }
+    if source is None:
+        # No source_session_id — broadcast to ALL open sessions
+        # (so a task created from the TaskBoard panel shows up in
+        # every open CodingPanel side panel).
+        targets = [
+            ws for bucket in _ws_registry.values() for ws in bucket
+        ]
+    else:
+        targets = list(_ws_registry.get(source, set()))
+
+    for ws in targets:
+        try:
+            await ws.send_json(payload)
+        except Exception as e:
+            # Don't let one bad WS kill the broadcast loop. The
+            # WS will be unregistered on disconnect anyway.
+            _logger.debug(f"broadcast_task_event: WS send failed: {e}")
+
+
 def _load_tasks() -> list:
     """Load all tasks from disk. Returns [] if file missing/corrupt."""
     if not TASKS_FILE.exists():
@@ -1019,10 +1090,45 @@ class SessionManager:
                 TasksUpdateTool,
             )
             tasks_file = str(get_app_workspace_dir() / "tasks.json")
+
+            # on_change callback for the agent's task tools: when the
+            # agent creates/updates a task, broadcast a
+            # ``task_updated`` event via the WebSocket so the
+            # CodingPanel's Live Todo Progress component can update
+            # in real-time. Tasks created from the agent carry
+            # source_session_id so we can filter to the right
+            # session.
+            def _agent_task_changed(task: dict, action: str) -> None:
+                # Stamp the source_session_id so the broadcast
+                # knows which session's panel to update. The
+                # agent doesn't pass this — the backend owns the
+                # session context.
+                if not task.get("source_session_id"):
+                    task = {**task, "source_session_id": session_id}
+                # broadcast_task_event is async; we're called
+                # synchronously from the tool. Schedule the send
+                # on the running event loop so the tool returns
+                # immediately and the broadcast runs in the
+                # background.
+                import asyncio
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        asyncio.ensure_future(
+                            broadcast_task_event(task, action),
+                            loop=loop,
+                        )
+                except Exception as e:
+                    # Broadcast failures are non-fatal — the task
+                    # is already on disk. Just log.
+                    _logger.debug(
+                        f"_agent_task_changed: could not schedule broadcast: {e}"
+                    )
+
             tools.extend([
-                TasksCreateTool(tasks_file=tasks_file),
+                TasksCreateTool(tasks_file=tasks_file, on_change=_agent_task_changed),
                 TasksListTool(tasks_file=tasks_file),
-                TasksUpdateTool(tasks_file=tasks_file),
+                TasksUpdateTool(tasks_file=tasks_file, on_change=_agent_task_changed),
             ])
         except ImportError as exc:
             _logger.warning(f"Task board tools not registered: {exc}")
@@ -2924,6 +3030,10 @@ async def delete_task(task_id: str):
 async def chat_websocket(websocket: WebSocket, session_id: str):
     """WebSocket endpoint for streaming chat."""
     await websocket.accept()
+    # Register in the cross-session WS registry so the Live Todo
+    # Progress component (PR C) can receive task_updated events
+    # for this session. Unregistered on disconnect.
+    register_ws(session_id, websocket)
     _logger.info(f"WebSocket connected: {session_id}")
 
     try:
@@ -3416,6 +3526,10 @@ async def chat_websocket(websocket: WebSocket, session_id: str):
         _logger.info(f"WebSocket disconnected: {session_id}")
     except Exception as e:
         _logger.error(f"WebSocket error: {e}")
+    finally:
+        # Always unregister, even on exception. Prevents the
+        # registry from accumulating dead WebSocket refs.
+        unregister_ws(session_id, websocket)
 
 
 @app.post("/api/tts")
