@@ -3,9 +3,10 @@ breakdown that drives the StatusBar popover "Breakdown by source"
 section.
 
 The estimator splits the system prompt by ``## `` headers and
-categorizes each section by keyword (skills / tools / default →
-system). These tests exercise each branch with a hand-crafted
-system prompt and assert on the resulting dict shape.
+categorizes each section by keyword (skills / memory files /
+custom agents / MCP tools / default → system_prompt). These tests
+exercise each branch with a hand-crafted system prompt and assert
+on the resulting dict shape.
 
 Uses the same stub LLM as test_compact_logging.py so we don't
 need a real API key. A separate test exercises the tiktoken
@@ -41,14 +42,23 @@ class _StubLLM:
         pass
 
 
-def _make_agent(system_prompt: str = "default system"):
-    return Agent(
-        llm_client=_StubLLM(),
-        system_prompt="ignored — we override messages directly",
-        tools=[],
-        max_steps=1,
-        workspace_dir=Path.cwd().as_posix(),
-    ).__class__  # placeholder, replaced below
+class _StubMcpTool:
+    """Minimal ExternalMCPTool stub. Has server_id + server_config
+    so the per-server bucketing works."""
+
+    def __init__(self, name, server_id, server_name="Test Server",
+                 description="A test tool"):
+        self.name = name
+        self.server_id = server_id
+        self.server_config = {"name": server_name}
+        self.description = description
+
+    def to_anthropic_schema(self):
+        return {
+            "name": self.name,
+            "description": self.description,
+            "input_schema": {"type": "object", "properties": {}},
+        }
 
 
 @pytest.fixture
@@ -70,9 +80,25 @@ def agent():
 
 def test_estimate_by_source_returns_known_keys(agent):
     result = agent.estimate_by_source()
-    assert set(result.keys()) == {
-        "system", "skills", "tools", "messages", "mcp_deferred", "total",
+    # 9 source categories + total + limit + details sub-dict.
+    expected = {
+        "messages", "skills", "memory_files", "custom_agents",
+        "system_prompt", "mcp_tools", "mcp_deferred",
+        "system_tools_deferred", "free_space", "total", "limit",
+        "details",
     }
+    assert set(result.keys()) == expected
+
+
+def test_details_has_three_lists(agent):
+    result = agent.estimate_by_source()
+    assert set(result["details"].keys()) == {
+        "mcp_tools_list", "memory_files_list", "custom_agents_list",
+    }
+    # All start as empty lists
+    assert result["details"]["mcp_tools_list"] == []
+    assert result["details"]["memory_files_list"] == []
+    assert result["details"]["custom_agents_list"] == []
 
 
 def test_estimate_by_source_empty_messages_returns_zero(agent):
@@ -81,24 +107,38 @@ def test_estimate_by_source_empty_messages_returns_zero(agent):
     # truly-empty branch.
     agent.messages = []
     result = agent.estimate_by_source()
-    assert result["system"] == 0
-    assert result["skills"] == 0
-    assert result["tools"] == 0
-    assert result["messages"] == 0
-    assert result["mcp_deferred"] == 0
+    # All categories are zero (limit + free_space + total may still
+    # reflect the model's context window).
+    for key in ("messages", "skills", "memory_files", "custom_agents",
+                "system_prompt", "mcp_tools", "mcp_deferred",
+                "system_tools_deferred"):
+        assert result[key] == 0, f"{key} should be 0 for empty messages"
     assert result["total"] == 0
+    assert result["limit"] == 1_000_000  # M3 default from stub
 
 
-def test_total_equals_sum_of_parts(agent):
+def test_total_equals_sum_of_parts_minus_free_space(agent):
+    """total = sum of all 'consumed' categories (NOT including
+    free_space, which is the remaining headroom)."""
     agent.messages = [
         Message(role="system", content="base prompt."),
         Message(role="user", content="hello world"),
     ]
     result = agent.estimate_by_source()
-    assert result["total"] == (
-        result["system"] + result["skills"] + result["tools"]
-        + result["messages"] + result["mcp_deferred"]
+    consumed = (
+        result["messages"] + result["skills"] + result["memory_files"]
+        + result["custom_agents"] + result["system_prompt"]
+        + result["mcp_tools"] + result["mcp_deferred"]
+        + result["system_tools_deferred"]
     )
+    assert result["total"] == consumed
+
+
+def test_free_space_is_limit_minus_total(agent):
+    agent.messages = [Message(role="system", content="x" * 1000)]
+    result = agent.estimate_by_source()
+    assert result["free_space"] == result["limit"] - result["total"]
+    assert result["free_space"] >= 0
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -106,13 +146,13 @@ def test_total_equals_sum_of_parts(agent):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def test_system_prompt_base_prompt_is_categorized_as_system(agent):
-    """The preamble (before any ## header) goes to `system`."""
+def test_base_prompt_is_categorized_as_system_prompt(agent):
+    """The preamble (before any ## header) goes to `system_prompt`."""
     agent.messages = [Message(role="system", content="You are a helpful AI assistant powered by MiniMax-M3.")]
     result = agent.estimate_by_source()
-    assert result["system"] > 0
+    assert result["system_prompt"] > 0
     assert result["skills"] == 0
-    assert result["tools"] == 0
+    assert result["memory_files"] == 0
 
 
 def test_skills_section_categorized_via_header(agent):
@@ -126,37 +166,71 @@ def test_skills_section_categorized_via_header(agent):
     agent.messages = [Message(role="system", content=prompt)]
     result = agent.estimate_by_source()
     assert result["skills"] > 0
-    # Base preamble should still be `system`
-    assert result["system"] > 0
+    # Base preamble should still be `system_prompt`
+    assert result["system_prompt"] > 0
 
 
-def test_custom_mcp_tools_section_categorized_as_tools(agent):
+def test_mcp_servers_section_categorized_as_mcp_tools(agent):
+    """The `## MCP Servers` section header goes to `mcp_tools`."""
     prompt = (
         "base preamble here.\n\n"
-        "## Custom MCP Tools\n\n"
-        "Additional MCP tools are available from user-configured MCP servers.\n"
+        "## MCP Servers\n\n"
+        "Two MCP servers are always available.\n"
     )
     agent.messages = [Message(role="system", content=prompt)]
     result = agent.estimate_by_source()
-    assert result["tools"] > 0
-    assert result["skills"] == 0
+    assert result["mcp_tools"] > 0
 
 
-def test_agent_context_sections_fall_into_system(agent):
-    """SOUL / IDENTITY / USER / MEMORY / daily sections all default
-    to `system` (no special keyword)."""
+def test_identity_section_goes_to_custom_agents(agent):
+    """`## Current Role (IDENTITY.md)` → custom_agents bucket."""
     prompt = (
         "base\n\n"
-        "## Current Role (IDENTITY.md)\n\nExpert Python dev.\n\n"
-        "## About the User (USER.md)\n\nName: Edu.\n\n"
+        "## Current Role (IDENTITY.md)\n\nExpert Python dev.\n"
+    )
+    agent.messages = [Message(role="system", content=prompt)]
+    result = agent.estimate_by_source()
+    assert result["custom_agents"] > 0
+    # And the details list has an entry
+    assert len(result["details"]["custom_agents_list"]) == 1
+
+
+def test_user_md_section_goes_to_memory_files(agent):
+    """`## About the User (USER.md)` → memory_files bucket."""
+    prompt = (
+        "base\n\n"
+        "## About the User (USER.md)\n\nName: Edu.\n"
+    )
+    agent.messages = [Message(role="system", content=prompt)]
+    result = agent.estimate_by_source()
+    assert result["memory_files"] > 0
+    assert len(result["details"]["memory_files_list"]) == 1
+
+
+def test_memory_md_section_goes_to_memory_files(agent):
+    """Hermes `MEMORY (agent notes)` header (no `##` prefix) is
+    detected by the substring match."""
+    prompt = (
+        "base\n\n"
+        "MEMORY (agent notes) [50% — 1000/2000 chars]\n"
+        "══════════════════════════════════════════════\n"
+        "§ User prefers concise commits.\n"
+    )
+    agent.messages = [Message(role="system", content=prompt)]
+    result = agent.estimate_by_source()
+    assert result["memory_files"] > 0
+
+
+def test_today_session_log_falls_into_system_prompt(agent):
+    """The daily log section doesn't have a special keyword — it
+    falls into system_prompt (the default bucket)."""
+    prompt = (
+        "base\n\n"
         "## Today's Session Log (daily/2026-06-24.md)\n\n- 09:00 user: hi\n"
     )
     agent.messages = [Message(role="system", content=prompt)]
     result = agent.estimate_by_source()
-    # All sections fall into system
-    assert result["system"] > 0
-    assert result["skills"] == 0
-    assert result["tools"] == 0
+    assert result["system_prompt"] > 0
 
 
 def test_messages_contribute_to_messages_bucket(agent):
@@ -171,7 +245,62 @@ def test_messages_contribute_to_messages_bucket(agent):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Future feature: mcp_deferred (currently always 0)
+# MCP tool details (per-server breakdown)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_mcp_tools_in_self_tools_are_grouped_by_server(agent):
+    """Tools with `server_id` are bucketed into mcp_tools_list,
+    grouped by server_id. Built-in tools (no server_id) are skipped."""
+    fs_tool = _StubMcpTool(name="read_file", server_id="filesystem",
+                            server_name="Local FS")
+    gh_tool = _StubMcpTool(name="create_issue", server_id="github",
+                            server_name="GitHub API")
+    # Reload agent with these tools
+    agent2 = Agent(
+        llm_client=_StubLLM(),
+        system_prompt="base prompt",
+        tools=[fs_tool, gh_tool],
+        max_steps=1,
+        workspace_dir=Path.cwd().as_posix(),
+    )
+    result = agent2.estimate_by_source()
+    by_sid = {t["server_id"]: t for t in result["details"]["mcp_tools_list"]}
+    assert "filesystem" in by_sid
+    assert "github" in by_sid
+    assert by_sid["filesystem"]["name"] == "Local FS"
+    assert by_sid["filesystem"]["tool_count"] == 1
+    assert by_sid["github"]["tool_count"] == 1
+    # mcp_tools bucket also gets the schema tokens
+    assert result["mcp_tools"] > 0
+
+
+def test_builtin_tools_not_counted_in_mcp_tools(agent):
+    """Built-in tools (no server_id) shouldn't appear in
+    mcp_tools_list or mcp_tools bucket."""
+
+    class _BuiltinTool:
+        name = "read_file"
+        # Deliberately no server_id attribute
+        description = "reads a file"
+
+        def to_anthropic_schema(self):
+            return {"name": "read_file", "description": self.description}
+
+    agent2 = Agent(
+        llm_client=_StubLLM(),
+        system_prompt="base",
+        tools=[_BuiltinTool()],
+        max_steps=1,
+        workspace_dir=Path.cwd().as_posix(),
+    )
+    result = agent2.estimate_by_source()
+    assert result["details"]["mcp_tools_list"] == []
+    assert result["mcp_tools"] == 0
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Future feature: mcp_deferred + system_tools_deferred (currently always 0)
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -180,11 +309,19 @@ def test_mcp_deferred_is_zero_today(agent):
     Confirm we report 0 so the UI row is honest about it."""
     prompt = (
         "base\n\n"
-        "## Custom MCP Tools\n\nlots of tools\n"
+        "## MCP Servers\n\nlots of tools\n"
     )
     agent.messages = [Message(role="system", content=prompt)]
     result = agent.estimate_by_source()
     assert result["mcp_deferred"] == 0
+
+
+def test_system_tools_deferred_is_zero_today(agent):
+    """system_tools_deferred is a TODO placeholder. Same as
+    mcp_deferred — always 0 today."""
+    agent.messages = [Message(role="system", content="base")]
+    result = agent.estimate_by_source()
+    assert result["system_tools_deferred"] == 0
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -202,6 +339,21 @@ def test_fallback_estimation_works_when_tiktoken_init_fails(agent):
     with mock.patch("tiktoken.get_encoding", side_effect=Exception("no encoder")):
         result = agent.estimate_by_source()
     # Numbers should be > 0 even without tiktoken
-    assert result["system"] > 0
+    assert result["system_prompt"] > 0
     assert result["messages"] > 0
     assert result["total"] > 0
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Backwards-compat: old shape keys are gone
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_old_keys_not_present_in_new_shape(agent):
+    """Bumped shape in 0.4.x — old keys `system` and `tools` were
+    renamed to `system_prompt` and `mcp_tools` respectively. Verify
+    the old names are NOT returned so frontend code can't silently
+    fall back to the wrong bucket."""
+    result = agent.estimate_by_source()
+    assert "system" not in result
+    assert "tools" not in result

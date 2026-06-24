@@ -612,6 +612,125 @@ controls and fixed a number of Token Plan API quirks.
   a pure `_build_mcp_section(mcp_tools)` function in
   `web/backend/main.py` for unit testing.
 
+### Added — Anti-hallucination for `claude mcp list`
+
+- **MCP system prompt block teaches the agent how MCP tools
+  reach it** — the agent was trying to run `claude mcp list`
+  via the bash tool to discover MCP servers. Root cause:
+  training-data bleed from Claude Code CLI patterns. There
+  is no `claude` binary in this app; MCP tools are exposed
+  as native Anthropic `tool_use` functions in the request's
+  `tools` array. Added an explicit "How MCP tools reach you"
+  paragraph to `_build_mcp_section()` spelling out:
+  - MCP tools come in as native function calls (same as
+    `read_file`, `write_file`, `bash`), not behind a shell
+    command.
+  - NEVER run `claude mcp list`, `claude mcp add`,
+    `npx @modelcontextprotocol/...`, `pip install mcp-...`.
+  - There is no `claude` CLI in this app — the name is a
+    coincidence with the protocol, not a tool.
+  - To see what's available: read the `functions` array.
+  - If a tool is missing → toggled OFF in Settings or
+    server failed to start. Tell the user plainly, don't
+    try to install.
+  5 new tests in `tests/test_mcp_section.py` cover each
+  claim. 18/18 `mcp_section` tests pass.
+
+### Fixed — Onboarding wizard "still incomplete" after completion
+
+- **IncompleteContextBanner kept showing after the wizard**
+  — `MIN_CONTENT_CHARS = 500` in `web/backend/agent_context.py`
+  requires each of SOUL/IDENTITY/USER/MEMORY to be ≥500 chars.
+  The wizard wrote short scaffolds:
+  - `preset.concise`: 418 chars ❌ (others 320-385 chars)
+  - `role.{eng,reviewer,pm}`: ~50 chars ❌
+  - `buildUserBody()`: ~125 chars ❌
+  - `buildMemoryBody()`: ~90 chars ❌
+  Even when the user "finished" the wizard, 3-4 files stayed
+  below threshold → banner persisted. User feedback was
+  "achei que o onboarding poderia ser mais completo".
+  Expanded every wizard-written body with substantial new
+  sections:
+
+  PRESETS (SOUL.md, ~900-1150 chars each, en-US + pt-BR):
+  - `## Response patterns` (how to open, structure, length)
+  - `## When to ask vs decide` (decision-making framework)
+  Each preset now teaches the agent how to behave, not just
+  what to be.
+
+  ROLES (IDENTITY.md, ~900-1100 chars each):
+  - `## Out of scope` (what NOT to do)
+  - `## Output format` (how to deliver)
+  - `## Quality bar` (acceptance criteria)
+
+  USER.md (`buildUserBody`, ~730 chars):
+  - `## Communication preferences`
+  - `## Current focus`
+
+  MEMORY.md (`buildMemoryBody`, ~957 chars):
+  - Seeded with 3 §-separated Hermes-style entries covering
+    workspace conventions, banner behavior, persistence model.
+
+  Threshold kept at 500 — meaningful for real user content,
+  but the wizard seed counts as filled.
+
+  10 new tests across `test_agent_context.py`,
+  `test_agent_context_api.py`, `useAgentContext.test.jsx`:
+  - per-preset and per-role threshold checks (en-US + pt-BR)
+  - `buildUserBody`/`buildMemoryBody` size + structure
+  - end-to-end "after wizard write, `is_complete=True`"
+  - USER body clears threshold even with empty name
+
+### Changed — Breakdown refactor (matches the Claude Code design)
+
+- **`Agent.estimate_by_source()` returns 9 source categories
+  + expandable sub-section detail** — bumped shape:
+  `messages`, `skills`, `memory_files`, `custom_agents`,
+  `system_prompt` (renamed from `system`),
+  `mcp_tools` (currently loaded MCP tool schemas),
+  `mcp_deferred`, `system_tools_deferred`,
+  `free_space` (= `limit - total`), plus `total`, `limit`,
+  and a `details` sub-dict with three lists:
+  - `details.mcp_tools_list`: per-server summary
+    (`{server_id, name, tool_count, tokens}`) computed by
+    grouping `ExternalMCPTool` entries by `server_id` and
+    tokenizing each tool's Anthropic schema.
+  - `details.memory_files_list`: per-file
+    (`{file, tokens}`) extracted from
+    `(USER.md)`, `(MEMORY.md)`, `(SOUL.md)`,
+    and the Hermes `MEMORY (agent notes)` marker.
+  - `details.custom_agents_list`: per-agent
+    (`{agent, tokens}`) extracted from
+    `## Current Role (IDENTITY.md)`.
+
+  Attribution is best-effort: section headers that don't
+  match a known keyword fall into `system_prompt` (safe
+  default). Old keys (`system`, `tools`) are gone — `test_old_keys_not_present_in_new_shape`
+  guards against silent fallbacks.
+
+- **StatusBar popover renders the Claude-Code-style breakdown**
+  — new `BreakdownPanel` sub-component (extracted from
+  `ContextChip` for unit testability):
+  - 9 flat rows (Messages, Skills, Memory files, Custom
+    agents, System prompt, MCP tools, MCP tools deferred,
+    System tools deferred, Free space) — each with label +
+    bar + token count + percent.
+  - 3 expandable chevron rows below: MCP tools (per-server
+    tool counts), Memory files, Custom agents — chevron
+    rotates on click and the per-server/per-file entries
+    slide in below.
+
+  Layout matches the Claude Code reference: chevron +
+  summary (`X.XXk · N tools`) on the collapsed row;
+  per-entry with thin bar + count on expand.
+
+  6 new vitest in `StatusBar.test.jsx`: shape, all 9 row
+  labels, percentage computation, empty-details hidden,
+  expandable click → per-server entries visible.
+
+  Test counts: pytest **311/311** pass (was 292, +19);
+  vitest **102/102** pass (was 95, +7).
+
 ### Settings Modal: custom API base URL
 
 - The Agent tab now lets users override the default MiniMax

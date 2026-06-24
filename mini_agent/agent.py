@@ -213,37 +213,76 @@ class Agent:
         """Estimate the current context window breakdown by source.
 
         Returns a dict with token counts (approximate, ~2.5 chars/token
-        fallback OR tiktoken cl100k_base when available). Categories:
-          - system:       Agent context (SOUL/IDENTITY/USER/MEMORY/daily) +
-                          base preamble (before the first ``## `` header).
-          - skills:       Skills metadata block (placeholder content between
-                          ``{SKILLS_METADATA}`` markers, or the section
-                          whose header starts with "Skills").
-          - tools:        Custom MCP tools section + any other ``## Tool``
-                          section in the system prompt.
-          - messages:     user/assistant/tool message history
-                          (messages[1:]).
-          - mcp_deferred: Always 0 today (TODO — heuristic for deferred
-                          MCP tools). The Token Plan dashboard print
-                          shows ~2.8% MCP deferred, but that requires a
-                          relevance-based deferral strategy that isn't
-                          implemented yet.
-          - total:        Sum of all categories (matches
-                          ``self._estimate_tokens()`` approximately).
+        fallback OR tiktoken cl100k_base when available). Categories
+        (matches the StatusBar popover breakdown UI):
 
-        The attribution is best-effort: if a section header doesn't
-        match any known category, it falls into ``system`` (the safe
-        default). The numbers are an *approximation* — exact attribution
-        would require tokenizing the API's request payload, which we
-        don't have on the client side. Use this for the UI breakdown
-        (Messages / Skills / Tools / System) and for dashboards, not
-        for billing math.
+          - messages:            user/assistant/tool message history
+                                 (messages[1:]).
+          - skills:              Skills metadata block in the system
+                                 prompt (sections whose header mentions
+                                 "skill").
+          - memory_files:        USER.md + MEMORY.md + SOUL.md content
+                                 (sections whose header references one
+                                 of those filenames, or the Hermes
+                                 "MEMORY (agent notes)" header).
+          - custom_agents:       IDENTITY.md content ("Current Role
+                                 (IDENTITY.md)" and similar).
+          - system_prompt:       Base preamble (default identity +
+                                 "Today's Session Log" + everything
+                                 not bucketed elsewhere).
+          - mcp_tools:           Currently-loaded MCP tool schemas +
+                                 the "## MCP Servers" section header.
+                                 Sums tool-definition tokens from
+                                 self.tools (only ExternalMCPTool
+                                 entries).
+          - mcp_deferred:        Always 0 today (TODO — heuristic for
+                                 deferred MCP tools). The Token Plan
+                                 dashboard print shows ~2.8% MCP
+                                 deferred, but that requires a
+                                 relevance-based deferral strategy
+                                 that isn't implemented yet.
+          - system_tools_deferred: Always 0 today (placeholder for
+                                 future "core tools not in this turn"
+                                 attribution).
+          - free_space:          ``max(0, model_context_limit - total)``.
+                                 What the agent could still write
+                                 before auto-compact kicks in.
+          - total:               Sum of all categorized tokens (matches
+                                 ``self._estimate_tokens()`` approx).
+          - limit:               The model's context window (echo of
+                                 ``self.model_context_limit``).
+
+        Plus a ``details`` sub-dict with three lists used by the
+        expandable sub-sections in the StatusBar popover:
+
+          - details.mcp_tools_list:    per-server summary of loaded
+                                       MCP tools — ``{server_id, name,
+                                       tool_count, tokens}``.
+          - details.memory_files_list: per-file memory-file summary —
+                                       ``{file, tokens}``.
+          - details.custom_agents_list: per-agent (IDENTITY.md) summary
+                                        — ``{agent, tokens}``.
+
+        Attribution is best-effort: sections whose header doesn't
+        match a known keyword fall into ``system_prompt``. Numbers
+        are an *approximation* — exact attribution would require
+        tokenizing the API's request payload, which we don't have
+        on the client side. Use this for the UI breakdown and for
+        dashboards, not for billing math.
         """
+        empty = {
+            "messages": 0, "skills": 0, "memory_files": 0,
+            "custom_agents": 0, "system_prompt": 0, "mcp_tools": 0,
+            "mcp_deferred": 0, "system_tools_deferred": 0,
+            "free_space": 0, "total": 0, "limit": self.model_context_limit,
+            "details": {
+                "mcp_tools_list": [],
+                "memory_files_list": [],
+                "custom_agents_list": [],
+            },
+        }
         if not self.messages:
-            return {
-                "system": 0, "skills": 0, "tools": 0,
-                "messages": 0, "mcp_deferred": 0, "total": 0,
-            }
+            return empty
 
         # Pick the same tokenizer as ``_estimate_tokens`` for consistency.
         try:
@@ -263,11 +302,6 @@ class Agent:
         # The first chunk (before the first ``## ``) is the base
         # preamble (default identity). Subsequent chunks are named
         # sections, each starting with their header line.
-        # We split on ``^## `` (anchored, multiline) so the newline
-        # before the header stays in the previous chunk and the
-        # ``## `` stays in the new one. A naive `\n## ` split would
-        # attach the leading newline to the preamble and confuse the
-        # categorization that follows.
         chunks = re.split(r"^## ", system_content, flags=re.MULTILINE)
         preamble = chunks[0] if chunks else system_content
         named = []
@@ -275,27 +309,122 @@ class Agent:
             header, _, body = raw.partition("\n")
             named.append((header.strip().lower(), body))
 
+        # Bucket accumulators + per-section detail records (so the
+        # expandable sub-sections have something to render).
         by_source = {
-            "system": 0, "skills": 0, "tools": 0,
-            "messages": 0, "mcp_deferred": 0,
+            "messages": 0, "skills": 0, "memory_files": 0,
+            "custom_agents": 0, "system_prompt": 0, "mcp_tools": 0,
+            "mcp_deferred": 0, "system_tools_deferred": 0,
         }
-        # Base preamble is always system (default identity + agent setup).
-        by_source["system"] += count(preamble)
+        memory_files_list: list[dict] = []
+        custom_agents_list: list[dict] = []
+
+        # The MEMORY block (rendered by render_memory_prompt in
+        # web/backend/agent_context.py) doesn't use `## ` headers —
+        # it's a Hermes-style "═════... MEMORY (agent notes) ═════"
+        # block. If the preamble (or trailing content after the
+        # last `## ` section) contains that marker, peel it off into
+        # memory_files before bucketing the rest.
+        mem_marker = "MEMORY (agent notes)"
+        mem_idx = preamble.find(mem_marker)
+        if mem_idx >= 0:
+            mem_block = preamble[mem_idx:]
+            preamble = preamble[:mem_idx]
+            by_source["memory_files"] += count(mem_block)
+            memory_files_list.append({
+                "file": "MEMORY.md",
+                "tokens": count(mem_block),
+            })
+
+        # Base preamble is always system_prompt (default identity + setup).
+        by_source["system_prompt"] += count(preamble)
 
         # Categorize each named section by its header. Headers we recognize
-        # explicitly; anything else falls into ``system``.
-        SKILLS_KEYWORDS = ("skill",)
-        TOOLS_KEYWORDS = ("mcp tool", "custom mcp", "tool",)
+        # explicitly; anything else falls into ``system_prompt``.
+        # Match on lowercase header substring. Order matters — more
+        # specific matches first (IDENTITY.md before any generic
+        # "current role" match).
         for header, body in named:
-            tokens = count("## " + header + "\n" + body) if body else count("## " + header)
-            if any(k in header for k in SKILLS_KEYWORDS):
+            text = "## " + header + "\n" + body if body else "## " + header
+            tokens = count(text)
+
+            if "skill" in header:
                 by_source["skills"] += tokens
-            elif any(k in header for k in TOOLS_KEYWORDS):
-                by_source["tools"] += tokens
+            elif "identity.md" in header or "current role" in header:
+                # IDENTITY.md section = the user's chosen role.
+                by_source["custom_agents"] += tokens
+                custom_agents_list.append({
+                    "agent": header,
+                    "tokens": tokens,
+                })
+            elif any(k in header for k in ("user.md", "memory.md", "soul.md")) \
+                    or "memory (agent notes)" in header:
+                # USER.md + MEMORY.md + SOUL.md → memory_files bucket.
+                # The Hermes MEMORY header doesn't start with `##` but
+                # its body still appears between the marker block, so
+                # we catch it here too.
+                by_source["memory_files"] += tokens
+                memory_files_list.append({
+                    "file": header,
+                    "tokens": tokens,
+                })
+            elif "mcp server" in header or "mcp tool" in header \
+                    or "external mcp" in header:
+                by_source["mcp_tools"] += tokens
             else:
-                # SOUL, IDENTITY (Current Role), USER (About the User),
-                # MEMORY, daily (Today's Session Log), Workspace, etc.
-                by_source["system"] += tokens
+                # SOUL/IDENTITY sections we don't catch, the daily
+                # log, "Today's Session Log", "Current Workspace",
+                # and any future un-bucketed sections land here.
+                by_source["system_prompt"] += tokens
+
+        # ---- MCP tool schemas (the actual tool definitions sent in
+        # the API request) ----
+        # Group loaded ExternalMCPTool instances by server_id so the
+        # popover's "Ferramentas MCP" expandable row can list each
+        # server with its tool count. Built-in tools (ReadTool,
+        # WriteTool, BashTool, etc.) are not ExternalMCPTool — they
+        # don't have server_id and stay out of this bucket.
+        mcp_tools_list: list[dict] = []
+        per_server_tokens: dict[str, int] = {}
+        per_server_name: dict[str, str] = {}
+        for tool in (self.tools or {}).values():
+            sid = getattr(tool, "server_id", None)
+            if not sid:
+                continue
+            # Tool definitions are sent in the API request's `tools`
+            # array — tokenize the JSON shape the LLM actually sees
+            # (name + description + input_schema).
+            try:
+                schema = tool.to_anthropic_schema() if hasattr(tool, "to_anthropic_schema") else None
+                if schema is None:
+                    # Fallback — stringify whatever attributes we have.
+                    schema = {
+                        "name": getattr(tool, "name", "unknown"),
+                        "description": getattr(tool, "description", ""),
+                    }
+                text = json.dumps(schema, ensure_ascii=False)
+            except Exception:
+                text = (getattr(tool, "name", "") + " " +
+                       getattr(tool, "description", ""))
+            per_server_tokens[sid] = per_server_tokens.get(sid, 0) + count(text)
+            # Prefer the server_config.name over the raw server_id for display.
+            cfg = getattr(tool, "server_config", None) or {}
+            display = (cfg.get("name") if isinstance(cfg, dict) else None) or sid
+            per_server_name[sid] = display
+        for sid, tokens in sorted(per_server_tokens.items()):
+            # Count tools per server: how many entries in self.tools have
+            # this server_id (cheap, runs once per WS usage event).
+            tool_count = sum(
+                1 for t in (self.tools or {}).values()
+                if getattr(t, "server_id", None) == sid
+            )
+            mcp_tools_list.append({
+                "server_id": sid,
+                "name": per_server_name.get(sid, sid),
+                "tool_count": tool_count,
+                "tokens": tokens,
+            })
+        by_source["mcp_tools"] += sum(per_server_tokens.values())
 
         # ---- History (messages[1:]) ----
         for msg in self.messages[1:]:
@@ -312,13 +441,26 @@ class Agent:
             # Per-message metadata overhead (same as _estimate_tokens).
             by_source["messages"] += 4
 
-        # ---- mcp_deferred placeholder ----
-        # TODO(minimax-m3): implement a relevance-based MCP deferral
-        # strategy. For now we report 0 (the "loaded" set covers all
-        # tools the agent has access to).
+        # ---- mcp_deferred + system_tools_deferred placeholders ----
+        # TODO(minimax-m3): implement relevance-based deferral. For
+        # now both are 0 — the "loaded" set covers all tools the
+        # agent has access to. Honest reporting (0) keeps the
+        # popover rows truthful.
 
         total = sum(by_source.values())
-        return {**by_source, "total": total}
+        limit = self.model_context_limit or 0
+        by_source["free_space"] = max(0, limit - total) if limit else 0
+
+        return {
+            **by_source,
+            "total": total,
+            "limit": limit,
+            "details": {
+                "mcp_tools_list": mcp_tools_list,
+                "memory_files_list": memory_files_list,
+                "custom_agents_list": custom_agents_list,
+            },
+        }
 
     async def _summarize_messages(self):
         """Message history summarization: summarize conversations between user messages when tokens exceed limit

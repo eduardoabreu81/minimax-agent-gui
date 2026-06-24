@@ -210,29 +210,37 @@ describe('StatusBar ContextChip — per-source breakdown', () => {
           output_tokens: 0,
           turnCount: 3,
           lastBySource: {
-            system: 1000,
-            skills: 80,
-            tools: 200,
             messages: 3720,
+            skills: 80,
+            memory_files: 50,
+            custom_agents: 30,
+            system_prompt: 20,
+            mcp_tools: 100,
             mcp_deferred: 0,
-            total: 5000,
+            system_tools_deferred: 0,
+            free_space: 0,
+            total: 4000,
+            limit: 1_000_000,
+            details: { mcp_tools_list: [], memory_files_list: [], custom_agents_list: [] },
           },
         },
       },
       activeSessionId: 'sess-1',
     })
     render(<StatusBar model="MiniMax-M3" setModel={vi.fn()} thinkingEnabled={false} setThinkingEnabled={vi.fn()} supportsThinking={true} />)
-    // Open the popover
     screen.getByTitle('Context window & plan').click()
-    // Wait for the popover to render
     await screen.findByText('Plan usage')
-    // Section header + all 5 row labels
     expect(screen.getByText(/Breakdown by source/i)).toBeInTheDocument()
+    // All 9 row labels (the design's flat summary list)
     expect(screen.getByText('Messages')).toBeInTheDocument()
-    expect(screen.getByText('System')).toBeInTheDocument()
     expect(screen.getByText('Skills')).toBeInTheDocument()
-    expect(screen.getByText('Tools')).toBeInTheDocument()
-    expect(screen.getByText('MCP deferred')).toBeInTheDocument()
+    expect(screen.getByText('Memory files')).toBeInTheDocument()
+    expect(screen.getByText('Custom agents')).toBeInTheDocument()
+    expect(screen.getByText('System prompt')).toBeInTheDocument()
+    expect(screen.getByText('MCP tools')).toBeInTheDocument()
+    expect(screen.getByText('MCP tools (deferred)')).toBeInTheDocument()
+    expect(screen.getByText('System tools (deferred)')).toBeInTheDocument()
+    expect(screen.getByText('Free space')).toBeInTheDocument()
   })
 
   it('computes correct percentages for each source', async () => {
@@ -245,12 +253,18 @@ describe('StatusBar ContextChip — per-source breakdown', () => {
           output_tokens: 0,
           turnCount: 3,
           lastBySource: {
-            system: 100,    // 10%
-            skills: 50,     // 5%
-            tools: 50,      // 5%
-            messages: 800,  // 80%
+            messages: 800,
+            skills: 50,
+            memory_files: 0,
+            custom_agents: 0,
+            system_prompt: 100,    // 10%
+            mcp_tools: 50,
             mcp_deferred: 0,
+            system_tools_deferred: 0,
+            free_space: 0,
             total: 1000,
+            limit: 1_000_000,
+            details: { mcp_tools_list: [], memory_files_list: [], custom_agents_list: [] },
           },
         },
       },
@@ -258,17 +272,87 @@ describe('StatusBar ContextChip — per-source breakdown', () => {
     })
     render(<StatusBar model="MiniMax-M3" setModel={vi.fn()} thinkingEnabled={false} setThinkingEnabled={vi.fn()} supportsThinking={true} />)
     screen.getByTitle('Context window & plan').click()
-    // Wait for popover + breakdown
     await screen.findByText(/Breakdown by source/i)
-
-    // Each row shows "NN%". Messages 80%, System 10%, Skills/Tools 5%,
-    // MCP deferred 0%. Assert by reading the document text.
     const breakdown = screen.getByText(/Breakdown by source/i).parentElement
     expect(breakdown).toBeTruthy()
     const text = breakdown.parentElement.textContent
     expect(text).toMatch(/80%/)     // Messages
-    expect(text).toMatch(/10%/)     // System
-    expect(text).toMatch(/5%/)      // Skills + Tools
-    expect(text).toMatch(/0%/)      // MCP deferred
+    expect(text).toMatch(/10%/)     // System prompt
+    expect(text).toMatch(/5%/)      // Skills + MCP tools
+  })
+
+  it('hides expandable sub-sections when details is empty', async () => {
+    mockUseSessionTokens.mockReturnValue({
+      sessions: {
+        'sess-1': {
+          lastModel: 'MiniMax-M3',
+          lastTurnInput: 50_000,
+          input_tokens: 50_000,
+          output_tokens: 0,
+          turnCount: 3,
+          lastBySource: {
+            messages: 5000, skills: 0, memory_files: 0, custom_agents: 0,
+            system_prompt: 0, mcp_tools: 0, mcp_deferred: 0,
+            system_tools_deferred: 0, free_space: 0,
+            total: 5000, limit: 1_000_000,
+            details: { mcp_tools_list: [], memory_files_list: [], custom_agents_list: [] },
+          },
+        },
+      },
+      activeSessionId: 'sess-1',
+    })
+    render(<StatusBar model="MiniMax-M3" setModel={vi.fn()} thinkingEnabled={false} setThinkingEnabled={vi.fn()} supportsThinking={true} />)
+    screen.getByTitle('Context window & plan').click()
+    await screen.findByText(/Breakdown by source/i)
+    // No expandable chevron rows when details are empty
+    expect(screen.queryByText(/^MCP tools\s*\u00b7/)).toBeNull()
+    expect(screen.queryByText(/^Memory files\s*\u00b7/)).toBeNull()
+    expect(screen.queryByText(/^Custom agents\s*\u00b7/)).toBeNull()
+  })
+
+  it('renders expandable MCP tools row when mcp_tools_list has entries', async () => {
+    mockUseSessionTokens.mockReturnValue({
+      sessions: {
+        'sess-1': {
+          lastModel: 'MiniMax-M3',
+          lastTurnInput: 50_000,
+          input_tokens: 50_000,
+          output_tokens: 0,
+          turnCount: 3,
+          lastBySource: {
+            messages: 5000, skills: 0, memory_files: 0, custom_agents: 0,
+            system_prompt: 0, mcp_tools: 100, mcp_deferred: 0,
+            system_tools_deferred: 0, free_space: 0,
+            total: 5100, limit: 1_000_000,
+            details: {
+              mcp_tools_list: [
+                { server_id: 'filesystem', name: 'Local FS', tool_count: 12, tokens: 50 },
+                { server_id: 'github',     name: 'GitHub API', tool_count: 73, tokens: 50 },
+              ],
+              memory_files_list: [],
+              custom_agents_list: [],
+            },
+          },
+        },
+      },
+      activeSessionId: 'sess-1',
+    })
+    const { default: user } = await import('@testing-library/user-event')
+    const u = user.setup({ delay: null })
+    render(<StatusBar model="MiniMax-M3" setModel={vi.fn()} thinkingEnabled={false} setThinkingEnabled={vi.fn()} supportsThinking={true} />)
+    await u.click(screen.getByTitle('Context window & plan'))
+    await screen.findByText(/Breakdown by source/i)
+
+    // The expandable MCP tools row has a stable data-testid
+    // (`breakdown-expand-mcp-tools`). Use it instead of role+name
+    // which collides with the flat "MCP tools" row label.
+    const button = screen.getByTestId('breakdown-expand-mcp-tools')
+    expect(button).toBeTruthy()
+    await u.click(button)
+    // After expanding, the per-server entries are visible
+    expect(screen.getByText('Local FS')).toBeInTheDocument()
+    expect(screen.getByText('GitHub API')).toBeInTheDocument()
+    expect(screen.getByText(/^12 tools$/)).toBeInTheDocument()
+    expect(screen.getByText(/^73 tools$/)).toBeInTheDocument()
   })
 })
