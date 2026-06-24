@@ -264,7 +264,12 @@ export default function ChatPanel({
         // this event only when there's something meaningful.
         console.log('[ChatPanel] got usage event:', { sessionId, usage: data.usage, model: data.model })
         if (data.usage) {
-          recordUsage(sessionId, data.usage, data.model || null)
+          // data.by_source is the per-source breakdown from
+          // Agent.estimate_by_source() (system / skills / tools /
+          // messages / mcp_deferred / total). Optional — only present
+          // since the token-attribution feature; older backends
+          // omit it and we fall back to no breakdown.
+          recordUsage(sessionId, data.usage, data.model || null, data.by_source || null)
         }
       } else if (data.type === 'compact_done') {
         // Backend finished _summarize_messages for our manual [Compact]
@@ -299,7 +304,7 @@ export default function ChatPanel({
         // separate 'usage' event — record it either way so the StatusBar
         // sees real numbers even if the dedicated event isn't emitted.
         if (data.usage) {
-          recordUsage(sessionId, data.usage, data.model || null)
+          recordUsage(sessionId, data.usage, data.model || null, data.by_source || null)
         }
         // The final assistant message arrives AFTER all the text_delta
         // events have already streamed the content to the in-flight

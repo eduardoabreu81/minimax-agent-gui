@@ -275,6 +275,50 @@ function ContextChip() {
             <div className="h-full transition-all duration-300" style={barStyle} />
           </div>
 
+          {/* Section 1b — Per-source token breakdown (best-effort, from
+              Agent.estimate_by_source). Hidden when the backend hasn't
+              sent a breakdown yet (older sessions). Each row is a tiny
+              bar + label + pct of the total. Matches the Token Plan
+              dashboard print (Messages / Skills / MCP / System). */}
+          {bucket?.lastBySource && (() => {
+            const bs = bucket.lastBySource
+            const total = bs.total || 1
+            const rows = [
+              { key: 'messages',     label: 'Messages' },
+              { key: 'system',       label: 'System' },
+              { key: 'skills',       label: 'Skills' },
+              { key: 'tools',        label: 'Tools' },
+              { key: 'mcp_deferred', label: 'MCP deferred' },
+            ]
+            return (
+              <div className="mb-3">
+                <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
+                  Breakdown by source
+                </div>
+                <div className="space-y-1">
+                  {rows.map(({ key, label }) => {
+                    const tokens = bs[key] || 0
+                    const rowPct = total > 0 ? (tokens / total) * 100 : 0
+                    return (
+                      <div key={key} className="flex items-center gap-2 text-[11px]">
+                        <span className="w-[80px] text-muted-foreground truncate">{label}</span>
+                        <span className="flex-1 h-1.5 rounded-full bg-secondary overflow-hidden">
+                          <span
+                            className="block h-full bg-primary/70 transition-all duration-300"
+                            style={{ width: `${Math.min(rowPct, 100)}%` }}
+                          />
+                        </span>
+                        <span className="w-[44px] text-right font-mono tabular-nums text-foreground">
+                          {rowPct.toFixed(0)}%
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })()}
+
           {/* Section 2 — Token Plan (Claude Code style) */}
           <div className="flex items-center justify-between mb-2 pt-2.5 border-t border-border">
             <span className="text-[12.5px] font-semibold text-foreground">Plan usage</span>

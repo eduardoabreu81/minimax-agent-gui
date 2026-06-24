@@ -48,6 +48,13 @@ function emptyBucket() {
     lastModel: null,
     lastUpdated: 0,
     turnCount: 0,
+    // Token breakdown by source (system/skills/tools/messages/
+    // mcp_deferred/total). Filled in from the WS `usage` event's
+    // `by_source` field, computed by the backend's
+    // Agent.estimate_by_source(). Optional — older turns or
+    // estimation failures leave this as null and the StatusBar
+    // falls back to no breakdown.
+    lastBySource: null,
   }
 }
 
@@ -72,6 +79,9 @@ export function SessionTokensProvider({ children }) {
       if (typeof initial[id].lastTurnInput !== 'number') {
         initial[id] = { ...emptySession(), ...initial[id] }
       }
+      if (typeof initial[id].lastBySource === 'undefined') {
+        initial[id] = { ...initial[id], lastBySource: null }
+      }
     }
     return initial
   })
@@ -92,9 +102,12 @@ export function SessionTokensProvider({ children }) {
   // Record usage from a single assistant event. Anthropic usage is
   // cumulative per turn; we ADD input/output/cache to the running total
   // and remember the latest input_tokens value separately (for the bar).
-  const recordUsage = useCallback((sessionId, usage, model = null) => {
+  // Optional `bySource` carries Agent.estimate_by_source() output
+  // (system/skills/tools/messages/mcp_deferred/total) so the StatusBar
+  // popover can render a per-source breakdown.
+  const recordUsage = useCallback((sessionId, usage, model = null, bySource = null) => {
     if (!sessionId || !usage) return
-    console.log('[recordUsage]', { sessionId, input: usage.input_tokens, output: usage.output_tokens, cacheRead: usage.cache_read_input_tokens, cacheWrite: usage.cache_creation_input_tokens, model })
+    console.log('[recordUsage]', { sessionId, input: usage.input_tokens, output: usage.output_tokens, cacheRead: usage.cache_read_input_tokens, cacheWrite: usage.cache_creation_input_tokens, model, hasBySource: !!bySource })
     setSessions((prev) => {
       const cur = prev[sessionId] || emptySession()
       const next = {
@@ -107,6 +120,10 @@ export function SessionTokensProvider({ children }) {
         lastModel: model || cur.lastModel,
         lastUpdated: Date.now(),
         turnCount: cur.turnCount + 1,
+        // Only overwrite lastBySource when the backend actually sent
+        // a new breakdown — keeps the popover stable if a future turn
+        // doesn't include the field for any reason.
+        lastBySource: bySource ?? cur.lastBySource,
       }
       return { ...prev, [sessionId]: next }
     })
