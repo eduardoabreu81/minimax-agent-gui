@@ -118,6 +118,8 @@
     "lightMode": "浅色模式",
     "agent": "智能体",
     "maxSteps": "最大步数",
+    "autoCompact": "在 80% 自动压缩",
+    "autoCompactDesc": "当对话达到模型上下文窗口的 80% 时自动汇总早期回合。90% 安全网始终运行（忽略此开关），以防止超出上下文限制。",
     "workspace": "工作区",
     "configHint": "编辑 config/config.yaml 进行完整设置",
     "clickToToggle": "点击切换",

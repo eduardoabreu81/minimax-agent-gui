@@ -126,6 +126,8 @@
     "audioLowBitrateWarn": "Low bitrate selected ({kbps} kbps). Audio may sound noticeably compressed — consider 128 kbps or higher for music.",
     "audioHighBitrateHint": "Selected preset: {khz} kHz · {kbps} kbps · {format}. Higher bitrates produce larger files but preserve more detail.",
     "maxSteps": "Max Steps",
+    "autoCompact": "Auto-compact at 80%",
+    "autoCompactDesc": "Automatically summarize earlier turns when the conversation reaches 80% of the model's context window. The 90% safety net always runs (ignores this toggle) to prevent the context from blowing the limit.",
     "workspace": "Workspace",
     "configHint": "Edit config/config.yaml for full settings",
     "clickToToggle": "Click to toggle",

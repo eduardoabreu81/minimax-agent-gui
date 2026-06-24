@@ -118,6 +118,8 @@
     "lightMode": "ライトモード",
     "agent": "エージェント",
     "maxSteps": "最大ステップ数",
+    "autoCompact": "80%で自動圧縮",
+    "autoCompactDesc": "会話がモデルのコンテキストウィンドウの80%に達したとき、以前のターンを自動的に要約します。90%のセーフティネットは常に実行され(このトグルを無視します)、コンテキスト制限を超えるのを防ぎます。",
     "workspace": "ワークスペース",
     "configHint": "完全な設定は config/config.yaml を編集",
     "clickToToggle": "クリックで切り替え",

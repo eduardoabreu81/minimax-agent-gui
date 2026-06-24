@@ -2157,6 +2157,7 @@ class AgentConfigUpdate(BaseModel):
     workspace_dir: Optional[str] = None
     region: Optional[str] = None  # "global" or "cn"
     api_base: Optional[str] = None  # full URL, e.g. https://api.minimax.io/anthropic or a proxy
+    auto_compact: Optional[bool] = None  # whether to auto-compact at the 80% threshold; 90% safety net is NEVER overridable
 
 
 @app.put("/api/config/agent")
@@ -2223,6 +2224,12 @@ async def update_agent_config(req: AgentConfigUpdate):
             if not isinstance(cfg.get("minimax"), dict):
                 cfg["minimax"] = {}
             cfg["minimax"]["api_base"] = base.rstrip("/")
+
+        if req.auto_compact is not None:
+            # The 80% auto-compact threshold respects this toggle.
+            # The 90% safety net is NEVER overridable (see
+            # AgentConfig docstring + AGENTS.local.md invariant #14).
+            cfg["auto_compact"] = bool(req.auto_compact)
 
         import yaml
         with open(CONFIG_PATH, 'w', encoding='utf-8') as f:

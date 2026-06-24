@@ -118,6 +118,8 @@
     "lightMode": "라이트 모드",
     "agent": "에이전트",
     "maxSteps": "최대 단계",
+    "autoCompact": "80%에서 자동 압축",
+    "autoCompactDesc": "대화가 모델 컨텍스트 창의 80%에 도달하면 이전 턴을 자동으로 요약합니다. 90% 안전망은 항상 실행되며(이 토글을 무시합니다) 컨텍스트 제한을 초과하는 것을 방지합니다.",
     "workspace": "워크스페이스",
     "configHint": "전체 설정은 config/config.yaml 편집",
     "clickToToggle": "클릭하여 전환",

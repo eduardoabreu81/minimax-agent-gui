@@ -320,6 +320,7 @@ export default function SettingsPanel() {
           apiKeyConfigured: data.api_key_configured || false,
           model: data.agent?.model || 'MiniMax-M3',
           maxSteps: data.agent?.max_steps || 50,
+          autoCompact: data.agent?.auto_compact ?? true,
           // v0.5: ``workspace_dir`` is gone — we read the new
           // ``app_workspace_dir`` (read-only indicator below) instead.
           appWorkspaceDir: data.app_workspace_dir || '',
@@ -386,6 +387,9 @@ export default function SettingsPanel() {
       const agentPayload = {}
       if (localSettings.model) agentPayload.model = localSettings.model
       if (localSettings.maxSteps) agentPayload.max_steps = Number(localSettings.maxSteps)
+      // auto_compact is a bool — send as-is (don't coalesce to
+      // truthy; user turning it OFF must round-trip as false).
+      agentPayload.auto_compact = Boolean(localSettings.autoCompact)
       // v0.5: workspaceDir is no longer sent — per-session coding
       // workspace is set via PUT /api/coding/workspace instead.
       if (localSettings.region) agentPayload.region = localSettings.region
@@ -427,7 +431,8 @@ export default function SettingsPanel() {
       apiKey: '',
       apiKeyConfigured: false,
       model: 'MiniMax-M3',
-      maxSteps: 50,
+    maxSteps: 50,
+    autoCompact: true,
       // v0.5: no global workspaceDir; show the live app workspace
       // path (read-only) and let coding sessions pick their own folder.
       workspaceDir: '',
@@ -713,6 +718,31 @@ export default function SettingsPanel() {
                 className="w-full h-[36px] bg-surface border border-border rounded-[9px] px-3 text-[13px] text-foreground focus:outline-none focus:border-primary"
               />
               <p className="text-[10px] text-muted-foreground mt-1">{t('settings.maxStepsHint')}</p>
+            </div>
+
+            {/* Auto-compact toggle — 80% auto-compact threshold. The
+                90% safety net is NEVER overridable (see AgentConfig
+                docstring + AGENTS.local.md invariant #14), so
+                turning this OFF only suppresses the soft auto at
+                80% — the agent still compacts at 90% to avoid
+                blowing the context limit. */}
+            <div className="flex items-start justify-between gap-4 pt-1">
+              <div className="flex-1 min-w-0">
+                <label className="text-[12.5px] font-semibold text-foreground block">
+                  {t('settings.autoCompact')}
+                </label>
+                <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">
+                  {t('settings.autoCompactDesc')}
+                </p>
+              </div>
+              <Toggle
+                on={localSettings.autoCompact}
+                onChange={() => {
+                  const next = !localSettings.autoCompact
+                  setLocalSettings(s => ({ ...s, autoCompact: next }))
+                }}
+                label={t('settings.autoCompact')}
+              />
             </div>
 
             {/* ``workspaceDir`` removed in v0.5 — coding sessions pick a

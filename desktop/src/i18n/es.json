@@ -118,6 +118,8 @@
     "lightMode": "Modo Claro",
     "agent": "Agente",
     "maxSteps": "Pasos Máximos",
+    "autoCompact": "Auto-compactar al 80%",
+    "autoCompactDesc": "Resumir automáticamente turnos anteriores cuando la conversación alcanza el 80% de la ventana de contexto del modelo. La red de seguridad del 90% siempre se ejecuta (ignora este interruptor) para evitar superar el límite de contexto.",
     "workspace": "Workspace",
     "configHint": "Edita config/config.yaml para configuración completa",
     "clickToToggle": "Clic para alternar",
