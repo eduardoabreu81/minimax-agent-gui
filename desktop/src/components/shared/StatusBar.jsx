@@ -275,12 +275,15 @@ function ContextChip() {
           <circle cx="12" cy="12" r="10" />
           <path d="M12 6v6l4 2" />
         </svg>
-        {/* Explicit "tokens" suffix — without it "12k / 1.0M"
-            reads like 12 kilobytes / 1 megabyte (which is what the
-            original Claude Code reference confused the user with).
-            Showing the unit removes the ambiguity. */}
+        {/* Chip stays compact — no unit suffix. The popover header
+            below carries the explicit "tokens" unit for users who
+            need to know; the bar at the bottom of the screen is
+            glanceable space, and the percent + ratio already say
+            "context fill" implicitly (title="Context window & plan").
+            Edu's v0.4.x feedback: "não precisa colocar 'tokens' na
+            barra" — the suffix was visual noise on the chip. */}
         <span className="text-[11.5px] tabular-nums">
-          {formatTokenCount(used)} / {formatTokenCount(limit)} <span className="text-muted-foreground">tokens</span> ({pct}%)
+          {formatTokenCount(used)} / {formatTokenCount(limit)} ({pct}%)
         </span>
         <span className="w-[42px] h-[5px] rounded-full bg-secondary overflow-hidden inline-block">
           <span className="block h-full transition-all duration-300" style={barStyle} />
