@@ -254,6 +254,10 @@ export function Composer({
         }
       }
       if (e.key === "Enter" && !e.shiftKey) {
+        // The autocomplete popover has its own Enter handler
+        // (document-level). When the popover is open, let it
+        // pick the item and skip the send.
+        if (autocompleteOpen) return;
         e.preventDefault();
         submit();
       }
@@ -358,7 +362,15 @@ export function Composer({
                   const t = e.currentTarget;
                   setCursor(t.selectionStart ?? t.value.length);
                 }}
-                onKeyDown={handleKeyDown}
+                onKeyDown={(e) => {
+                  // Route keys through the slash-menu / autocomplete
+                  // / send logic. The autocomplete popover also has a
+                  // document-level capture handler (for arrow nav),
+                  // but Enter / Escape are handled here so we can
+                  // prevent the send-button from firing when a
+                  // popover is open.
+                  handleKeyDown(e);
+                }}
                 placeholder={isBusy ? `Waiting for ${expertLabel}…` : t("chat.placeholder")}
                 disabled={disabled}
                 rows={1}
