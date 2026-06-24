@@ -561,17 +561,25 @@ controls and fixed a number of Token Plan API quirks.
 
 ### Added — Settings (MCP Servers MiniMax label)
 
-- **Settings → "Tools" section renamed to "MCP Servers
-  (MiniMax)"** — the section that holds the web_search and
-  understand_image toggles was labeled just "Tools", but
-  those toggles are MiniMax MCP servers, not generic
-  "tools". A second section later in the rail is called
-  "MCP servers" (for the user-configured MCP servers) — the
-  two were easy to confuse. Renamed the label across all 6
-  locales, added "(MCP)" suffix to the toggle labels, and
-  expanded the webSearch description to call out "MiniMax
-  MCP server". The MCP section further down (user-configured
-  MCP servers) is unchanged.
+- **Settings → "Tools" and "MCP servers" merged into a
+  single "MCP Servers" section** — the first attempt was to
+  rename the "Tools" section to "MCP Servers (MiniMax)" and
+  add a "(MCP)" suffix to the toggle labels. That kept the
+  two adjacent sections separate and the suffix redundant.
+  On second look the two were conceptually the same thing
+  (MiniMax ships two built-in MCP servers, the user can
+  add more) — the split was just historical. Now a single
+  "MCP Servers" section (id `settings-mcp-servers` for the
+  scroll-spy) with a single Card containing two sub-blocks:
+  "MiniMax" (the built-in web_search + understand_image
+  toggles, with toggle labels back to "Web Search" /
+  "Image Understanding" without the now-redundant suffix) and
+  "Your servers" (the user-configured MCP server list, with
+  the existing add/edit/delete UI). The two sub-block labels
+  are new i18n keys (`settings.mcpServersMinimax` and
+  `settings.mcpServersYours`) translated to all 6 locales.
+  The rail loses the separate "Tools" entry and keeps just
+  the "MCP Servers" entry.
 
 - **System prompt gets a "## MiniMax MCP Servers" block** —
   before this, the system prompt had a "## Custom MCP Tools"
