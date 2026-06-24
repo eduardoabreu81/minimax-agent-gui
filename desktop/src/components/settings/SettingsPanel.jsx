@@ -482,7 +482,7 @@ export default function SettingsPanel() {
   // Scroll-spy: highlight the left-rail entry for whichever section is
   // currently in view. Each SectionHeader renders with id="settings-<key>".
   useEffect(() => {
-    const ids = ['about-you', 'appearance', 'default-model', 'agent', 'api-key', 'lang-region', 'generation-defaults', 'skills', 'tools', 'mcp', 'shortcuts', 'about-app']
+    const ids = ['about-you', 'appearance', 'default-model', 'agent', 'api-key', 'lang-region', 'generation-defaults', 'skills', 'mcp-servers', 'shortcuts', 'about-app']
     const observer = new IntersectionObserver(
       (entries) => {
         const visible = entries.filter((e) => e.isIntersecting)
@@ -522,8 +522,7 @@ export default function SettingsPanel() {
     { id: 'lang-region',         label: t('settings.langRegion'),          icon: Globe },
     { id: 'generation-defaults', label: t('settings.generationDefaults'),  icon: Sliders },
     { id: 'skills',              label: t('settings.skills') || 'Skills',  icon: Sparkles },
-    { id: 'tools',               label: t('settings.tools'),               icon: Boxes },
-    { id: 'mcp',                 label: t('settings.mcpServers'),          icon: Server },
+    { id: 'mcp-servers',         label: t('settings.mcpServers'),          icon: Server },
     { id: 'shortcuts',           label: t('settings.shortcuts'),           icon: Keyboard },
     { id: 'about-app',           label: t('settings.about'),               icon: Info },
   ]
@@ -986,9 +985,30 @@ export default function SettingsPanel() {
           <SkillsTab />
         </Card>
 
-        {/* ─── 9. Tools ───────────────────────────────────────────────────── */}
-        <SectionHeader id="settings-tools" icon={Boxes} title={t('settings.tools')} />
+        {/* ─── 9. MCP Servers ─────────────────────────────────────────────── */}
+        {/* Single MCP Servers section: the 2 MiniMax-built-in servers
+            (web_search, understand_image) at the top + the user's
+            own server list below. Fusing them into one section
+            makes it obvious they're all MCP — the user-configured
+            servers and the MiniMax ones aren't conceptually
+            different things, just different sources. */}
+        <div id="settings-mcp-servers" className="flex items-center justify-between mb-3.5 scroll-mt-6">
+          <SectionHeader id="settings-mcp-servers-header" icon={Server} title={t('settings.mcpServers')} />
+          <button
+            onClick={() => { resetMcpForm(); setMcpFormVisible(true) }}
+            className="flex items-center gap-1.5 h-[30px] px-3 rounded-[8px] border border-border bg-transparent text-foreground text-[12px] font-medium hover:border-primary/50 transition-colors"
+          >
+            <span className="text-[14px] leading-none">+</span> {t('settings.addServer')}
+          </button>
+        </div>
         <Card>
+          {/* Sub-block A: MiniMax built-in servers. Always present,
+              user can toggle each one independently. */}
+          <div className="px-5 pt-4 pb-2">
+            <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+              {t('settings.mcpServersMinimax')}
+            </div>
+          </div>
           <Row label={t('settings.webSearch')} desc={t('settings.webSearchDesc')} last={false}>
             <Toggle
               on={localSettings.webSearch}
@@ -1011,19 +1031,19 @@ export default function SettingsPanel() {
               label={t('settings.imageUnderstanding')}
             />
           </Row>
-        </Card>
 
-        {/* ─── 10. MCP servers ───────────────────────────────────────────── */}
-        <div id="settings-mcp" className="flex items-center justify-between mb-3.5 scroll-mt-6">
-          <SectionHeader icon={Server} title={t('settings.mcpServers')} />
-          <button
-            onClick={() => { resetMcpForm(); setMcpFormVisible(true) }}
-            className="flex items-center gap-1.5 h-[30px] px-3 rounded-[8px] border border-border bg-transparent text-foreground text-[12px] font-medium hover:border-primary/50 transition-colors"
-          >
-            <span className="text-[14px] leading-none">+</span> {t('settings.addServer')}
-          </button>
-        </div>
-        <Card>
+          {/* Divider between the MiniMax block (above) and the
+              user-configured servers block (below). Same Card
+              wrapper — just a top border + sub-label to set
+              them apart visually. */}
+          <div className="border-t border-border mt-3">
+            <div className="px-5 pt-4 pb-2">
+              <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                {t('settings.mcpServersYours')}
+              </div>
+            </div>
+          </div>
+
           {mcpLoading && <div className="px-5 py-3 text-[12px] text-muted-foreground">{t('settings.mcpLoading')}</div>}
           {mcpError && <div className="px-5 py-3 text-[12px] text-error">{mcpError}</div>}
 
