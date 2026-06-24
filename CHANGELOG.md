@@ -249,8 +249,77 @@ controls and fixed a number of Token Plan API quirks.
   gets a `right` slot for inline pills. Speech / Image / Music /
   Video panels refactored to consume the new shared layout.
 
+### Added — Context Window (A→D)
+
+- **Per-model percentage-based auto-compact** — `Agent._summarize_messages()`
+  now triggers summarization based on `api_total_tokens / model_context_limit`
+  instead of an absolute 80K floor. Thresholds: **80% auto** (respects
+  user toggle, default ON), **90% force** (safety net, NEVER overridable
+  even when the user disables auto-compact), **50% warn** (UI-only on M3).
+  Thresholds live in `mini_agent.config.AgentConfig` and are exposed
+  via `/api/config` for the frontend banner.
+- **`MODEL_CONTEXT_LIMITS` per LLM client** — single source of truth
+  for context windows (M3 = 1M, M2.7 / M2.7-highspeed = 204K).
+  Mirrored in `desktop/src/lib/modelLimits.js`. Falls back to a 200K
+  default if the client doesn't expose the map.
+- **`ContextWarningBanner` 3-tier UI** — soft warn (50%, M3-only) with
+  opt-in `[Compact now]` button, stronger auto banner at 80%, critical
+  banner at 90%. State-based dismiss (analogia do tanque: o ponteiro
+  marca meio tanque toda vez que está em meio, não só uma vez). i18n
+  for `contextWindow.*` in en + pt-BR (other locales inherit English
+  fallback).
+- **`chat_websocket` compact handler** — accepts `{type: "compact"}`
+  from the frontend and runs `agent._summarize_messages()` synchronously,
+  emitting `compact_done {before_tokens, after_tokens, model}` or
+  `compact_failed {detail}`. Re-emits `usage` so the StatusBar context
+  chip updates without waiting for the next LLM call.
+- **`daily_updated` window event** — `append_daily_turn()` emits
+  `{date, path}` after each user / assistant turn so any open
+  `ContextModal` / `DocViewer` / status widget refreshes in-place.
+- **ContextModal a11y** — focus trap (Tab cycles inside, focus cannot
+  escape into the backdrop), restore focus to the previously-focused
+  element on close, `aria-modal="true"` + `aria-labelledby`, ESC +
+  backdrop close.
+- **`ConversationStore` Protocol + `JSONConversationStore`** —
+  conversation persistence extracted behind a stable Protocol so the
+  backend code talks to an interface instead of touching JSON files
+  directly. `SQLiteConversationStore` stub documented as a roadmap
+  placeholder (FTS5 + WAL mode hints).
+- **Pytest suites recovered** — `test_speech.py` (32), `test_music_phase1.py`
+  (19), `test_music_cover.py` (20), `test_music_lyrics.py` (16),
+  `test_generation_defaults.py` (17) — total 104 tests referenced in
+  commit `8b8de98` (v0.4.0) but never staged before that commit. They
+  were already on disk with the correct content; this entry credits
+  the recovery.
+- **vitest for `AboutYouCard` + `ContextModal`** — 16 new tests
+  (7 + 9) covering title/textarea/Save, MIN_CONTENT_CHARS validation
+  banner, focus trap, ESC close, focus restore, daily auto-refresh
+  via window event. Total frontend test suite: 7 files / 68 tests.
+
 ### Fixed
 
+- **Token tracking in `last_usage`** — `Agent` was reading
+  `response.usage.input_tokens` / `output_tokens`, but `TokenUsage`
+  carries `prompt_tokens` / `completion_tokens` (the field names
+  input_tokens / output_tokens were always 0 in this code path).
+  Result: the StatusBar context chip drifted from the API-reported
+  total. Now reads the correct fields; cache fields default to 0
+  (acceptable cosmetic gap until `TokenUsage` grows cache slots).
+- **i18next 23+ placeholder regression** — v23 changed the default
+  interpolation prefix/suffix from `{name}` to `{{name}}` (mustache-style).
+  Our locale JSON files still use single-curly, so every interpolated
+  value rendered literally as `{count}`, `{pct}`, etc. — visible in
+  the music char counter and the TaskBoard stats bar. Pinned back to
+  v3-style delimiters in `desktop/src/i18n/index.js`. Companion typo
+  fix: `MusicPanel.jsx` was reading `t('image.characters', ...)` for the
+  music counter — the key lives under `music.*`, so the typo returned
+  the key string. Now reads `t('music.characters', ...)`. Other locales
+  (`es`, `ja`, `ko`, `zh-CN`) gain the `music.characters` key.
+- **`_safe_join` basename match** — rel_path == root.name now resolves
+  to root itself, so the frontend's default `path=workspace` (or any
+  path equal to the resolved root's basename) doesn't 404 on
+  `root/workspace`. Path-traversal guarantees preserved (empty rel_path
+  always resolves to root).
 - **T2I + I2I unification on `/v1/image_generation`** — both modes
   now share the same endpoint and entry point
   (`MiniMaxSyncClient.image_generate`, `image_sync`). I2I is selected
@@ -262,6 +331,16 @@ controls and fixed a number of Token Plan API quirks.
   `statusConfig.id === 'in-progress' ? ...` (a config key), which
   returned the wrong translation key for any non-`in-progress`
   status. Now reads the actual `task.status` value.
+
+### Removed
+
+- **Legacy PyQt6 `gui/` folder** — dropped (~1.8k LOC across
+  `gui/main.py`, `gui/panels/*`, `gui/widgets/*`). The PyQt6 GUI was
+  a pre-Tauri experiment that has not been actively maintained since
+  the v0.4.0 desktop-first migration. Tauri 2 is the primary interface
+  (`desktop/`); the web app moves to a separate fork. A separate
+  PyQt6 redesign experiment (`web/gui/`) was moved out of the repo
+  to `~/Documents/minimax-experiments/pyqt6-redesign/gui/`.
 
 ### Internal
 
