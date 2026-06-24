@@ -93,6 +93,7 @@ export function ChatPanel({ expertLabel, backendStatus, backendMessage, onToolAc
         disabled={backendStatus !== "running"}
         status={state.status}
         expertLabel={expertLabel}
+        sessionId={state.sessionId}
       />
     </div>
   );
