@@ -799,6 +799,67 @@ gap in the v0.5+ Hermes feature roadmap
   with PR A marked complete (path forward for PR B is the
   memory tool).
 
+### Added — Memory tool (`memory` agent tool)
+
+Hermes-spec memory management. The agent can now save, replace,
+or remove entries in MEMORY.md (2,200 chars) and USER.md
+(1,375 chars) during a turn — unlocking the self-improvement
+loop between sessions that the spec requires.
+
+- **Backend** — new `MemoryTool` class in
+  `mini_agent/tools/memory_tool.py`
+  - **3 actions** dispatched via a single `action` parameter:
+    `add` (append, with auto-duplicate prevention),
+    `replace` (substring match on `old_text`),
+    `remove` (substring match on `old_text`).
+  - **Capacity check** before every write — if
+    `current + new > limit`, returns error with
+    `current_entries` list and usage string (Hermes spec
+    format, paraphrased to our 2-target shape). The agent
+    must consolidate (replace/remove) in the same turn
+    before retrying.
+  - **Substring matching** — `old_text` just needs to be a
+    unique substring of exactly 1 entry. Multiple matches
+    return error asking for a longer substring.
+  - **Security scan** — prompt-injection patterns
+    (ignore-previous, system-prompt-override, hidden HTML
+    comments, credential exfiltration) + invisible Unicode
+    (zero-width, bidi overrides) blocked.
+  - **Atomic write** (tmp + replace) so a crash mid-write
+    doesn't leave a half-written file.
+  - **Audit log** — structured `memory_write` event via
+    `logger.info` with extras `{action, target, old_chars,
+    new_chars, delta, ts}`. Failed writes don't emit
+    (only state changes log).
+  - **write_approval gate** — when `config.minimax.memory.
+    write_approval=true`, refuses with "awaiting approval"
+    message. The staging queue is a future batch — for now,
+    the gate just refuses.
+  - **§-separated entries** — Hermes pattern. The leading
+    `#` preamble (header + explanation) is preserved
+    across add/replace/remove operations.
+
+- **Agent registration** — `web/backend/main.py` appends
+  `MemoryTool` to the per-session tool list. `agent_dir` is
+  read from `<app_workspace>/.agent/` — the same path the
+  context-files loader reads from. So a write via
+  MemoryTool is immediately visible to `load_agent_context`
+  on the next session (frozen snapshot pattern, per spec).
+
+- **Tests** — 41 pytest (memory_tool.py unit tests) + 7 pytest
+  (integration) = **48 new tests** across 2 test files. All green.
+  - Unit: split/join round-trip (3), substring matching (4),
+    security scan (8), add (6), replace (6), remove (3),
+    validation (2), security integration (2), write_approval (2),
+    audit log (3), split_preamble helper (3).
+  - Integration: writes to expected path, capacity blocks,
+    replace/remove, audit log emitted with extras, tool
+    importable, tool list assembly includes MemoryTool.
+
+- **Roadmap** — PR B marked complete in
+  `docs/roadmap/v0.5-hermes-context-features.md`. PR C
+  (Live Todo Progress) is next.
+
   Test counts: pytest **311/311** pass (was 292, +19);
   vitest **102/102** pass (was 95, +7).
 
