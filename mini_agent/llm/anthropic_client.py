@@ -33,6 +33,17 @@ class AnthropicClient(LLMClientBase):
         "MiniMax-M2.1-highspeed": 65_536,
         "MiniMax-M2": 65_536,
     }
+    # Per-model CONTEXT WINDOW (input limit, separate from max_tokens
+    # which is the output limit). Used by Agent._summarize_messages()
+    # to compute pct-based auto-compact triggers. M3 is the 1M-context
+    # flagship; M2.x tops out at 200K. Keep in sync with
+    # desktop/src/lib/modelLimits.js — both files are the source of
+    # truth on the respective sides (frontend display, backend trigger).
+    MODEL_CONTEXT_LIMITS: dict = {
+        "MiniMax-M3":           1_000_000,
+        "MiniMax-M2.7":           204_800,
+        "MiniMax-M2.7-highspeed": 204_800,
+    }
     # Models that support Anthropic-style extended thinking blocks.
     # Only M3 currently — M2.x does not accept the `thinking` param.
     THINKING_SUPPORTED: set = {"MiniMax-M3"}

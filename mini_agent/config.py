@@ -35,6 +35,14 @@ class AgentConfig(BaseModel):
     max_steps: int = 50
     workspace_dir: str = "./workspace"
     system_prompt_path: str = "system_prompt.md"
+    # Auto-compact when context window crosses compact_at_pct (0.0-1.0).
+    # Disabled by setting auto_compact=False — but the 90% safety net
+    # (force-compact, see mini_agent/agent.py) is NEVER overridable.
+    # Defaults match the spec agreed 2026-06-23: warn at 50%, auto at
+    # 80%, force at 90%.
+    auto_compact: bool = True
+    compact_at_pct: float = 0.8
+    force_compact_at_pct: float = 0.9
 
 
 class MCPConfig(BaseModel):
@@ -138,6 +146,9 @@ class Config(BaseModel):
             max_steps=data.get("max_steps", 50),
             workspace_dir=data.get("workspace_dir", "./workspace"),
             system_prompt_path=data.get("system_prompt_path", "system_prompt.md"),
+            auto_compact=data.get("auto_compact", True),
+            compact_at_pct=float(data.get("compact_at_pct", 0.8)),
+            force_compact_at_pct=float(data.get("force_compact_at_pct", 0.9)),
         )
 
         # Parse tools configuration

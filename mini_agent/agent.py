@@ -56,12 +56,27 @@ class Agent:
         tools: list[Tool],
         max_steps: int = 50,
         workspace_dir: str = "./workspace",
-        token_limit: int = 80000,  # Summary triggered when tokens exceed this value
+        token_limit: int = 80000,  # Legacy absolute-token floor (kept for back-compat)
+        auto_compact: bool = True,
+        compact_at_pct: float = 0.8,
+        force_compact_at_pct: float = 0.9,
     ):
         self.llm = llm_client
         self.tools = {tool.name: tool for tool in tools}
         self.max_steps = max_steps
         self.token_limit = token_limit
+        self.auto_compact = auto_compact
+        self.compact_at_pct = compact_at_pct
+        self.force_compact_at_pct = force_compact_at_pct
+        # Resolve the model's context window from the LLM client so pct
+        # checks are model-aware. Falls back to token_limit if the client
+        # doesn't expose the map (e.g. OpenAI client — it doesn't track
+        # this yet, default 200K is a safe over-estimate).
+        limits_map = getattr(llm_client, "MODEL_CONTEXT_LIMITS", {}) or {}
+        self.model_context_limit = (
+            limits_map.get(llm_client.model)
+            or getattr(llm_client, "DEFAULT_CONTEXT_LIMIT", 200_000)
+        )
         self.workspace_dir = Path(workspace_dir)
         # Cancellation event for interrupting agent execution (set externally, e.g., by Esc key)
         self.cancel_event: Optional[asyncio.Event] = None
@@ -195,9 +210,12 @@ class Agent:
         - If last round is still executing (has agent/tool messages but no next user), also summarize
         - Structure: system -> user1 -> summary1 -> user2 -> summary2 -> user3 -> summary3 (if executing)
 
-        Summary is triggered when EITHER:
-        - Local token estimation exceeds limit
-        - API reported total_tokens exceeds limit
+        Summary is triggered when ANY of:
+        - API reported total_tokens / model_context_limit >= compact_at_pct
+          AND auto_compact is enabled (user toggle in advanced settings)
+        - API reported total_tokens / model_context_limit >= force_compact_at_pct
+          (90% safety net — ALWAYS triggers, even if user disabled the toggle)
+        - Legacy absolute-token floor (token_limit=80K default) for back-compat
         """
         # Skip check if we just completed a summary (wait for next LLM call to update api_total_tokens)
         if self._skip_next_token_check:
@@ -205,15 +223,38 @@ class Agent:
             return
 
         estimated_tokens = self._estimate_tokens()
+        limit = self.model_context_limit or 1
+        api_pct = self.api_total_tokens / limit if limit > 0 else 0
+        estimated_pct = estimated_tokens / limit if limit > 0 else 0
 
-        # Check both local estimation and API reported tokens
-        should_summarize = estimated_tokens > self.token_limit or self.api_total_tokens > self.token_limit
+        # 90% safety net — never overridable by user toggle
+        force_compact = (
+            api_pct >= self.force_compact_at_pct
+            or estimated_pct >= self.force_compact_at_pct
+        )
+
+        # Auto-compact at user-configured threshold — respects toggle
+        auto_compact_due = (
+            self.auto_compact
+            and (
+                api_pct >= self.compact_at_pct
+                or estimated_pct >= self.compact_at_pct
+            )
+        )
+
+        # Legacy back-compat floor (token_limit=80K default from old code)
+        legacy_floor = (
+            estimated_tokens > self.token_limit
+            or self.api_total_tokens > self.token_limit
+        )
+
+        should_summarize = force_compact or auto_compact_due or legacy_floor
 
         # If neither exceeded, no summary needed
         if not should_summarize:
             return
 
-        _logger.debug(f"Token usage - Local estimate: {estimated_tokens}, API reported: {self.api_total_tokens}, Limit: {self.token_limit}")
+        _logger.debug(f"Token usage - Local estimate: {estimated_tokens} ({estimated_pct:.1%}), API reported: {self.api_total_tokens} ({api_pct:.1%}), Limit: {limit} | auto={self.auto_compact} compact_at={self.compact_at_pct:.0%} force_at={self.force_compact_at_pct:.0%}")
         _logger.debug("Triggering message history summarization...")
 
         # Find all user message indices (skip system prompt)
@@ -427,17 +468,22 @@ Requirements:
 
             # Accumulate API reported token usage + store the full block
             # so the WebSocket can forward it to the StatusBar's
-            # context-window chip. Anthropic SDK gives us input_tokens,
-            # output_tokens, cache_read_input_tokens,
-            # cache_creation_input_tokens — we ship them all.
+            # context-window chip. response.usage is a TokenUsage
+            # (mini_agent.schema) — it carries prompt_tokens /
+            # completion_tokens / total_tokens (provider-agnostic shape).
+            # The Anthropic client folds cache_read + cache_creation
+            # into prompt_tokens, so input_tokens here means "total
+            # tokens billed as input", which is what the StatusBar chip
+            # actually displays. Cache fields are 0 in this shape —
+            # acceptable cosmetic gap until TokenUsage grows cache slots.
             if response.usage:
                 self.api_total_tokens = response.usage.total_tokens
                 usage = response.usage
                 self.last_usage = {
-                    "input_tokens": getattr(usage, "input_tokens", 0) or 0,
-                    "output_tokens": getattr(usage, "output_tokens", 0) or 0,
-                    "cache_read_input_tokens": getattr(usage, "cache_read_input_tokens", 0) or 0,
-                    "cache_creation_input_tokens": getattr(usage, "cache_creation_input_tokens", 0) or 0,
+                    "input_tokens": getattr(usage, "prompt_tokens", 0) or 0,
+                    "output_tokens": getattr(usage, "completion_tokens", 0) or 0,
+                    "cache_read_input_tokens": 0,
+                    "cache_creation_input_tokens": 0,
                 }
 
             # Stream the model's reasoning (M3 extended thinking, etc.)
