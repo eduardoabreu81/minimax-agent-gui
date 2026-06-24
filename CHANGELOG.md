@@ -315,6 +315,22 @@ controls and fixed a number of Token Plan API quirks.
   music counter — the key lives under `music.*`, so the typo returned
   the key string. Now reads `t('music.characters', ...)`. Other locales
   (`es`, `ja`, `ko`, `zh-CN`) gain the `music.characters` key.
+- **i18next interpolation follow-up: balance + media keys left in
+  mustache** — the cffdad5 fix above only caught the `image.characters`
+  typo and `music.characters`; it missed a batch of keys migrated to
+  `{{var}}` in all 6 locales: `balance.tooltip`, `media.costLabel`,
+  `media.dailyLabel`, `media.imageCostLabel`. With the config pinned
+  to single-curly, the runtime couldn't resolve them and rendered them
+  literally as `{{balance}} / {{total}}` in the StatusBar credit
+  balance widget and as `{{credits}} credits (${{usd}})` in the
+  Music/Video/Speech cost badges. 24 placeholders (4 keys × 6
+  locales) converted back to single-curly. `media.imageCostLabel`
+  has no caller today (dead key) but is fixed for parity.
+  Guarded by `desktop/src/i18n/i18n.test.js` (4 new tests: no
+  mustache anywhere, all 4 keys exist in all 6 locales, placeholder
+  names are consistent across locales, and the real i18n instance
+  correctly substitutes vars in all 6 locales). Total frontend test
+  suite: 8 files / 72 tests.
 - **`_safe_join` basename match** — rel_path == root.name now resolves
   to root itself, so the frontend's default `path=workspace` (or any
   path equal to the resolved root's basename) doesn't 404 on
