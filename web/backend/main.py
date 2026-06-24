@@ -75,6 +75,21 @@ from mcp_runtime import test_mcp_server
 logging.basicConfig(level=logging.INFO)
 _logger = logging.getLogger(__name__)
 
+
+def _log_compact_event(payload: dict) -> None:
+    """Emit a structured compact-event log line (JSON, one line).
+
+    Companion to ``Agent._log_compact_event`` for events that originate
+    outside the agent (e.g. the WebSocket ``compact`` handler in
+    ``chat_websocket``). The frontend and the backend can both trigger
+    a summary; this helper unifies the log shape so dashboards ingest
+    the same format regardless of which path fired. Payload is echoed
+    verbatim — callers fill in ``event``, ``compact_id``, ``session_id``,
+    ``triggered_by`` (and any other fields like ``before_tokens`` /
+    ``pct_before`` / ``delta_tokens``).
+    """
+    _logger.info(json.dumps(payload))
+
 # Load config
 CONFIG_PATH = PROJECT_ROOT / "config" / "config.yaml"
 try:
@@ -1020,6 +1035,11 @@ Be concise, friendly, and helpful."""
         # ``history`` WebSocket event already gives the frontend the
         # visual timeline; this gives the *API* the same memory.
         _hydrate_agent_messages(agent, session_id)
+
+        # Bind the session_id onto the agent so structured compact logs
+        # (started / completed / failed) emitted from inside the agent
+        # carry the WS session id for correlation.
+        agent.session_id = session_id
 
         self.sessions[session_id] = agent
         return agent
@@ -2615,19 +2635,36 @@ async def chat_websocket(websocket: WebSocket, session_id: str):
             # (triggered by the [Compact] button in the warning banner).
             # Runs _summarize_messages synchronously, then re-emits a
             # `usage` event with the post-compact totals so the StatusBar
-            # updates without waiting for the next LLM call.
+            # updates without waiting for the next LLM call. Emits
+            # structured `started` / `completed` / `failed` log events
+            # (JSON, one line per state) for dashboards to ingest.
             if data.get("type") == "compact":
+                compact_id = uuid.uuid4().hex[:12]
+                before = agent.api_total_tokens or 0
+                limit = agent.model_context_limit or 1
+                pct_before = before / limit if limit > 0 else 0
+                last_usage = getattr(agent, "last_usage", None)
+                effective_model = (
+                    data.get("model")
+                    or getattr(agent.llm, "model", None)
+                )
+                _log_compact_event({
+                    "event": "started",
+                    "compact_id": compact_id,
+                    "session_id": session_id,
+                    "triggered_by": "frontend",
+                    "model": effective_model,
+                    "before_tokens": before,
+                    "pct_before": round(pct_before, 4),
+                    "model_context_limit": limit,
+                })
                 try:
-                    before = agent.api_total_tokens or 0
                     await agent._summarize_messages()
                     after = agent.api_total_tokens or 0
-                    last_usage = getattr(agent, "last_usage", None)
-                    effective_model = (
-                        data.get("model")
-                        or getattr(agent.llm, "model", None)
-                    )
+                    pct_after = after / limit if limit > 0 else 0
                     await websocket.send_json({
                         "type": "compact_done",
+                        "compact_id": compact_id,
                         "before_tokens": before,
                         "after_tokens": after,
                         "model": effective_model,
@@ -2639,11 +2676,34 @@ async def chat_websocket(websocket: WebSocket, session_id: str):
                             "usage": last_usage,
                             "model": effective_model,
                         })
-                    _logger.info(f"[compact] session={session_id} {before}->{after} model={effective_model}")
+                    _log_compact_event({
+                        "event": "completed",
+                        "compact_id": compact_id,
+                        "session_id": session_id,
+                        "triggered_by": "frontend",
+                        "model": effective_model,
+                        "before_tokens": before,
+                        "after_tokens": after,
+                        "pct_before": round(pct_before, 4),
+                        "pct_after": round(pct_after, 4),
+                        "delta_tokens": before - after,
+                        "delta_pct": round(pct_before - pct_after, 4),
+                    })
                 except Exception as compact_err:
-                    _logger.error(f"[compact] session={session_id} failed: {compact_err}")
+                    _log_compact_event({
+                        "event": "failed",
+                        "compact_id": compact_id,
+                        "session_id": session_id,
+                        "triggered_by": "frontend",
+                        "model": effective_model,
+                        "before_tokens": before,
+                        "pct_before": round(pct_before, 4),
+                        "error": str(compact_err),
+                        "error_type": type(compact_err).__name__,
+                    })
                     await websocket.send_json({
                         "type": "compact_failed",
+                        "compact_id": compact_id,
                         "detail": str(compact_err),
                     })
                 continue
