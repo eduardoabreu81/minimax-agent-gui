@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { apiFetch, apiWebSocketUrl } from '../../lib/api.js'
 import { useTranslation } from 'react-i18next'
-import { Send, ArrowRight, Plus, User, Bot, Loader2, Paperclip, X, Image as ImageIcon, FileText, MessageSquarePlus, Trash2, ChevronDown, Pencil, Search } from 'lucide-react'
-import SlashMenu from '../shared/SlashMenu.jsx'
+import { Plus, User, Bot, Loader2, FileText, MessageSquarePlus, Trash2, ChevronDown, Pencil } from 'lucide-react'
+import { Composer } from './Composer'
 import { useSessionProtection } from '../../hooks/useSessionProtection'
 import { useSessionTokens } from '../../context/SessionTokensContext'
 import ThinkingBlock from '../shared/ThinkingBlock'
@@ -10,10 +10,6 @@ import CopyButton from '../shared/CopyButton'
 import MarkdownRenderer from '../MarkdownRenderer'
 import ContextWarningBanner from '../shared/ContextWarningBanner'
 import { getCompactThresholds, getContextLimit } from '../../lib/modelLimits'
-import { useContextRefs } from '../context-refs/useContextRefs.js'
-import { ContextRefChips } from '../context-refs/ContextRefChips.jsx'
-import { ContextRefAutocomplete } from '../context-refs/ContextRefAutocomplete.jsx'
-import { buildAttachedContext } from '../context-refs/buildAttachedContext.js'
 
 function generateId() {
   return Math.random().toString(36).substring(2, 10)
@@ -36,11 +32,6 @@ export default function ChatPanel({
   const thinkingEnabled = thinkingEnabledProp ?? true
   const supportsThinking = supportsThinkingProp ?? (activeModelProp === 'MiniMax-M3')
   const [messages, setMessages] = useState([])
-  const [input, setInput] = useState('')
-  // Cursor position inside the textarea — used by the @-refs hook
-  // to compute which partial ref the user is currently typing and
-  // to position the autocomplete popover relative to the caret.
-  const [cursor, setCursor] = useState(0)
   const [isConnected, setIsConnected] = useState(false)
   const [isThinking, setIsThinking] = useState(false)
   // True between sending {type:'compact'} and receiving the matching
@@ -48,7 +39,6 @@ export default function ChatPanel({
   // for the auto/max tiers so the user sees feedback while the backend
   // runs _summarize_messages (can take 1-3s for long histories).
   const [compactInFlight, setCompactInFlight] = useState(false)
-  const [attachment, setAttachment] = useState(null)
   const [sessionId, setSessionId] = useState(() => {
     // Persist the chat sessionId in localStorage so it survives tab
     // switches, page refreshes, and accidental component unmounts.
@@ -76,9 +66,6 @@ export default function ChatPanel({
   const streamingThinkingRef = useRef('')
   const [conversations, setConversations] = useState([])
   const [showConvList, setShowConvList] = useState(false)
-  const [skills, setSkills] = useState([])
-  const [showSkills, setShowSkills] = useState(false)
-  const [skillIndex, setSkillIndex] = useState(0)
   const [thinkingDuration, setThinkingDuration] = useState(0)
   const [editingId, setEditingId] = useState(null)
   const [editingTitle, setEditingTitle] = useState('')
@@ -91,13 +78,8 @@ export default function ChatPanel({
   const [permissionRequest, setPermissionRequest] = useState(null)
   const wsRef = useRef(null)
   const scrollRef = useRef(null)
-  const fileInputRef = useRef(null)
   const convListRef = useRef(null)
   const searchTimeoutRef = useRef(null)
-  // Ref to the composer textarea — used to anchor the @-ref
-  // autocomplete popover (positioned via getBoundingClientRect in
-  // ContextRefAutocomplete).
-  const composerTextareaRef = useRef(null)
 
   const { register } = useSessionProtection()
 
@@ -105,56 +87,16 @@ export default function ChatPanel({
     register('chat-thinking', isThinking, 'Agent is thinking')
   }, [isThinking, register])
 
-  // ---- @-refs: parse, expand (debounced), autocomplete (debounced) ----
-  // The hook is pure-React: it observes (draft, cursor, sessionId) and
-  // returns the live state. We do NOT mutate `input` from inside the
-  // hook — the textarea onChange is the source of truth.
-  const { parsed, partial, report, isExpanding, suggestions, isListing } = useContextRefs({
-    draft: input,
-    cursor,
-    sessionId,
-  })
-
-  // Popover open state mirrors partial: true when there's an active
-  // partial ref at the cursor, false otherwise (whitespace, no @,
-  // cursor not on a ref). Escape flips it to false explicitly.
-  const [autocompleteOpen, setAutocompleteOpen] = useState(false)
-  useEffect(() => {
-    if (partial) setAutocompleteOpen(true)
-    else setAutocompleteOpen(false)
-  }, [partial])
-
-  // When the user picks a suggestion from the autocomplete popover,
-  // replace the partial @-ref in the text with the inserted string
-  // (which already includes the "@type:" prefix) and move the
-  // cursor to just after the inserted text.
-  const handleAutocompleteSelect = useCallback((insertion) => {
-    if (!partial) return
-    setInput((prev) => {
-      const before = prev.slice(0, partial.start)
-      const after = prev.slice(partial.end)
-      const next = before + insertion + after
-      const newCursor = before.length + insertion.length
-      // setTimeout so the textarea re-renders with the new value
-      // before we restore the caret.
-      setTimeout(() => {
-        if (composerTextareaRef.current) {
-          composerTextareaRef.current.focus()
-          composerTextareaRef.current.setSelectionRange(newCursor, newCursor)
-        }
-      }, 0)
-      return next
-    })
-    setAutocompleteOpen(false)
-  }, [partial])
-
-  useEffect(() => {
-    register('chat-input', input.trim().length > 0, 'Unsent message')
-  }, [input, register])
-
-  useEffect(() => {
-    register('chat-attachment', !!attachment, 'Pending attachment')
-  }, [attachment, register])
+  // Composer is responsible for the "unsent content" / "pending
+  // attachment" session protection registration. It fires
+  // onDirtyChange on every text/attachment state change; we
+  // re-register the chat-input slot here.
+  const handleComposerDirtyChange = useCallback(
+    (dirty) => {
+      register('chat-input', dirty, 'Unsent message')
+    },
+    [register]
+  )
 
   const fetchConversations = async () => {
     try {
@@ -168,14 +110,6 @@ export default function ChatPanel({
         // the user picks a previous one by clicking it in the sidebar
         // list explicitly.
       }
-    } catch (e) { /* ignore */ }
-  }
-
-  const fetchSkills = async () => {
-    try {
-      const res = await apiFetch('/api/skills')
-      const data = await res.json()
-      setSkills(data.skills || [])
     } catch (e) { /* ignore */ }
   }
 
@@ -545,8 +479,8 @@ export default function ChatPanel({
       wsRef.current.send(JSON.stringify({ type: 'activate_skill', skill: skillName }))
     }
     setMessages(prev => [...prev, { type: 'system', content: `Skill '${skillName}' activated` }])
-    setInput('')
-    setShowSkills(false)
+    // Composer handles the input-clear + slash-menu-close side of
+    // activation; this is just the WS plumbing + local system msg.
   }
 
   const handlePermissionApprove = useCallback(() => {
@@ -571,38 +505,15 @@ export default function ChatPanel({
     setPermissionRequest(null)
   }, [permissionRequest])
 
-  const sendMessage = useCallback(async () => {
-    if ((!input.trim() && !attachment) || !wsRef.current) return
-    const trimmed = input.trim()
-
-    // Re-run expand right before send so the attached context is
-    // fresh (the debounced report might be stale if the user typed
-    // fast and hit Enter before the 400ms timer fired).
-    let attached = ''
-    try {
-      const res = await apiFetch('/api/context-refs/expand', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id: sessionId, message: trimmed }),
-      })
-      if (res.ok) {
-        const body = await res.json()
-        if (body.refused) {
-          // Hard limit — refuse the send and surface the reason.
-          alert(`Context too large to send: ${body.refusal_reason}`)
-          return
-        }
-        attached = buildAttachedContext(body)
-      }
-    } catch {
-      // Network error — send without attached context. The agent
-      // still sees the @-refs in plain text, no worse than the
-      // pre-PR-A flow.
-    }
-
-    const finalText = attached ? `${trimmed}\n\n${attached}` : trimmed
+  // Called by Composer via onSend. The `text` argument is already
+  // augmented with the "--- Attached Context ---" block from
+  // @-ref expansion (Composer does the expand and hard-limit check
+  // before calling). The `attachment` is the file the user picked
+  // via the paperclip button.
+  const sendMessage = useCallback((text, attachment) => {
+    if (!wsRef.current) return
     const payload = {
-      message: finalText,
+      message: text,
       permission_mode: 'agent',
       // Per-turn model + thinking override. The backend uses these to
       // choose which LLM to call and whether to inject the Anthropic
@@ -611,79 +522,18 @@ export default function ChatPanel({
       thinking: supportsThinking ? thinkingEnabled : false,
     }
     if (attachment) payload.attachment = attachment.path
-    // Show user message immediately before sending (use the trimmed
-    // original — the attached context is for the agent only, the
-    // chat history stays clean).
+    // Show user message immediately before sending. The original
+    // (text) is shown — the attached context is for the agent only.
     setMessages(prev => [...prev, {
       type: 'user',
-      content: input.trim() || '📎 Attachment sent',
-      attachment: attachment?.path
+      content: text || '📎 Attachment sent',
+      attachment: attachment?.path,
     }])
     streamingThinkingRef.current = ''
     wsRef.current.send(JSON.stringify(payload))
-    setInput('')
-    setCursor(0)
-    setAttachment(null)
     setIsThinking(true)
     onProcessingChange?.(true)
-  }, [input, attachment, onProcessingChange, activeModel, supportsThinking, thinkingEnabled, sessionId])
-
-  const filteredSkills = input.startsWith('/')
-    ? skills.filter(s =>
-        s.name.toLowerCase().includes(input.slice(1).toLowerCase()) ||
-        s.description?.toLowerCase().includes(input.slice(1).toLowerCase())
-      )
-    : []
-
-  const handleKeyDown = (e) => {
-    if (e.key === 'Escape' && autocompleteOpen) {
-      e.preventDefault()
-      setAutocompleteOpen(false)
-      return
-    }
-    if (showSkills && filteredSkills.length > 0) {
-      if (e.key === 'ArrowDown') {
-        e.preventDefault()
-        setSkillIndex(i => (i + 1) % filteredSkills.length)
-        return
-      }
-      if (e.key === 'ArrowUp') {
-        e.preventDefault()
-        setSkillIndex(i => (i - 1 + filteredSkills.length) % filteredSkills.length)
-        return
-      }
-      if (e.key === 'Enter') {
-        e.preventDefault()
-        activateSkill(filteredSkills[skillIndex].name)
-        return
-      }
-      if (e.key === 'Escape') {
-        setShowSkills(false)
-        return
-      }
-    }
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      sendMessage()
-    }
-  }
-
-  const handleFileSelect = async (e) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    const formData = new FormData()
-    formData.append('file', file)
-    try {
-      const res = await apiFetch('/api/upload', { method: 'POST', body: formData })
-      const data = await res.json()
-      if (data.success) {
-        setAttachment({ name: file.name, path: data.path, type: file.type })
-      }
-    } catch (err) {
-      console.error('Upload failed:', err)
-    }
-    e.target.value = ''
-  }
+  }, [onProcessingChange, activeModel, supportsThinking, thinkingEnabled])
 
   const currentTitle = conversations.find(c => c.id === sessionId)?.title || 'Chat'
 
@@ -892,104 +742,19 @@ export default function ChatPanel({
         )}
       </div>
 
-      {/* Composer — single rounded card (mockup: lines 242-260) */}
-      <div style={{ flex: 'none', padding: '0 24px 22px' }}>
-        <div style={{ maxWidth: 760, margin: '0 auto' }}>
-          {attachment && (
-            <div className="flex items-center gap-2 mb-2 px-3 py-1.5 bg-primary/10 border border-primary/20 rounded-lg w-fit">
-              {attachment.type?.startsWith('image/') ? <ImageIcon size={12} className="text-primary" /> : <FileText size={12} className="text-primary" />}
-              <span className="text-xs text-primary">{attachment.name}</span>
-              <button onClick={() => setAttachment(null)} className="text-primary hover:text-primary/70">
-                <X size={12} />
-              </button>
-            </div>
-          )}
-          {/* @-ref preview chips (one per parsed @-ref). Renders
-              nothing when there are no refs in the current draft. */}
-          <ContextRefChips parsed={parsed} report={report} isExpanding={isExpanding} />
-          <div className="relative">
-            {showSkills && filteredSkills.length > 0 && (
-              <SlashMenu
-                skills={filteredSkills}
-                activeIndex={skillIndex}
-                onSelect={(s) => activateSkill(s.name)}
-                onHoverIndex={setSkillIndex}
-                size="md"
-              />
-            )}
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileSelect}
-              accept="image/*,.txt,.md,.json,.js,.jsx,.ts,.tsx,.py,.html,.css"
-              className="hidden"
-            />
-            <div style={{ border: '1px solid hsl(var(--border))', borderRadius: 14, background: 'hsl(var(--card))', boxShadow: '0 4px 20px rgba(0,0,0,0.18)', overflow: 'hidden' }}>
-              {/* Wrap textarea in a relative div so the @-ref
-                  autocomplete popover can position itself relative
-                  to the caret via anchorRef. */}
-              <div className="relative">
-                <textarea
-                  ref={composerTextareaRef}
-                  value={input}
-                  onChange={(e) => {
-                    const value = e.target.value
-                    setInput(value)
-                    setCursor(e.target.selectionStart ?? value.length)
-                    if (value.startsWith('/')) {
-                      if (!showSkills) fetchSkills()
-                      setShowSkills(true)
-                      setSkillIndex(0)
-                    } else {
-                      setShowSkills(false)
-                    }
-                  }}
-                  onSelect={(e) => {
-                    const t = e.currentTarget
-                    setCursor(t.selectionStart ?? t.value.length)
-                  }}
-                  onKeyDown={handleKeyDown}
-                  placeholder={t('chat.placeholder')}
-                  rows={1}
-                  style={{ width: '100%', border: 'none', outline: 'none', resize: 'none', background: 'transparent', color: 'hsl(var(--foreground))', fontSize: 14, padding: '14px 16px 4px', minHeight: 48 }}
-                />
-                {autocompleteOpen && partial && (
-                  <ContextRefAutocomplete
-                    partial={partial}
-                    suggestions={suggestions}
-                    isLoading={isListing}
-                    onSelect={handleAutocompleteSelect}
-                    onClose={() => setAutocompleteOpen(false)}
-                    anchorRef={composerTextareaRef}
-                  />
-                )}
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 10px 10px' }}>
-                <div className="flex items-center gap-1.5">
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={!isConnected}
-                    title="Attach file or image"
-                    className="w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:bg-surface hover:text-foreground disabled:opacity-40 transition-colors"
-                  >
-                    <Paperclip size={17} aria-hidden="true" />
-                  </button>
-                </div>
-                <button
-                  onClick={sendMessage}
-                  disabled={(!input.trim() && !attachment) || !isConnected}
-                  title="Send"
-                  className="flex items-center justify-center bg-primary hover:bg-primary-hover disabled:opacity-40 disabled:cursor-not-allowed text-white transition-colors"
-                  style={{ width: 34, height: 34, borderRadius: 9 }}
-                >
-                  <ArrowRight size={17} aria-hidden="true" />
-                </button>
-              </div>
-            </div>
-          </div>
-          <p className="text-[10px] text-muted-foreground mt-2 text-center">Enter to send · Shift+Enter for new line</p>
-        </div>
-      </div>
+      {/* Composer — owns the textarea, @-ref chips + autocomplete,
+          /skill slash menu, paperclip attachment, hard-limit banner.
+          Status is derived from WS state so the spinner / placeholder
+          / send button reflect the agent's current activity. */}
+      <Composer
+        sessionId={sessionId}
+        onSend={sendMessage}
+        onActivateSkill={activateSkill}
+        onDirtyChange={handleComposerDirtyChange}
+        status={!isConnected ? 'error' : isThinking ? 'thinking' : 'idle'}
+        expertLabel={t('app.name')}
+        disabled={!isConnected}
+      />
 
       {/* Inline permission modal — only for medium/high risk tools.
           Read-only tools (risk === "low") are auto-approved in the WS
