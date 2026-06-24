@@ -1,17 +1,24 @@
-// SettingsPanel — MCP Servers (MiniMax) label test.
+// SettingsPanel.mcp.test.jsx — guards the merged "MCP Servers"
+// section. After the v0.4.x session-4 fix, the old separate
+// "Tools" / "MCP servers" sections were fused into one
+// "MCP Servers" Card with two sub-blocks:
+//   - "MiniMax" (the built-in web_search + understand_image toggles)
+//   - "Your servers" (the user-configured MCP server list)
 //
-// Verifies that the section that holds the web_search and
-// understand_image toggles is clearly labeled as MiniMax
-// MCP servers, not just "Tools". The MCP section further
-// down (user-configured MCP servers) keeps its own
-// "MCP servers" label — this test only covers the
-// MiniMax-specific section.
+// The two sub-blocks use the same Card wrapper — they just
+// have a divider + sub-label between them. This test confirms:
+//   - the rail has ONE entry for MCP Servers (not two)
+//   - the section header + sub-block labels render
+//   - the built-in web_search and understand_image labels are
+//     clean ("Web Search", "Image Understanding" — no
+//     "(MCP)" suffix because the parent section already
+//     makes the MCP context clear)
+//   - the i18n key values map to the merged-section strings
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import SettingsPanel from './SettingsPanel.jsx'
 
-// Minimal mocks — same shape as the auto-compact test file.
 const mockApiFetch = vi.fn()
 vi.mock('../../lib/api.js', () => ({
   apiFetch: (...args) => mockApiFetch(...args),
@@ -72,47 +79,42 @@ beforeEach(() => {
   })
 })
 
-describe('SettingsPanel — MCP Servers (MiniMax) section', () => {
-  it('section header uses the MCP Servers (MiniMax) label, not just Tools', async () => {
+describe('SettingsPanel — merged MCP Servers section', () => {
+  it('section header + sub-block labels both render', async () => {
     render(<SettingsPanel />)
-    // t('settings.tools') renders in 2 places: the rail entry
-    // and the section header. We assert both are present and
-    // the section header has the right id.
-    const matches = await screen.findAllByText('settings.tools')
-    expect(matches.length).toBeGreaterThanOrEqual(1)
-    // The section header carries id="settings-tools"
-    const sectionHeader = document.getElementById('settings-tools')
-    expect(sectionHeader).toBeTruthy()
-    expect(sectionHeader.textContent).toContain('settings.tools')
+    // The "MCP Servers" label appears twice: once in the rail
+    // entry, once in the section header. Both should be present.
+    const headerMatches = screen.getAllByText('settings.mcpServers')
+    expect(headerMatches.length).toBeGreaterThanOrEqual(1)
+    // The two sub-block labels inside the same Card
+    expect(screen.getByText('settings.mcpServersMinimax')).toBeInTheDocument()
+    expect(screen.getByText('settings.mcpServersYours')).toBeInTheDocument()
   })
 
-  it('webSearch label includes the (MCP) suffix in the i18n key value', async () => {
+  it('section carries id="settings-mcp-servers" for scroll-spy', async () => {
     render(<SettingsPanel />)
-    // The toggle's accessible name is t('settings.webSearch')
-    // which is "Web Search (MCP)" in the en.json translation.
-    // We assert the i18n key is in the DOM (via the t() stub
-    // returning the key) AND that the key maps to a string
-    // containing the (MCP) marker. This double-check protects
-    // against future key renames that drop the marker.
-    const en = (await import('./../../i18n/en.json')).default
-    expect(en.settings.webSearch).toMatch(/\(MCP\)/i)
-    expect(en.settings.imageUnderstanding).toMatch(/\(MCP\)/i)
+    const section = document.getElementById('settings-mcp-servers')
+    expect(section).toBeTruthy()
+    expect(section.textContent).toContain('settings.mcpServers')
   })
 
-  it('webSearchDesc explicitly names the MiniMax MCP server', async () => {
-    // The description text is the agent's primary way of
-    // understanding what this tool is and when to use it.
-    // Verify the en.json translation calls out "MiniMax MCP".
+  it('built-in web_search toggle is labeled "Web Search" (no MCP suffix)', async () => {
+    // The (MCP) suffix was added in the previous round of
+    // session-4 changes but became redundant once the parent
+    // section made the MCP context clear. The label is back
+    // to a clean "Web Search".
     const en = (await import('./../../i18n/en.json')).default
-    expect(en.settings.webSearchDesc).toMatch(/MiniMax MCP/i)
+    expect(en.settings.webSearch).toBe('Web Search')
+    expect(en.settings.imageUnderstanding).toBe('Image Understanding')
   })
 
-  it('section label in en.json is MCP Servers (MiniMax), not Tools', async () => {
-    // Hard guarantee against reverting the label back to a
-    // generic "Tools" — that was the original bug (the user
-    // couldn't tell that the two toggles were MCP servers).
+  it('sub-block label in en.json is "MiniMax"', async () => {
     const en = (await import('./../../i18n/en.json')).default
-    expect(en.settings.tools).toMatch(/MCP Servers/i)
-    expect(en.settings.tools).toMatch(/MiniMax/i)
+    expect(en.settings.mcpServersMinimax).toBe('MiniMax')
+  })
+
+  it('sub-block label in en.json is "Your servers"', async () => {
+    const en = (await import('./../../i18n/en.json')).default
+    expect(en.settings.mcpServersYours).toBe('Your servers')
   })
 })
