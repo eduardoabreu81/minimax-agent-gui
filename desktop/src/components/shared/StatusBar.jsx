@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { ChevronDown, ChevronRight, Loader2, Brain, AlertCircle } from 'lucide-react'
 import { useSessionTokens } from '../../context/SessionTokensContext'
 import { useAgentActivity } from '../../context/AgentActivityContext'
-import { getContextLimit, formatTokenCount, formatTokenCountExact, DEFAULT_MODEL } from '../../lib/modelLimits'
+import { getContextLimit, formatTokenCount, formatTokenCountExact, formatByteCount, DEFAULT_MODEL } from '../../lib/modelLimits'
 import { apiFetch } from '../../lib/api.js'
 
 // StatusBar — global footer anchored above the bottom of the app.
@@ -216,295 +216,13 @@ export const planTextState = (pct) => {
 // Exported for unit testing.
 export const contextBarGradient = 'linear-gradient(to right, hsl(142 71% 45%) 0%, hsl(48 96% 53%) 50%, hsl(0 84% 60%) 100%)'
 
-// BreakdownPanel — the 9-row summary + 3 expandable sub-sections
-// inside the context popover. Extracted from ContextChip so it can
-// be unit-tested in isolation (see StatusBar.test.jsx) and so the
-// JSX inside ContextChip stays readable.
-//
-// Visual layout (matches the Claude Code reference):
-//
-//   COLLAPSED (default):
-//   ┌──────────────────────────────────────────────────────┐
-//   │ Breakdown by source                        718.2k  v  │
-//   └──────────────────────────────────────────────────────┘
-//
-//   EXPANDED (click the header):
-//   ┌──────────────────────────────────────────────────────┐
-//   │ Breakdown by source                        718.2k  ^  │
-//   │ ──────────────────────────────────────────────────── │
-//   │ Messages              ▰▰▰▰▰▰▰▰▰▰▰▰▰▱▱▱ 718.2k  72% │
-//   │ Skills                ▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱  30.1k   3% │
-//   │ Memory files          ▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱   7.4k   1% │
-//   │ Custom agents         ▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱   5.1k   1% │
-//   │ System prompt         ▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱   2.8k   0% │
-//   │ MCP tools             ▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱   171    0% │
-//   │ MCP tools (deferred)  ▰▰▱▱▱▱▱▱▱▱▱▱▱▱▱  22.8k   2% │
-//   │ System tools (defer.) ▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱  14.5k   2% │
-//   │ Free space            ▰▰▰▰▰▱▱▱▱▱▱▱▱▱▱ 236.3k  24% │
-//   ├──────────────────────────────────────────────────────┤
-//   │ > MCP tools                  23.0k    85 tools      │
-//   │ > Memory files                7.4k    12 files      │
-//   │ > Custom agents               5.1k    60 agents     │
-//   └──────────────────────────────────────────────────────┘
-//
-// Exported for unit testing.
-export function BreakdownPanel({ bySource }) {
-  // Outer collapse: hides the entire 9-row + 3-expandable list. The
-  // 3 in-list expandables are tracked separately so a user can
-  // expand a section WITHOUT first expanding the parent — useful
-  // when a user knows exactly which section they want to inspect.
-  const [outerOpen, setOuterOpen] = useState(false)
-  const [expanded, setExpanded] = useState({ mcp: false, memory: false, agents: false })
+// ExpandableRow — REMOVED in v0.4.x. The 3 per-category expandable
+// rows (MCP / Memory / Custom agents) were dropped when the
+// breakdown was simplified to 6 flat rows under "Janela de
+// contexto". The per-category details still come back from the
+// backend in `details.{mcp_tools_list,memory_files_list,custom_agents_list}`
+// (kept for future expansion) but the UI no longer renders them.
 
-  // Hide the whole panel if the backend hasn't sent a breakdown yet.
-  if (!bySource) return null
-  const total = bySource.total || 1
-  const pct = (n) => total > 0 ? (n / total) * 100 : 0
-
-  // Order matches the design (heaviest first). No "free space" row —
-  // the user explicitly didn't want it (the design doesn't have a
-  // bucket for "context I haven't used yet", and reporting a
-  // derived value like `limit - total` made the dominant-row
-  // detection pick free_space whenever it dwarfed everything else,
-  // producing nonsense headers like "Free space · 198k (10734%)").
-  const rows = [
-    { key: 'messages',              label: 'Messages' },
-    { key: 'skills',                label: 'Skills' },
-    { key: 'memory_files',          label: 'Memory files' },
-    { key: 'custom_agents',         label: 'Custom agents' },
-    { key: 'system_prompt',         label: 'System prompt' },
-    { key: 'mcp_tools',             label: 'MCP tools' },
-    { key: 'mcp_deferred',          label: 'MCP tools (deferred)' },
-    { key: 'system_tools_deferred', label: 'System tools (deferred)' },
-  ]
-
-  // The dominant row (heaviest bucket) — shown in the collapsed
-  // header so the user still sees "what's filling my context"
-  // without expanding. Defaults to the first row if every bucket
-  // is 0 (would otherwise crash on the empty `acc`).
-  const dominant = rows.reduce(
-    (acc, r) => ((bySource[r.key] || 0) > (bySource[acc.key] || 0) ? r : acc),
-    rows[0],
-  )
-  const dominantTokens = bySource[dominant.key] || 0
-  const dominantPct = pct(dominantTokens)
-
-  const details = bySource.details || {}
-  const mcpList     = details.mcp_tools_list     || []
-  const memoryList  = details.memory_files_list  || []
-  const agentsList  = details.custom_agents_list || []
-
-  // Per-expandable summary line (sum of tokens + count of items).
-  // Pluralize properly — "1 files" looks unprofessional. The helper
-  // is local because it's a 3-line function and only used here.
-  const plural = (n, singular, pluralForm) =>
-    n === 1 ? singular : (pluralForm || singular + 's')
-  const summary = {
-    mcp:    { tokens: mcpList.reduce((s, x)    => s + (x.tokens || 0), 0), n: mcpList.length,
-              label: plural(mcpList.length, 'tool', 'tools') },
-    memory: { tokens: memoryList.reduce((s, x) => s + (x.tokens || 0), 0), n: memoryList.length,
-              label: plural(memoryList.length, 'file', 'files') },
-    agents: { tokens: agentsList.reduce((s, x) => s + (x.tokens || 0), 0), n: agentsList.length,
-              label: plural(agentsList.length, 'agent', 'agents') },
-  }
-
-  const toggle = (key) => setExpanded((e) => ({ ...e, [key]: !e[key] }))
-
-  return (
-    <div className="mb-3">
-      {/* Collapsible header — matches the Claude Code reference.
-          When collapsed: just the dominant row's name + total +
-          chevron (so the user can still tell "what's filling my
-          context" without expanding). When expanded: the full
-          9-row list + 3 expandable sub-sections. */}
-      <button
-        type="button"
-        onClick={() => setOuterOpen(!outerOpen)}
-        data-testid="breakdown-toggle"
-        aria-expanded={outerOpen}
-        className="
-          w-full flex items-center gap-2 text-left
-          px-1.5 py-1 -mx-1.5 rounded-md
-          hover:bg-surface/60 transition-colors
-          mb-1.5
-        "
-      >
-        <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-          Breakdown
-        </span>
-        <span className="flex-1 text-[11px] text-foreground truncate min-w-0">
-          <span className="text-muted-foreground">{dominant.label}</span>
-          <span className="text-muted-foreground/80 tabular-nums">
-            {' · '}
-            {formatTokenCount(dominantTokens)} ({dominantPct.toFixed(0)}%)
-          </span>
-        </span>
-        {outerOpen
-          ? <ChevronDown size={13} className="text-muted-foreground shrink-0" />
-          : <ChevronRight size={13} className="text-muted-foreground shrink-0" />}
-      </button>
-
-      {outerOpen && (
-        <>
-          {/* Flat summary list — 8 rows */}
-          <div className="space-y-1">
-            {rows.map(({ key, label }) => {
-              const tokens = bySource[key] || 0
-              const rowPct = pct(tokens)
-              return (
-                <div key={key}>
-                  <div className="flex items-center gap-2 text-[11px]">
-                    <span className="w-[120px] text-muted-foreground truncate">{label}</span>
-                    <span className="flex-1 h-1.5 rounded-full bg-secondary overflow-hidden">
-                      <span
-                        className="block h-full bg-primary/70 transition-all duration-300"
-                        style={{ width: `${Math.min(rowPct, 100)}%` }}
-                      />
-                    </span>
-                    <span className="w-[52px] text-right font-mono tabular-nums text-foreground">
-                      {formatTokenCount(tokens)}
-                    </span>
-                    <span className="w-[36px] text-right font-mono tabular-nums text-muted-foreground">
-                      {rowPct.toFixed(0)}%
-                    </span>
-                  </div>
-                  {/* Subtle hint under Messages — clarifies that the
-                      number covers user + assistant + thinking, so
-                      the user doesn't think "I sent 2 messages, why
-                      is it 598 tokens?" Placed only under Messages
-                      since the other rows have unambiguous labels. */}
-                  {key === 'messages' && tokens > 0 && (
-                    <div className="text-[10px] text-muted-foreground/70 italic pl-[120px] -mt-0.5 mb-0.5">
-                      your messages + agent's responses + thinking
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-
-          {/* Expandable sub-sections — only render if there's anything to show.
-              A backend payload from an older session (no `details`) just
-              hides these — no crash. */}
-          {(mcpList.length + memoryList.length + agentsList.length) > 0 && (
-            <div className="mt-2 pt-2 border-t border-border space-y-1">
-              {/* MCP tools (per-server) */}
-              {mcpList.length > 0 && (
-                <ExpandableRow
-                  label="MCP tools"
-                  summary={`${formatTokenCount(summary.mcp.tokens)} · ${summary.mcp.n} ${summary.mcp.label}`}
-                  expanded={expanded.mcp}
-                  onToggle={() => toggle('mcp')}
-                  rows={mcpList.map((t) => ({
-                    key: `mcp-${t.server_id}`,
-                    primary: t.name || t.server_id,
-                    secondary: `${t.tool_count} tool${t.tool_count === 1 ? '' : 's'}`,
-                    tokens: t.tokens,
-                    pct: pct(t.tokens),
-                  }))}
-                />
-              )}
-
-              {/* Memory files */}
-              {memoryList.length > 0 && (
-                <ExpandableRow
-                  label="Memory files"
-                  summary={`${formatTokenCount(summary.memory.tokens)} · ${summary.memory.n} ${summary.memory.label}`}
-                  expanded={expanded.memory}
-                  onToggle={() => toggle('memory')}
-                  rows={memoryList.map((t) => ({
-                    key: `mem-${t.file}`,
-                    primary: t.file,
-                    secondary: null,
-                    tokens: t.tokens,
-                    pct: pct(t.tokens),
-                  }))}
-                />
-              )}
-
-              {/* Custom agents */}
-              {agentsList.length > 0 && (
-                <ExpandableRow
-                  label="Custom agents"
-                  summary={`${formatTokenCount(summary.agents.tokens)} · ${summary.agents.n} ${summary.agents.label}`}
-                  expanded={expanded.agents}
-                  onToggle={() => toggle('agents')}
-                  rows={agentsList.map((t) => ({
-                    key: `agent-${t.agent}`,
-                    primary: t.agent,
-                    secondary: null,
-                    tokens: t.tokens,
-                    pct: pct(t.tokens),
-                  }))}
-                />
-              )}
-            </div>
-          )}
-        </>
-      )}
-    </div>
-  )
-}
-
-// ExpandableRow — chevron + label + summary on the collapsed row;
-// expands to show the child `rows` (each with bar + count + pct).
-//
-// Visually distinguished from the flat summary rows above so the
-// user can tell "this is a clickable thing" at a glance:
-//   - Subtle background tint that deepens on hover AND when expanded
-//   - Larger chevron (14px instead of 12px) with a softer color
-//   - Slightly indented from the flat rows
-//   - Primary-color label that brightens on hover
-// Matches the Claude Code design where the chevron rotates and the
-// sub-rows slide in below.
-function ExpandableRow({ label, summary, expanded, onToggle, rows }) {
-  const Chevron = expanded ? ChevronDown : ChevronRight
-  return (
-    <div>
-      <button
-        type="button"
-        onClick={onToggle}
-        data-testid={`breakdown-expand-${label.toLowerCase().replace(/\s+/g, '-')}`}
-        aria-expanded={expanded}
-        className={`
-          w-full flex items-center gap-2 text-[11px]
-          pl-1.5 pr-2 py-1 rounded-md
-          ${expanded
-            ? 'bg-primary/10 text-primary'
-            : 'bg-surface/40 text-foreground hover:bg-surface/80 hover:text-primary'}
-          transition-colors
-        `}
-      >
-        <Chevron size={14} className={expanded ? 'text-primary' : 'text-muted-foreground'} />
-        <span className="flex-1 text-left font-medium">{label}</span>
-        <span className="text-muted-foreground tabular-nums text-[10.5px]">{summary}</span>
-      </button>
-      {expanded && (
-        <div className="pl-5 mt-1.5 pb-1 space-y-1">
-          {rows.map((r) => (
-            <div key={r.key} className="flex items-center gap-2 text-[10.5px] text-muted-foreground">
-              <span className="w-[110px] truncate">{r.primary}</span>
-              {r.secondary && (
-                <span className="text-[10px] text-muted-foreground/70 tabular-nums">
-                  {r.secondary}
-                </span>
-              )}
-              <span className="flex-1 h-1 rounded-full bg-secondary overflow-hidden">
-                <span
-                  className="block h-full bg-primary/60"
-                  style={{ width: `${Math.min(r.pct, 100)}%` }}
-                />
-              </span>
-              <span className="w-[40px] text-right font-mono tabular-nums text-foreground">
-                {formatTokenCount(r.tokens)}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
 
 function ContextChip() {
   const { sessions, activeSessionId } = useSessionTokens()
@@ -534,6 +252,12 @@ function ContextChip() {
 
   const anchorRef = useRef(null)
   const [open, setOpen] = useState(false)
+  // The 6-row breakdown (Messages / Skills / Memory files / Custom
+  // agents / System prompt / MCP tools) defaults to expanded. The
+  // user can collapse it via the small chevron next to the section
+  // header to focus on just the bar + total. Hidden in the
+  // collapsed state to keep the popover compact.
+  const [breakdownOpen, setBreakdownOpen] = useState(true)
   // Token breakdown section — collapsed by default. Six rows of
   // raw cache/turn metrics is debug info most users don't need
   // every time they open the popover. Toggle exposes it on demand.
@@ -575,30 +299,103 @@ function ContextChip() {
             <div className="h-full transition-all duration-300" style={barStyle} />
           </div>
 
-          {/* Section 1b — Per-source token breakdown (best-effort, from
-              Agent.estimate_by_source). Hidden when the backend hasn't
-              sent a breakdown yet (older sessions).
+          {/* Chevron toggle for the 6-row breakdown below — keeps
+              the popover compact when the user just wants the bar.
+              Default expanded so the breakdown is visible on first
+              open (matches Edu's screenshot). */}
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+              By source
+            </span>
+            <button
+              type="button"
+              onClick={() => setBreakdownOpen((v) => !v)}
+              data-testid="breakdown-toggle"
+              aria-expanded={breakdownOpen}
+              className="p-0.5 rounded hover:bg-surface/60 text-muted-foreground transition-colors"
+              title={breakdownOpen ? 'Hide breakdown' : 'Show breakdown'}
+            >
+              {breakdownOpen
+                ? <ChevronDown size={12} />
+                : <ChevronRight size={12} />}
+            </button>
+          </div>
 
-              Shape (per the agent.py contract):
-                bs = {
-                  messages, skills, memory_files, custom_agents,
-                  system_prompt, mcp_tools, mcp_deferred,
-                  system_tools_deferred, free_space, total, limit,
-                  details: {
-                    mcp_tools_list:    [{server_id, name, tool_count, tokens}],
-                    memory_files_list: [{file, tokens}],
-                    custom_agents_list:[{agent, tokens}],
-                  },
-                }
+          {/* Section 1b — Per-source token breakdown, inlined.
+              Edu's v0.4.x feedback: the separate "Breakdown by
+              source" panel was redundant — the 6 source rows ARE
+              the breakdown, and they belong visually under "Janela
+              de contexto" (Portuguese for "Context window" — the
+              user is using pt-BR labels in screenshots). So we
+              dropped the BreakdownPanel component entirely and
+              render the 6 rows directly here.
 
-              Layout matches the Claude Code reference:
-                - 9 flat rows (label + bar + count + pct)
-                - 3 expandable chevron rows below: MCP tools (with
-                  per-server tool_count), Memory files, Custom agents.
+              The 6 rows (in pt-BR labels):
+                Messages       — size in bytes (the user explicitly
+                                  asked for "tamanho em bytes" on
+                                  Messages specifically, because
+                                  that's what the conversation
+                                  weighs in memory/disk, not tokens)
+                Skills         — tokens
+                Memory files   — tokens
+                Custom agents  — tokens
+                System prompt  — tokens
+                MCP tools      — tokens
 
-              Older payloads without `details` fall back to no
-              expandable sections (no crash). */}
-          <BreakdownPanel bySource={bucket?.lastBySource} />
+              The two deferred buckets (mcp_deferred, system_tools_deferred)
+              were dropped — they're always 0 today and the user
+              didn't want them visible. Backend still returns them
+              in the data contract for backwards-compat / future
+              use; we just don't render.
+
+              Free space is gone (already removed earlier in v0.4.x). */}
+          {breakdownOpen && (() => {
+            const bs = bucket?.lastBySource
+            if (!bs) return null
+            const total = bs.total || 1
+            // Per-row config. The Messages row is special — it
+            // shows the byte size (from bs.messages_bytes) instead
+            // of the token count, per Edu's "tamanho em bytes" ask.
+            // All other rows show token counts as before.
+            const rows = [
+              { key: 'messages',      label: 'Messages',      useBytes: true  },
+              { key: 'skills',        label: 'Skills',        useBytes: false },
+              { key: 'memory_files',  label: 'Memory files',  useBytes: false },
+              { key: 'custom_agents', label: 'Custom agents', useBytes: false },
+              { key: 'system_prompt', label: 'System prompt', useBytes: false },
+              { key: 'mcp_tools',     label: 'MCP tools',     useBytes: false },
+            ]
+            return (
+              <div className="space-y-1 mt-1">
+                {rows.map(({ key, label, useBytes }) => {
+                  const tokens = bs[key] || 0
+                  const bytes  = bs.messages_bytes || 0
+                  const value  = useBytes ? bytes : tokens
+                  const rowPct = total > 0 ? (tokens / total) * 100 : 0
+                  const display = useBytes
+                    ? formatByteCount(bytes)
+                    : formatTokenCount(tokens)
+                  return (
+                    <div key={key} className="flex items-center gap-2 text-[11px]">
+                      <span className="w-[88px] text-muted-foreground truncate">{label}</span>
+                      <span className="flex-1 h-1.5 rounded-full bg-secondary overflow-hidden">
+                        <span
+                          className="block h-full bg-primary/70 transition-all duration-300"
+                          style={{ width: `${Math.min(rowPct, 100)}%` }}
+                        />
+                      </span>
+                      <span className="w-[60px] text-right font-mono tabular-nums text-foreground">
+                        {display}
+                      </span>
+                      <span className="w-[36px] text-right font-mono tabular-nums text-muted-foreground">
+                        {rowPct.toFixed(0)}%
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          })()}
 
           {/* Section 2 — Token Plan (Claude Code style) */}
           <div className="flex items-center justify-between mb-2 pt-2.5 border-t border-border">

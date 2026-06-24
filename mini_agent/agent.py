@@ -424,17 +424,29 @@ class Agent:
         by_source["mcp_tools"] += sum(per_server_tokens.values())
 
         # ---- History (messages[1:]) ----
+        # Token count for the Messages row uses tiktoken via
+        # `count` (same path as the other buckets). A separate
+        # `messages_bytes` field is also reported for the StatusBar
+        # "Messages" row, which shows the byte size of the combined
+        # conversation rather than the token count. Reason: the
+        # user (Edu) asked for "tamanho em bytes" on Messages
+        # because the byte count is what the conversation actually
+        # "weighs" on disk / in memory, independent of the model's
+        # tokenizer. Other buckets stay in tokens since their
+        # purpose is fitting into the model's context window.
+        messages_bytes = 0
         for msg in self.messages[1:]:
             if isinstance(msg.content, str):
                 by_source["messages"] += count(msg.content)
+                messages_bytes += len(msg.content)
             elif isinstance(msg.content, list):
                 for block in msg.content:
                     if isinstance(block, dict):
-                        by_source["messages"] += count(str(block))
+                        block_str = str(block)
+                        by_source["messages"] += count(block_str)
+                        messages_bytes += len(block_str)
             if msg.thinking:
                 by_source["messages"] += count(msg.thinking)
-            if msg.tool_calls:
-                by_source["messages"] += count(str(msg.tool_calls))
             # Per-message metadata overhead (same as _estimate_tokens).
             by_source["messages"] += 4
 
@@ -449,6 +461,7 @@ class Agent:
 
         return {
             **by_source,
+            "messages_bytes": messages_bytes,
             "total": total,
             "limit": limit,
             "details": {

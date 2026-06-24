@@ -80,15 +80,17 @@ def agent():
 
 def test_estimate_by_source_returns_known_keys(agent):
     result = agent.estimate_by_source()
-    # 8 source categories + total + limit + details sub-dict.
-    # (free_space was removed in v0.4.x — it dwarfed everything
-    # and made the dominant-row picker in the StatusBar produce
-    # nonsense headers like "Free space · 198k (10734%)".)
+    # 8 source categories + total + limit + details sub-dict +
+    # messages_bytes (raw byte size of message content, shown in
+    # the StatusBar Messages row — separate from the token count
+    # because the user asked for "tamanho em bytes" on Messages
+    # specifically, since that's what the conversation weighs in
+    # memory/disk, not tokens). free_space was removed in v0.4.x.
     expected = {
         "messages", "skills", "memory_files", "custom_agents",
         "system_prompt", "mcp_tools", "mcp_deferred",
         "system_tools_deferred", "total", "limit",
-        "details",
+        "details", "messages_bytes",
     }
     assert set(result.keys()) == expected
 

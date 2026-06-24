@@ -384,3 +384,28 @@ for plan detection and quota enrichment. The mmx CLI subprocess and
 the `_fetch_quota_via_mmx` helper were removed. Subsequent PRs migrate
 the remaining `/api/minimax/cli` and `/api/minimax/voices` endpoints
 to direct API calls (see migration roadmap).
+
+## Roadmap references (Hermes upstream docs)
+
+Hermes is the upstream agent that this project mirrors. These pages
+are the canonical references for the Agent Context feature work —
+keep them open when designing any context-window / memory / persona
+change so we stay compatible with the Hermes spec:
+
+- **Memory** — https://hermes-agent.nousresearch.com/docs/user-guide/features/memory
+  Hermes memory file structure (SOUL/IDENTITY/USER/MEMORY + daily logs),
+  append-only patterns, char budgets per slot, banner-trigger rules.
+- **Context files** — https://hermes-agent.nousresearch.com/docs/user-guide/features/context-files
+  How the four `.agent/*.md` files get read at session start, the
+  snapshot-into-system-prompt semantics, and the per-file char limits.
+- **Context references** — https://hermes-agent.nousresearch.com/docs/user-guide/features/context-references
+  How Memory writes back into the files (append-only via `§`), daily
+  log rotation, and the agent→memory feedback loop.
+- **Personality** — https://hermes-agent.nousresearch.com/docs/user-guide/features/personality
+  The 5 SOUL.md presets (concise / friendly / mentor / expert / creative)
+  and how the personality slot fits into the system prompt.
+
+When designing the v0.5+ Advanced Controls panel (approval mode,
+command allowlist, working directory, compression thresholds, etc.)
+these pages are the starting point — match Hermes conventions unless
+we have an explicit reason to diverge.

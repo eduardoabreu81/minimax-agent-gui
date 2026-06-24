@@ -217,13 +217,31 @@ describe('StatusBar ContextChip — gradient + plan bar', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Per-source token breakdown — renders "Breakdown" sub-section
-// when bucket.lastBySource is present (sent by the backend in the WS
-// `usage` event's `by_source` field).
+// Simplified breakdown — v0.4.x feedback (Edu): the 9-row breakdown
+// panel with 3 expandable chevrons was overkill. Reduced to 6 flat
+// rows directly under "Janela de contexto", no separate panel:
+//
+//   Messages       (size in BYTES, per user request — not tokens)
+//   Skills         (tokens)
+//   Memory files   (tokens)
+//   Custom agents  (tokens)
+//   System prompt  (tokens)
+//   MCP tools      (tokens)
+//
+// The two deferred buckets (mcp_deferred, system_tools_deferred)
+// and free_space were dropped from the UI. Backend still returns
+// them in the contract for backwards-compat / future use.
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('StatusBar ContextChip — per-source breakdown', () => {
-  it('hides the breakdown when bucket has no lastBySource', async () => {
+describe('StatusBar ContextChip — simplified 6-row breakdown', () => {
+  beforeEach(() => {
+    mockApiFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ success: true, plan: 'plus', data: { model_remains: [] } }),
+    })
+  })
+
+  it('hides the breakdown rows when bucket has no lastBySource', async () => {
     mockUseSessionTokens.mockReturnValue({
       sessions: {
         'sess-1': {
@@ -238,61 +256,15 @@ describe('StatusBar ContextChip — per-source breakdown', () => {
       activeSessionId: 'sess-1',
     })
     render(<StatusBar model="MiniMax-M3" setModel={vi.fn()} thinkingEnabled={false} setThinkingEnabled={vi.fn()} supportsThinking={true} />)
-    // Open the popover (the popover renders async, so use findAllByText)
-    screen.getByTitle('Context window & plan').click()
-    // Wait for the popover to render (Plan usage is the second
-    // section, always present when open).
-    await screen.findByText('Plan usage')
-    expect(screen.queryByText(/Breakdown/i)).toBeNull()
-  })
-
-  it('renders the breakdown collapsed by default — only header + dominant row', async () => {
-    // The Claude Code reference shows the context breakdown as a
-    // collapsed row with the dominant bucket name + total + chevron.
-    // The 9-row list + expandable sub-sections are hidden until the
-    // user clicks the header.
-    mockUseSessionTokens.mockReturnValue({
-      sessions: {
-        'sess-1': {
-          lastModel: 'MiniMax-M3',
-          lastTurnInput: 50_000,
-          input_tokens: 50_000,
-          output_tokens: 0,
-          turnCount: 3,
-          lastBySource: {
-            messages: 3720,  // dominant — should show in header
-            skills: 80,
-            memory_files: 50,
-            custom_agents: 30,
-            system_prompt: 20,
-            mcp_tools: 100,
-            mcp_deferred: 0,
-            system_tools_deferred: 0,
-            free_space: 0,
-            total: 4000,
-            limit: 1_000_000,
-            details: { mcp_tools_list: [], memory_files_list: [], custom_agents_list: [] },
-          },
-        },
-      },
-      activeSessionId: 'sess-1',
-    })
-    render(<StatusBar model="MiniMax-M3" setModel={vi.fn()} thinkingEnabled={false} setThinkingEnabled={vi.fn()} supportsThinking={true} />)
     screen.getByTitle('Context window & plan').click()
     await screen.findByText('Plan usage')
-    // Header is rendered
-    expect(screen.getByText(/Breakdown/i)).toBeInTheDocument()
-    // Dominant row name shown in collapsed header (Messages 3720 / 4000 = 93%)
-    expect(screen.getByText(/Messages/)).toBeInTheDocument()
-    // 9 row labels NOT yet rendered — collapsed
+    // No breakdown rows rendered when no by_source data
     expect(screen.queryByText('Skills')).toBeNull()
     expect(screen.queryByText('Memory files')).toBeNull()
     expect(screen.queryByText('Custom agents')).toBeNull()
-    expect(screen.queryByText('System prompt')).toBeNull()
-    expect(screen.queryByText('Free space')).toBeNull()
   })
 
-  it('expanding the breakdown reveals all 9 rows + percentages', async () => {
+  it('renders exactly 6 rows directly under "Context window"', async () => {
     mockUseSessionTokens.mockReturnValue({
       sessions: {
         'sess-1': {
@@ -302,51 +274,33 @@ describe('StatusBar ContextChip — per-source breakdown', () => {
           output_tokens: 0,
           turnCount: 3,
           lastBySource: {
-            messages: 3720,
-            skills: 80,
-            memory_files: 50,
-            custom_agents: 30,
-            system_prompt: 20,
-            mcp_tools: 100,
-            mcp_deferred: 0,
-            system_tools_deferred: 0,
-            free_space: 0,
-            total: 4000,
-            limit: 1_000_000,
+            messages: 3720, skills: 80, memory_files: 50,
+            custom_agents: 30, system_prompt: 20, mcp_tools: 100,
+            mcp_deferred: 0, system_tools_deferred: 0,
+            total: 4000, limit: 1_000_000,
+            messages_bytes: 14_960,
             details: { mcp_tools_list: [], memory_files_list: [], custom_agents_list: [] },
           },
         },
       },
       activeSessionId: 'sess-1',
     })
-    const { default: user } = await import('@testing-library/user-event')
-    const u = user.setup({ delay: null })
     render(<StatusBar model="MiniMax-M3" setModel={vi.fn()} thinkingEnabled={false} setThinkingEnabled={vi.fn()} supportsThinking={true} />)
-    await u.click(screen.getByTitle('Context window & plan'))
-    await screen.findByText(/Breakdown/i)
-
-    // Click the header to expand
-    await u.click(screen.getByTestId('breakdown-toggle'))
-
-    // All 8 rows are now visible. "Messages" appears in both the
-    // collapsed header AND the expanded row list, so use
-    // getAllByText for that one. The other 7 row labels are unique
-    // to the expanded view. (Free space was removed in v0.4.x —
-    // the dominant-row picker was picking it whenever it dwarfed
-    // everything else, producing "Free space · 10734%" headers.)
-    expect(screen.getAllByText('Messages').length).toBeGreaterThanOrEqual(2)
+    screen.getByTitle('Context window & plan').click()
+    await screen.findByText('Plan usage')
+    // 6 row labels visible
+    expect(screen.getByText('Messages')).toBeInTheDocument()
     expect(screen.getByText('Skills')).toBeInTheDocument()
     expect(screen.getByText('Memory files')).toBeInTheDocument()
     expect(screen.getByText('Custom agents')).toBeInTheDocument()
     expect(screen.getByText('System prompt')).toBeInTheDocument()
     expect(screen.getByText('MCP tools')).toBeInTheDocument()
-    expect(screen.getByText('MCP tools (deferred)')).toBeInTheDocument()
-    expect(screen.getByText('System tools (deferred)')).toBeInTheDocument()
-    // Free space was removed — verify it's NOT in the breakdown.
+    // The 2 deferred buckets are NOT rendered
+    expect(screen.queryByText(/deferred/)).toBeNull()
     expect(screen.queryByText('Free space')).toBeNull()
   })
 
-  it('computes correct percentages for each source (after expand)', async () => {
+  it('Messages row shows size in BYTES (not tokens) when messages_bytes is present', async () => {
     mockUseSessionTokens.mockReturnValue({
       sessions: {
         'sess-1': {
@@ -356,17 +310,82 @@ describe('StatusBar ContextChip — per-source breakdown', () => {
           output_tokens: 0,
           turnCount: 3,
           lastBySource: {
-            messages: 800,
-            skills: 50,
-            memory_files: 0,
-            custom_agents: 0,
-            system_prompt: 100,    // 10%
-            mcp_tools: 50,
-            mcp_deferred: 0,
-            system_tools_deferred: 0,
-            free_space: 0,
-            total: 1000,
-            limit: 1_000_000,
+            messages: 3720,  // tokens (tiktoken count)
+            skills: 80, memory_files: 50, custom_agents: 30,
+            system_prompt: 20, mcp_tools: 100,
+            mcp_deferred: 0, system_tools_deferred: 0,
+            total: 4000, limit: 1_000_000,
+            messages_bytes: 14_960,  // raw byte size
+            details: { mcp_tools_list: [], memory_files_list: [], custom_agents_list: [] },
+          },
+        },
+      },
+      activeSessionId: 'sess-1',
+    })
+    render(<StatusBar model="MiniMax-M3" setModel={vi.fn()} thinkingEnabled={false} setThinkingEnabled={vi.fn()} supportsThinking={true} />)
+    screen.getByTitle('Context window & plan').click()
+    await screen.findByText('Plan usage')
+    // The Messages row should show the byte size, not 3720.
+    // 14,960 bytes → "14.6KB" via formatByteCount (1024-based)
+    expect(screen.getByText('14.6KB')).toBeInTheDocument()
+  })
+
+  it('other rows show token counts (with 1-decimal k format)', async () => {
+    mockUseSessionTokens.mockReturnValue({
+      sessions: {
+        'sess-1': {
+          lastModel: 'MiniMax-M3',
+          lastTurnInput: 50_000,
+          input_tokens: 50_000,
+          output_tokens: 0,
+          turnCount: 3,
+          lastBySource: {
+            messages: 3720, skills: 30_000, memory_files: 7_400,
+            custom_agents: 5_100, system_prompt: 2_800, mcp_tools: 167,
+            mcp_deferred: 0, system_tools_deferred: 0,
+            total: 46_217, limit: 1_000_000,
+            messages_bytes: 14_960,
+            details: { mcp_tools_list: [], memory_files_list: [], custom_agents_list: [] },
+          },
+        },
+      },
+      activeSessionId: 'sess-1',
+    })
+    render(<StatusBar model="MiniMax-M3" setModel={vi.fn()} thinkingEnabled={false} setThinkingEnabled={vi.fn()} supportsThinking={true} />)
+    screen.getByTitle('Context window & plan').click()
+    await screen.findByText('Plan usage')
+    // Decimal format for k values — matches the user's screenshot
+    // "7.4k" / "5.1k" / "2.8k" / "30.0k" / "167"
+    expect(screen.getByText('30.0k')).toBeInTheDocument()  // skills
+    expect(screen.getByText('7.4k')).toBeInTheDocument()   // memory_files
+    expect(screen.getByText('5.1k')).toBeInTheDocument()   // custom_agents
+    expect(screen.getByText('2.8k')).toBeInTheDocument()   // system_prompt
+    // MCP tools is 167 → "167" (under 1k threshold, no suffix)
+    expect(screen.getByText('167')).toBeInTheDocument()
+
+    // The chip itself should show "30.0k tokens" as well — the
+    // 30.0k appears in BOTH the breakdown row AND the chip
+    // (the chip uses the same number, just for "used / limit").
+    // If both show 30.0k, this query throws — verify the row
+    // version is found and the chip's "tokens" label is unique.
+    expect(screen.getByText('tokens')).toBeInTheDocument()
+  })
+
+  it('collapses/expands the rows via the breakdown-toggle button', async () => {
+    mockUseSessionTokens.mockReturnValue({
+      sessions: {
+        'sess-1': {
+          lastModel: 'MiniMax-M3',
+          lastTurnInput: 50_000,
+          input_tokens: 50_000,
+          output_tokens: 0,
+          turnCount: 3,
+          lastBySource: {
+            messages: 3720, skills: 80, memory_files: 50,
+            custom_agents: 30, system_prompt: 20, mcp_tools: 100,
+            mcp_deferred: 0, system_tools_deferred: 0,
+            total: 4000, limit: 1_000_000,
+            messages_bytes: 14_960,
             details: { mcp_tools_list: [], memory_files_list: [], custom_agents_list: [] },
           },
         },
@@ -377,128 +396,140 @@ describe('StatusBar ContextChip — per-source breakdown', () => {
     const u = user.setup({ delay: null })
     render(<StatusBar model="MiniMax-M3" setModel={vi.fn()} thinkingEnabled={false} setThinkingEnabled={vi.fn()} supportsThinking={true} />)
     await u.click(screen.getByTitle('Context window & plan'))
-    await screen.findByText(/Breakdown/i)
-    await u.click(screen.getByTestId('breakdown-toggle'))
-    // Now the rows are rendered; the parent of "Breakdown"
-    // holds the whole panel.
-    const breakdown = screen.getByText(/Breakdown/i).closest('div')
-    const text = breakdown.textContent
-    expect(text).toMatch(/80%/)     // Messages
-    expect(text).toMatch(/10%/)     // System prompt
-    expect(text).toMatch(/5%/)      // Skills + MCP tools
-  })
-
-  it('hides expandable sub-sections when details is empty (after expand)', async () => {
-    mockUseSessionTokens.mockReturnValue({
-      sessions: {
-        'sess-1': {
-          lastModel: 'MiniMax-M3',
-          lastTurnInput: 50_000,
-          input_tokens: 50_000,
-          output_tokens: 0,
-          turnCount: 3,
-          lastBySource: {
-            messages: 5000, skills: 0, memory_files: 0, custom_agents: 0,
-            system_prompt: 0, mcp_tools: 0, mcp_deferred: 0,
-            system_tools_deferred: 0, free_space: 0,
-            total: 5000, limit: 1_000_000,
-            details: { mcp_tools_list: [], memory_files_list: [], custom_agents_list: [] },
-          },
-        },
-      },
-      activeSessionId: 'sess-1',
-    })
-    const { default: user } = await import('@testing-library/user-event')
-    const u = user.setup({ delay: null })
-    render(<StatusBar model="MiniMax-M3" setModel={vi.fn()} thinkingEnabled={false} setThinkingEnabled={vi.fn()} supportsThinking={true} />)
-    await u.click(screen.getByTitle('Context window & plan'))
-    await screen.findByText(/Breakdown/i)
-    await u.click(screen.getByTestId('breakdown-toggle'))
-    // No expandable chevron rows when details are empty
-    expect(screen.queryByText(/^MCP tools\s*\u00b7/)).toBeNull()
-    expect(screen.queryByText(/^Memory files\s*\u00b7/)).toBeNull()
-    expect(screen.queryByText(/^Custom agents\s*\u00b7/)).toBeNull()
-  })
-
-  it('expands the breakdown then reveals per-server MCP entries', async () => {
-    mockUseSessionTokens.mockReturnValue({
-      sessions: {
-        'sess-1': {
-          lastModel: 'MiniMax-M3',
-          lastTurnInput: 50_000,
-          input_tokens: 50_000,
-          output_tokens: 0,
-          turnCount: 3,
-          lastBySource: {
-            messages: 5000, skills: 0, memory_files: 0, custom_agents: 0,
-            system_prompt: 0, mcp_tools: 100, mcp_deferred: 0,
-            system_tools_deferred: 0, free_space: 0,
-            total: 5100, limit: 1_000_000,
-            details: {
-              mcp_tools_list: [
-                { server_id: 'filesystem', name: 'Local FS', tool_count: 12, tokens: 50 },
-                { server_id: 'github',     name: 'GitHub API', tool_count: 73, tokens: 50 },
-              ],
-              memory_files_list: [],
-              custom_agents_list: [],
-            },
-          },
-        },
-      },
-      activeSessionId: 'sess-1',
-    })
-    const { default: user } = await import('@testing-library/user-event')
-    const u = user.setup({ delay: null })
-    render(<StatusBar model="MiniMax-M3" setModel={vi.fn()} thinkingEnabled={false} setThinkingEnabled={vi.fn()} supportsThinking={true} />)
-    await u.click(screen.getByTitle('Context window & plan'))
-    await screen.findByText(/Breakdown/i)
-
-    // Outer breakdown is collapsed — no inner expandables visible yet
-    expect(screen.queryByTestId('breakdown-expand-mcp-tools')).toBeNull()
-    // Expand the outer breakdown first
-    await u.click(screen.getByTestId('breakdown-toggle'))
-    // Now the per-server MCP expandable row is visible
-    const button = screen.getByTestId('breakdown-expand-mcp-tools')
-    expect(button).toBeTruthy()
-    await u.click(button)
-    // Per-server entries are visible
-    expect(screen.getByText('Local FS')).toBeInTheDocument()
-    expect(screen.getByText('GitHub API')).toBeInTheDocument()
-    expect(screen.getByText(/^12 tools$/)).toBeInTheDocument()
-    expect(screen.getByText(/^73 tools$/)).toBeInTheDocument()
-  })
-
-  it('clicking the toggle a second time collapses the breakdown again', async () => {
-    mockUseSessionTokens.mockReturnValue({
-      sessions: {
-        'sess-1': {
-          lastModel: 'MiniMax-M3',
-          lastTurnInput: 50_000,
-          input_tokens: 50_000,
-          output_tokens: 0,
-          turnCount: 3,
-          lastBySource: {
-            messages: 5000, skills: 80, memory_files: 0, custom_agents: 0,
-            system_prompt: 0, mcp_tools: 0, mcp_deferred: 0,
-            system_tools_deferred: 0, free_space: 0,
-            total: 5080, limit: 1_000_000,
-            details: { mcp_tools_list: [], memory_files_list: [], custom_agents_list: [] },
-          },
-        },
-      },
-      activeSessionId: 'sess-1',
-    })
-    const { default: user } = await import('@testing-library/user-event')
-    const u = user.setup({ delay: null })
-    render(<StatusBar model="MiniMax-M3" setModel={vi.fn()} thinkingEnabled={false} setThinkingEnabled={vi.fn()} supportsThinking={true} />)
-    await u.click(screen.getByTitle('Context window & plan'))
-    await screen.findByText(/Breakdown/i)
-    // Expand
-    await u.click(screen.getByTestId('breakdown-toggle'))
+    await screen.findByText('Plan usage')
+    // Default: rows visible
     expect(screen.getByText('Skills')).toBeInTheDocument()
     // Collapse
     await u.click(screen.getByTestId('breakdown-toggle'))
     expect(screen.queryByText('Skills')).toBeNull()
+  })
+})
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Simplified breakdown — v0.4.x feedback (Edu): the 9-row breakdown
+// panel with 3 expandable chevrons was overkill. Reduced to 6 flat
+// rows directly under "Janela de contexto", no separate panel:
+//
+//   Messages       (size in BYTES, per user request — not tokens)
+//   Skills         (tokens)
+//   Memory files   (tokens)
+//   Custom agents  (tokens)
+//   System prompt  (tokens)
+//   MCP tools      (tokens)
+//
+// The two deferred buckets (mcp_deferred, system_tools_deferred)
+// and free_space were dropped from the UI. Backend still returns
+// them in the contract for backwards-compat / future use.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('StatusBar ContextChip — simplified 6-row breakdown', () => {
+  beforeEach(() => {
+    mockApiFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ success: true, plan: 'plus', data: { model_remains: [] } }),
+    })
+  })
+
+  it('renders exactly 6 rows under "Janela de contexto"', async () => {
+    mockUseSessionTokens.mockReturnValue({
+      sessions: {
+        'sess-1': {
+          lastModel: 'MiniMax-M3',
+          lastTurnInput: 50_000,
+          input_tokens: 50_000,
+          output_tokens: 0,
+          turnCount: 3,
+          lastBySource: {
+            messages: 3720, skills: 80, memory_files: 50,
+            custom_agents: 30, system_prompt: 20, mcp_tools: 100,
+            mcp_deferred: 0, system_tools_deferred: 0,
+            total: 4000, limit: 1_000_000,
+            messages_bytes: 14_960,
+            details: { mcp_tools_list: [], memory_files_list: [], custom_agents_list: [] },
+          },
+        },
+      },
+      activeSessionId: 'sess-1',
+    })
+    render(<StatusBar model="MiniMax-M3" setModel={vi.fn()} thinkingEnabled={false} setThinkingEnabled={vi.fn()} supportsThinking={true} />)
+    screen.getByTitle('Context window & plan').click()
+    await screen.findByText('Plan usage')
+    // 6 row labels visible
+    expect(screen.getByText('Messages')).toBeInTheDocument()
+    expect(screen.getByText('Skills')).toBeInTheDocument()
+    expect(screen.getByText('Memory files')).toBeInTheDocument()
+    expect(screen.getByText('Custom agents')).toBeInTheDocument()
+    expect(screen.getByText('System prompt')).toBeInTheDocument()
+    expect(screen.getByText('MCP tools')).toBeInTheDocument()
+    // The 2 deferred buckets are NOT rendered
+    expect(screen.queryByText(/deferred/)).toBeNull()
+    expect(screen.queryByText('Free space')).toBeNull()
+  })
+
+  it('Messages row shows size in BYTES (not tokens) when messages_bytes is present', async () => {
+    mockUseSessionTokens.mockReturnValue({
+      sessions: {
+        'sess-1': {
+          lastModel: 'MiniMax-M3',
+          lastTurnInput: 50_000,
+          input_tokens: 50_000,
+          output_tokens: 0,
+          turnCount: 3,
+          lastBySource: {
+            messages: 3720,  // tokens (tiktoken count)
+            skills: 80, memory_files: 50, custom_agents: 30,
+            system_prompt: 20, mcp_tools: 100,
+            mcp_deferred: 0, system_tools_deferred: 0,
+            total: 4000, limit: 1_000_000,
+            messages_bytes: 14_960,  // raw byte size
+            details: { mcp_tools_list: [], memory_files_list: [], custom_agents_list: [] },
+          },
+        },
+      },
+      activeSessionId: 'sess-1',
+    })
+    render(<StatusBar model="MiniMax-M3" setModel={vi.fn()} thinkingEnabled={false} setThinkingEnabled={vi.fn()} supportsThinking={true} />)
+    screen.getByTitle('Context window & plan').click()
+    await screen.findByText('Plan usage')
+    // The Messages row should show the byte size, not 3720.
+    // 14,960 bytes ≈ 14.6KB → "14.6KB" via formatByteCount
+    expect(screen.getByText('14.6KB')).toBeInTheDocument()
+    // Token count for Messages (3720) should NOT appear in the popover
+    expect(screen.queryByText('3.7k')).toBeNull()
+  })
+
+  it('other rows still show token counts (not bytes)', async () => {
+    mockUseSessionTokens.mockReturnValue({
+      sessions: {
+        'sess-1': {
+          lastModel: 'MiniMax-M3',
+          lastTurnInput: 50_000,
+          input_tokens: 50_000,
+          output_tokens: 0,
+          turnCount: 3,
+          lastBySource: {
+            messages: 3720, skills: 30_000, memory_files: 7_400,
+            custom_agents: 5_100, system_prompt: 2_800, mcp_tools: 167,
+            mcp_deferred: 0, system_tools_deferred: 0,
+            total: 46_217, limit: 1_000_000,
+            messages_bytes: 14_960,
+            details: { mcp_tools_list: [], memory_files_list: [], custom_agents_list: [] },
+          },
+        },
+      },
+      activeSessionId: 'sess-1',
+    })
+    render(<StatusBar model="MiniMax-M3" setModel={vi.fn()} thinkingEnabled={false} setThinkingEnabled={vi.fn()} supportsThinking={true} />)
+    screen.getByTitle('Context window & plan').click()
+    await screen.findByText('Plan usage')
+    // Token counts (1-decimal k format) for the 5 non-Messages rows
+    expect(screen.getByText('30.0k')).toBeInTheDocument()  // skills
+    expect(screen.getByText('7.4k')).toBeInTheDocument()   // memory_files
+    expect(screen.getByText('5.1k')).toBeInTheDocument()   // custom_agents
+    expect(screen.getByText('2.8k')).toBeInTheDocument()   // system_prompt
+    // MCP tools is 167 → displayed as "167" (under 1k threshold)
+    expect(screen.getByText('167')).toBeInTheDocument()
   })
 })
 
