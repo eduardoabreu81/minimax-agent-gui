@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { ChevronDown, Loader2, Brain } from 'lucide-react'
+import { ChevronDown, Loader2, Brain, AlertCircle } from 'lucide-react'
 import { useSessionTokens } from '../../context/SessionTokensContext'
 import { useAgentActivity } from '../../context/AgentActivityContext'
 import { getContextLimit, formatTokenCount, formatTokenCountExact, DEFAULT_MODEL } from '../../lib/modelLimits'
@@ -183,11 +183,35 @@ function ConnectionChip() {
 // reveals plan on click.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const planBarColor = (pct) =>
-  pct === null ? 'bg-muted' :
-  pct >= 90 ? 'bg-error' :
-  pct >= 70 ? 'bg-amber-400' :
-  'bg-primary'
+// Plan bar color — based on the % REMAINING (not the % used), so
+// the bar goes red when the user is about to run out rather than
+// after they're already at 90% used. Thresholds match the daily
+// wrap decision: 5% left = critical, 20% left = warning.
+const planBarColor = (pct) => {
+  if (pct === null) return 'bg-muted'
+  const remaining = 100 - pct
+  if (remaining <= 5) return 'bg-error'
+  if (remaining <= 20) return 'bg-amber-400'
+  return 'bg-primary'
+}
+
+// Plan usage text state — mirrors the bar color. The popover
+// renderer uses this to pick the bold/weight + icon treatment.
+const planTextState = (pct) => {
+  if (pct === null) return 'normal'
+  const remaining = 100 - pct
+  if (remaining <= 5) return 'critical'
+  if (remaining <= 20) return 'warning'
+  return 'normal'
+}
+
+// Context window bar — continuous gradient from green → amber → red
+// as the user fills the model context window. Width is set by the
+// caller (`width: ${pct}%`); the gradient is fixed and stretches
+// with the bar so the visible color at the leading edge always
+// reflects the current fill level (50% filled shows ~amber at the
+// edge, 95% filled shows ~red).
+const contextBarGradient = 'linear-gradient(to right, hsl(142 71% 45%) 0%, hsl(48 96% 53%) 50%, hsl(0 84% 60%) 100%)'
 
 function ContextChip() {
   const { sessions, activeSessionId } = useSessionTokens()
@@ -203,10 +227,9 @@ function ContextChip() {
 
   console.log('[ContextChip] bucket:', { activeSessionId, bucketExists: !!bucket, lastModel: bucket?.lastModel, lastTurnInput: bucket?.lastTurnInput, inputTokens: bucket?.input_tokens, outputTokens: bucket?.output_tokens, turnCount: bucket?.turnCount, modelId, limit, used, pct })
 
-  const barColor =
-    pct >= 90 ? 'bg-error' :
-    pct >= 70 ? 'bg-amber-400' :
-    'bg-primary'
+  // Continuous gradient bar — color at the leading edge reflects the
+  // current pct (50% filled shows amber at the edge, 95% shows red).
+  const barStyle = { width: `${pct}%`, background: contextBarGradient }
 
   // Plan usage — pull the text bucket (5h + weekly)
   const textQuota = quotaItems.find(i => i.group === 'text' && !i.available)
@@ -233,7 +256,7 @@ function ContextChip() {
         </svg>
         <span className="text-[11.5px] tabular-nums">{formatTokenCount(used)} / {formatTokenCount(limit)} ({pct}%)</span>
         <span className="w-[42px] h-[5px] rounded-full bg-secondary overflow-hidden inline-block">
-          <span className={`block h-full ${barColor}`} style={{ width: `${pct}%` }} />
+          <span className="block h-full transition-all duration-300" style={barStyle} />
         </span>
       </button>
       <Popover open={open} onClose={() => setOpen(false)} anchorRef={anchorRef} width={320}>
@@ -246,7 +269,7 @@ function ContextChip() {
             </span>
           </div>
           <div className="h-2 rounded-full bg-secondary overflow-hidden mb-3">
-            <div className={`h-full ${barColor} transition-all duration-300`} style={{ width: `${pct}%` }} />
+            <div className="h-full transition-all duration-300" style={barStyle} />
           </div>
 
           {/* Section 2 — Token Plan (Claude Code style) */}
@@ -268,35 +291,55 @@ function ContextChip() {
           ) : (
             <div className="space-y-2.5">
               {/* 5-hour session limit */}
-              <div>
-                <div className="flex items-baseline justify-between mb-1.5">
-                  <span className="text-[12px] font-semibold text-foreground">5-hour limit</span>
-                  <span className="text-[11px] text-muted-foreground tabular-nums">
-                    Resets in {formatResetTime(sessionReset)} · {100 - sessionPct}% left
-                  </span>
-                </div>
-                <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
-                  <div
-                    className={`h-full ${planBarColor(sessionPct)} transition-all duration-300`}
-                    style={{ width: `${sessionPct}%` }}
-                  />
-                </div>
-              </div>
+              {(() => {
+                const sessionState = planTextState(sessionPct)
+                const sessionTextClass =
+                  sessionState === 'critical' ? 'text-error font-semibold' :
+                  sessionState === 'warning'  ? 'text-amber-600 dark:text-amber-400 font-semibold' :
+                                                 'text-muted-foreground'
+                return (
+                  <div>
+                    <div className="flex items-baseline justify-between mb-1.5">
+                      <span className="text-[12px] font-semibold text-foreground">5-hour limit</span>
+                      <span className={`inline-flex items-center gap-1 text-[11px] tabular-nums ${sessionTextClass}`}>
+                        {sessionState !== 'normal' && <AlertCircle size={11} />}
+                        Resets in {formatResetTime(sessionReset)} · {100 - sessionPct}% left
+                      </span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
+                      <div
+                        className={`h-full ${planBarColor(sessionPct)} transition-all duration-300`}
+                        style={{ width: `${sessionPct}%` }}
+                      />
+                    </div>
+                  </div>
+                )
+              })()}
               {/* Weekly */}
-              {weeklyPct !== null && (
-                <div>
-                  <div className="flex items-baseline justify-between mb-1.5">
-                    <span className="text-[12px] font-semibold text-foreground">Weekly · all models</span>
-                    <span className="text-[11px] text-muted-foreground tabular-nums">{100 - weeklyPct}% left</span>
+              {weeklyPct !== null && (() => {
+                const weeklyState = planTextState(weeklyPct)
+                const weeklyTextClass =
+                  weeklyState === 'critical' ? 'text-error font-semibold' :
+                  weeklyState === 'warning'  ? 'text-amber-600 dark:text-amber-400 font-semibold' :
+                                                 'text-muted-foreground'
+                return (
+                  <div>
+                    <div className="flex items-baseline justify-between mb-1.5">
+                      <span className="text-[12px] font-semibold text-foreground">Weekly · all models</span>
+                      <span className={`inline-flex items-center gap-1 text-[11px] tabular-nums ${weeklyTextClass}`}>
+                        {weeklyState !== 'normal' && <AlertCircle size={11} />}
+                        {100 - weeklyPct}% left
+                      </span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
+                      <div
+                        className={`h-full ${planBarColor(weeklyPct)} transition-all duration-300`}
+                        style={{ width: `${weeklyPct}%` }}
+                      />
+                    </div>
                   </div>
-                  <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
-                    <div
-                      className={`h-full ${planBarColor(weeklyPct)} transition-all duration-300`}
-                      style={{ width: `${weeklyPct}%` }}
-                    />
-                  </div>
-                </div>
-              )}
+                )
+              })()}
             </div>
           )}
 
