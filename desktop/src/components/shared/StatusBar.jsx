@@ -321,25 +321,27 @@ export function BreakdownPanel({ bySource }) {
         type="button"
         onClick={() => setOuterOpen(!outerOpen)}
         data-testid="breakdown-toggle"
-        className="w-full flex items-center gap-2 text-left mb-1.5 hover:bg-surface/60 rounded px-1 py-0.5 -mx-1 transition-colors"
         aria-expanded={outerOpen}
+        className="
+          w-full flex items-center gap-2 text-left
+          px-1.5 py-1 -mx-1.5 rounded-md
+          hover:bg-surface/60 transition-colors
+          mb-1.5
+        "
       >
         <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-          Breakdown by source
+          Breakdown
         </span>
-        <span className="flex-1 text-[11px] text-foreground">
-          {dominant.label}
-          <span className="text-muted-foreground tabular-nums">
+        <span className="flex-1 text-[11px] text-foreground truncate min-w-0">
+          <span className="text-muted-foreground">{dominant.label}</span>
+          <span className="text-muted-foreground/80 tabular-nums">
             {' · '}
             {formatTokenCount(dominantTokens)} ({dominantPct.toFixed(0)}%)
           </span>
         </span>
-        <span className="text-[11px] text-muted-foreground tabular-nums">
-          {formatTokenCount(total)}
-        </span>
         {outerOpen
-          ? <ChevronDown size={12} className="text-muted-foreground shrink-0" />
-          : <ChevronRight size={12} className="text-muted-foreground shrink-0" />}
+          ? <ChevronDown size={13} className="text-muted-foreground shrink-0" />
+          : <ChevronRight size={13} className="text-muted-foreground shrink-0" />}
       </button>
 
       {outerOpen && (
@@ -446,6 +448,13 @@ export function BreakdownPanel({ bySource }) {
 
 // ExpandableRow — chevron + label + summary on the collapsed row;
 // expands to show the child `rows` (each with bar + count + pct).
+//
+// Visually distinguished from the flat summary rows above so the
+// user can tell "this is a clickable thing" at a glance:
+//   - Subtle background tint that deepens on hover AND when expanded
+//   - Larger chevron (14px instead of 12px) with a softer color
+//   - Slightly indented from the flat rows
+//   - Primary-color label that brightens on hover
 // Matches the Claude Code design where the chevron rotates and the
 // sub-rows slide in below.
 function ExpandableRow({ label, summary, expanded, onToggle, rows }) {
@@ -456,14 +465,22 @@ function ExpandableRow({ label, summary, expanded, onToggle, rows }) {
         type="button"
         onClick={onToggle}
         data-testid={`breakdown-expand-${label.toLowerCase().replace(/\s+/g, '-')}`}
-        className="w-full flex items-center gap-2 text-[11px] py-0.5 hover:bg-surface/60 rounded transition-colors"
+        aria-expanded={expanded}
+        className={`
+          w-full flex items-center gap-2 text-[11px]
+          pl-1.5 pr-2 py-1 rounded-md
+          ${expanded
+            ? 'bg-primary/10 text-primary'
+            : 'bg-surface/40 text-foreground hover:bg-surface/80 hover:text-primary'}
+          transition-colors
+        `}
       >
-        <Chevron size={12} className="text-muted-foreground shrink-0" />
-        <span className="flex-1 text-left text-foreground">{label}</span>
-        <span className="text-muted-foreground tabular-nums">{summary}</span>
+        <Chevron size={14} className={expanded ? 'text-primary' : 'text-muted-foreground'} />
+        <span className="flex-1 text-left font-medium">{label}</span>
+        <span className="text-muted-foreground tabular-nums text-[10.5px]">{summary}</span>
       </button>
       {expanded && (
-        <div className="pl-5 mt-1 space-y-0.5">
+        <div className="pl-5 mt-1.5 pb-1 space-y-1">
           {rows.map((r) => (
             <div key={r.key} className="flex items-center gap-2 text-[10.5px] text-muted-foreground">
               <span className="w-[110px] truncate">{r.primary}</span>
@@ -517,6 +534,10 @@ function ContextChip() {
 
   const anchorRef = useRef(null)
   const [open, setOpen] = useState(false)
+  // Token breakdown section — collapsed by default. Six rows of
+  // raw cache/turn metrics is debug info most users don't need
+  // every time they open the popover. Toggle exposes it on demand.
+  const [showTokenDetail, setShowTokenDetail] = useState(false)
 
   return (
     <div className="relative">
@@ -650,27 +671,48 @@ function ContextChip() {
             </div>
           )}
 
-          {/* Section 3 — Per-token detail (debug) */}
+          {/* Section 3 — Per-token detail (debug). Hidden by default
+              because the six rows of cache/turn metrics are noise
+              for normal use. A small "Show details" toggle at the
+              bottom of the popover reveals them on demand. */}
           {bucket && (
-            <>
-              <div className="text-[12.5px] font-semibold text-foreground mb-2 mt-3 pt-2.5 border-t border-border">
-                Token breakdown
-              </div>
-              <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-[11px]">
-                <span className="text-muted-foreground">Input (this turn)</span>
-                <span className="font-mono tabular-nums text-right text-foreground">{formatTokenCountExact(bucket?.lastTurnInput)}</span>
-                <span className="text-muted-foreground">Input (cumulative)</span>
-                <span className="font-mono tabular-nums text-right text-foreground">{formatTokenCountExact(bucket?.input_tokens)}</span>
-                <span className="text-muted-foreground">Cache read</span>
-                <span className="font-mono tabular-nums text-right text-foreground">{formatTokenCountExact(bucket?.cache_read_input_tokens)}</span>
-                <span className="text-muted-foreground">Cache write</span>
-                <span className="font-mono tabular-nums text-right text-foreground">{formatTokenCountExact(bucket?.cache_creation_input_tokens)}</span>
-                <span className="text-muted-foreground">Output (cumulative)</span>
-                <span className="font-mono tabular-nums text-right text-foreground">{formatTokenCountExact(bucket?.output_tokens)}</span>
-                <span className="text-muted-foreground">Turns</span>
-                <span className="font-mono tabular-nums text-right text-foreground">{bucket?.turnCount || 0}</span>
-              </div>
-            </>
+            <div className="mt-3 pt-2 border-t border-border">
+              <button
+                type="button"
+                onClick={() => setShowTokenDetail((v) => !v)}
+                data-testid="token-detail-toggle"
+                aria-expanded={showTokenDetail}
+                className="
+                  w-full flex items-center justify-between
+                  text-[10.5px] text-muted-foreground
+                  hover:text-foreground transition-colors
+                  py-1 px-1 rounded
+                "
+              >
+                <span className="font-medium uppercase tracking-wider">
+                  {showTokenDetail ? 'Hide token details' : 'Show token details'}
+                </span>
+                {showTokenDetail
+                  ? <ChevronDown size={11} />
+                  : <ChevronRight size={11} />}
+              </button>
+              {showTokenDetail && (
+                <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5 text-[11px]">
+                  <span className="text-muted-foreground">Input (this turn)</span>
+                  <span className="font-mono tabular-nums text-right text-foreground">{formatTokenCountExact(bucket?.lastTurnInput)}</span>
+                  <span className="text-muted-foreground">Input (cumulative)</span>
+                  <span className="font-mono tabular-nums text-right text-foreground">{formatTokenCountExact(bucket?.input_tokens)}</span>
+                  <span className="text-muted-foreground">Cache read</span>
+                  <span className="font-mono tabular-nums text-right text-foreground">{formatTokenCountExact(bucket?.cache_read_input_tokens)}</span>
+                  <span className="text-muted-foreground">Cache write</span>
+                  <span className="font-mono tabular-nums text-right text-foreground">{formatTokenCountExact(bucket?.cache_creation_input_tokens)}</span>
+                  <span className="text-muted-foreground">Output (cumulative)</span>
+                  <span className="font-mono tabular-nums text-right text-foreground">{formatTokenCountExact(bucket?.output_tokens)}</span>
+                  <span className="text-muted-foreground">Turns</span>
+                  <span className="font-mono tabular-nums text-right text-foreground">{bucket?.turnCount || 0}</span>
+                </div>
+              )}
+            </div>
           )}
         </div>
       </Popover>

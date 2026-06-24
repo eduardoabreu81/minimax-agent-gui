@@ -217,7 +217,7 @@ describe('StatusBar ContextChip — gradient + plan bar', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Per-source token breakdown — renders "Breakdown by source" sub-section
+// Per-source token breakdown — renders "Breakdown" sub-section
 // when bucket.lastBySource is present (sent by the backend in the WS
 // `usage` event's `by_source` field).
 // ─────────────────────────────────────────────────────────────────────────────
@@ -243,7 +243,7 @@ describe('StatusBar ContextChip — per-source breakdown', () => {
     // Wait for the popover to render (Plan usage is the second
     // section, always present when open).
     await screen.findByText('Plan usage')
-    expect(screen.queryByText(/Breakdown by source/i)).toBeNull()
+    expect(screen.queryByText(/Breakdown/i)).toBeNull()
   })
 
   it('renders the breakdown collapsed by default — only header + dominant row', async () => {
@@ -281,7 +281,7 @@ describe('StatusBar ContextChip — per-source breakdown', () => {
     screen.getByTitle('Context window & plan').click()
     await screen.findByText('Plan usage')
     // Header is rendered
-    expect(screen.getByText(/Breakdown by source/i)).toBeInTheDocument()
+    expect(screen.getByText(/Breakdown/i)).toBeInTheDocument()
     // Dominant row name shown in collapsed header (Messages 3720 / 4000 = 93%)
     expect(screen.getByText(/Messages/)).toBeInTheDocument()
     // 9 row labels NOT yet rendered — collapsed
@@ -323,7 +323,7 @@ describe('StatusBar ContextChip — per-source breakdown', () => {
     const u = user.setup({ delay: null })
     render(<StatusBar model="MiniMax-M3" setModel={vi.fn()} thinkingEnabled={false} setThinkingEnabled={vi.fn()} supportsThinking={true} />)
     await u.click(screen.getByTitle('Context window & plan'))
-    await screen.findByText(/Breakdown by source/i)
+    await screen.findByText(/Breakdown/i)
 
     // Click the header to expand
     await u.click(screen.getByTestId('breakdown-toggle'))
@@ -377,11 +377,11 @@ describe('StatusBar ContextChip — per-source breakdown', () => {
     const u = user.setup({ delay: null })
     render(<StatusBar model="MiniMax-M3" setModel={vi.fn()} thinkingEnabled={false} setThinkingEnabled={vi.fn()} supportsThinking={true} />)
     await u.click(screen.getByTitle('Context window & plan'))
-    await screen.findByText(/Breakdown by source/i)
+    await screen.findByText(/Breakdown/i)
     await u.click(screen.getByTestId('breakdown-toggle'))
-    // Now the rows are rendered; the parent of "Breakdown by source"
+    // Now the rows are rendered; the parent of "Breakdown"
     // holds the whole panel.
-    const breakdown = screen.getByText(/Breakdown by source/i).closest('div')
+    const breakdown = screen.getByText(/Breakdown/i).closest('div')
     const text = breakdown.textContent
     expect(text).toMatch(/80%/)     // Messages
     expect(text).toMatch(/10%/)     // System prompt
@@ -412,7 +412,7 @@ describe('StatusBar ContextChip — per-source breakdown', () => {
     const u = user.setup({ delay: null })
     render(<StatusBar model="MiniMax-M3" setModel={vi.fn()} thinkingEnabled={false} setThinkingEnabled={vi.fn()} supportsThinking={true} />)
     await u.click(screen.getByTitle('Context window & plan'))
-    await screen.findByText(/Breakdown by source/i)
+    await screen.findByText(/Breakdown/i)
     await u.click(screen.getByTestId('breakdown-toggle'))
     // No expandable chevron rows when details are empty
     expect(screen.queryByText(/^MCP tools\s*\u00b7/)).toBeNull()
@@ -451,7 +451,7 @@ describe('StatusBar ContextChip — per-source breakdown', () => {
     const u = user.setup({ delay: null })
     render(<StatusBar model="MiniMax-M3" setModel={vi.fn()} thinkingEnabled={false} setThinkingEnabled={vi.fn()} supportsThinking={true} />)
     await u.click(screen.getByTitle('Context window & plan'))
-    await screen.findByText(/Breakdown by source/i)
+    await screen.findByText(/Breakdown/i)
 
     // Outer breakdown is collapsed — no inner expandables visible yet
     expect(screen.queryByTestId('breakdown-expand-mcp-tools')).toBeNull()
@@ -492,12 +492,114 @@ describe('StatusBar ContextChip — per-source breakdown', () => {
     const u = user.setup({ delay: null })
     render(<StatusBar model="MiniMax-M3" setModel={vi.fn()} thinkingEnabled={false} setThinkingEnabled={vi.fn()} supportsThinking={true} />)
     await u.click(screen.getByTitle('Context window & plan'))
-    await screen.findByText(/Breakdown by source/i)
+    await screen.findByText(/Breakdown/i)
     // Expand
     await u.click(screen.getByTestId('breakdown-toggle'))
     expect(screen.getByText('Skills')).toBeInTheDocument()
     // Collapse
     await u.click(screen.getByTestId('breakdown-toggle'))
     expect(screen.queryByText('Skills')).toBeNull()
+  })
+})
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Popover density — Edu's "barra cada vez mais bagunçada" feedback
+// (v0.4.x): the popover crammed context window + 8-row breakdown +
+// 3 expandable chevrons + plan usage + 6-row token debug. The
+// token debug block (cache read/write, turn count, exact input/
+// output) is low-value noise for normal use. Tests cover the new
+// collapsed-by-default behaviour + the aria-expanded wiring.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('StatusBar ContextChip — token detail toggle', () => {
+  beforeEach(() => {
+    mockApiFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ success: true, plan: 'plus', data: { model_remains: [] } }),
+    })
+  })
+
+  it('hides the token detail rows by default (no cache/turn metrics shown)', async () => {
+    mockUseSessionTokens.mockReturnValue({
+      sessions: {
+        'sess-1': {
+          lastModel: 'MiniMax-M3',
+          lastTurnInput: 4_665,
+          input_tokens: 9_330,
+          cache_read_input_tokens: 0,
+          cache_creation_input_tokens: 0,
+          output_tokens: 794,
+          turnCount: 2,
+        },
+      },
+      activeSessionId: 'sess-1',
+    })
+    render(<StatusBar model="MiniMax-M3" setModel={vi.fn()} thinkingEnabled={false} setThinkingEnabled={vi.fn()} supportsThinking={true} />)
+    screen.getByTitle('Context window & plan').click()
+    await screen.findByText('Plan usage')
+    // The toggle button is visible
+    expect(screen.getByTestId('token-detail-toggle')).toBeInTheDocument()
+    // But the debug rows are hidden
+    expect(screen.queryByText(/Cache read/)).toBeNull()
+    expect(screen.queryByText(/Cache write/)).toBeNull()
+    expect(screen.queryByText(/Input \(cumulative\)/)).toBeNull()
+  })
+
+  it('expanding the toggle reveals the debug rows (cache, turn count, exact numbers)', async () => {
+    mockUseSessionTokens.mockReturnValue({
+      sessions: {
+        'sess-1': {
+          lastModel: 'MiniMax-M3',
+          lastTurnInput: 4_665,
+          input_tokens: 9_330,
+          cache_read_input_tokens: 0,
+          cache_creation_input_tokens: 0,
+          output_tokens: 794,
+          turnCount: 2,
+        },
+      },
+      activeSessionId: 'sess-1',
+    })
+    const { default: user } = await import('@testing-library/user-event')
+    const u = user.setup({ delay: null })
+    render(<StatusBar model="MiniMax-M3" setModel={vi.fn()} thinkingEnabled={false} setThinkingEnabled={vi.fn()} supportsThinking={true} />)
+    await u.click(screen.getByTitle('Context window & plan'))
+    await screen.findByText('Plan usage')
+    // Click the toggle to expand
+    await u.click(screen.getByTestId('token-detail-toggle'))
+    // Debug rows are now visible
+    expect(screen.getByText(/Cache read/)).toBeInTheDocument()
+    expect(screen.getByText(/Cache write/)).toBeInTheDocument()
+    expect(screen.getByText(/Input \(cumulative\)/)).toBeInTheDocument()
+    expect(screen.getByText(/Output \(cumulative\)/)).toBeInTheDocument()
+    expect(screen.getByText(/Turns/)).toBeInTheDocument()
+  })
+
+  it('clicking the toggle a second time hides the debug rows again', async () => {
+    mockUseSessionTokens.mockReturnValue({
+      sessions: {
+        'sess-1': {
+          lastModel: 'MiniMax-M3',
+          lastTurnInput: 4_665,
+          input_tokens: 9_330,
+          cache_read_input_tokens: 0,
+          cache_creation_input_tokens: 0,
+          output_tokens: 794,
+          turnCount: 2,
+        },
+      },
+      activeSessionId: 'sess-1',
+    })
+    const { default: user } = await import('@testing-library/user-event')
+    const u = user.setup({ delay: null })
+    render(<StatusBar model="MiniMax-M3" setModel={vi.fn()} thinkingEnabled={false} setThinkingEnabled={vi.fn()} supportsThinking={true} />)
+    await u.click(screen.getByTitle('Context window & plan'))
+    await screen.findByText('Plan usage')
+    // Expand then collapse
+    await u.click(screen.getByTestId('token-detail-toggle'))
+    expect(screen.getByText(/Cache read/)).toBeInTheDocument()
+    await u.click(screen.getByTestId('token-detail-toggle'))
+    expect(screen.queryByText(/Cache read/)).toBeNull()
   })
 })
