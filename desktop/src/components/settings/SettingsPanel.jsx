@@ -363,6 +363,38 @@ export default function SettingsPanel() {
       .catch(() => {})
   }, [])
 
+  // Agent-only save — the API key save uses `handleSave` (which
+  // does both). This one is wired to the Agent section's own Save
+  // button so the user can persist auto_compact / max_steps /
+  // api_base without also typing a new API key.
+  const handleSaveAgent = async () => {
+    try {
+      const agentPayload = {}
+      if (localSettings.model) agentPayload.model = localSettings.model
+      if (localSettings.maxSteps) agentPayload.max_steps = Number(localSettings.maxSteps)
+      // auto_compact is a bool — send as-is (don't coalesce to
+      // truthy; user turning it OFF must round-trip as false).
+      agentPayload.auto_compact = Boolean(localSettings.autoCompact)
+      if (localSettings.region) agentPayload.region = localSettings.region
+      if (localSettings.apiBase) agentPayload.api_base = localSettings.apiBase
+
+      const res = await apiFetch('/api/config/agent', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(agentPayload),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.detail || t('settings.saveFailed'))
+      }
+      setSavedMessage(t('settings.agentSaved'))
+      setTimeout(() => setSavedMessage(''), 3000)
+    } catch (e) {
+      setSavedMessage(e?.message || t('settings.saveFailed'))
+      setTimeout(() => setSavedMessage(''), 3000)
+    }
+  }
+
   const handleSave = async () => {
     try {
       const messages = []
@@ -785,6 +817,22 @@ export default function SettingsPanel() {
                   yaml: <code className="px-1 py-0.5 rounded bg-card border border-border font-mono text-foreground text-[11px]">config.yaml</code>,
                 })}
               </div>
+            </div>
+
+            {/* Save button — own action so the user can persist the
+                auto-compact toggle + max_steps + api_base without
+                having to also type a new API key. */}
+            <div className="pt-2 flex items-center justify-between border-t border-border">
+              <p className="text-[10px] text-muted-foreground leading-snug">
+                {savedMessage || t('settings.saveHint')}
+              </p>
+              <button
+                onClick={handleSaveAgent}
+                className="h-[34px] px-4 rounded-[8px] bg-primary hover:bg-primary-hover text-white text-[12px] font-medium transition-colors flex items-center gap-1.5 shrink-0 ml-3"
+              >
+                <Save size={12} />
+                {t('settings.save')}
+              </button>
             </div>
           </div>
         </Card>
