@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+import re
 import uuid
 from pathlib import Path
 from time import perf_counter
@@ -207,6 +208,115 @@ class Agent:
 
         # Rough estimation: average 2.5 characters = 1 token
         return int(total_chars / 2.5)
+
+    def estimate_by_source(self) -> dict:
+        """Estimate the current context window breakdown by source.
+
+        Returns a dict with token counts (approximate, ~2.5 chars/token
+        fallback OR tiktoken cl100k_base when available). Categories:
+          - system:       Agent context (SOUL/IDENTITY/USER/MEMORY/daily) +
+                          base preamble (before the first ``## `` header).
+          - skills:       Skills metadata block (placeholder content between
+                          ``{SKILLS_METADATA}`` markers, or the section
+                          whose header starts with "Skills").
+          - tools:        Custom MCP tools section + any other ``## Tool``
+                          section in the system prompt.
+          - messages:     user/assistant/tool message history
+                          (messages[1:]).
+          - mcp_deferred: Always 0 today (TODO — heuristic for deferred
+                          MCP tools). The Token Plan dashboard print
+                          shows ~2.8% MCP deferred, but that requires a
+                          relevance-based deferral strategy that isn't
+                          implemented yet.
+          - total:        Sum of all categories (matches
+                          ``self._estimate_tokens()`` approximately).
+
+        The attribution is best-effort: if a section header doesn't
+        match any known category, it falls into ``system`` (the safe
+        default). The numbers are an *approximation* — exact attribution
+        would require tokenizing the API's request payload, which we
+        don't have on the client side. Use this for the UI breakdown
+        (Messages / Skills / Tools / System) and for dashboards, not
+        for billing math.
+        """
+        if not self.messages:
+            return {
+                "system": 0, "skills": 0, "tools": 0,
+                "messages": 0, "mcp_deferred": 0, "total": 0,
+            }
+
+        # Pick the same tokenizer as ``_estimate_tokens`` for consistency.
+        try:
+            encoding = tiktoken.get_encoding("cl100k_base")
+            count = lambda s: len(encoding.encode(s)) if s else 0
+        except Exception:
+            count = lambda s: int(len(s) / 2.5) if s else 0
+
+        # ---- System prompt (messages[0]) ----
+        system_msg = self.messages[0]
+        if isinstance(system_msg.content, str):
+            system_content = system_msg.content
+        else:
+            system_content = str(system_msg.content)
+
+        # Split the system prompt into sections by ``## `` headers.
+        # The first chunk (before the first ``## ``) is the base
+        # preamble (default identity). Subsequent chunks are named
+        # sections, each starting with its header line.
+        chunks = re.split(r"\n## ", "\n" + system_content)
+        # chunks[0] is empty (the leading "\n" we prepended), chunks[1] is
+        # the preamble, chunks[2+] are the named sections, each prefixed
+        # by their header line.
+        preamble = chunks[1] if len(chunks) > 1 else system_content
+        named = []
+        for raw in chunks[2:]:
+            header, _, body = raw.partition("\n")
+            named.append((header.strip().lower(), body))
+
+        by_source = {
+            "system": 0, "skills": 0, "tools": 0,
+            "messages": 0, "mcp_deferred": 0,
+        }
+        # Base preamble is always system (default identity + agent setup).
+        by_source["system"] += count(preamble)
+
+        # Categorize each named section by its header. Headers we recognize
+        # explicitly; anything else falls into ``system``.
+        SKILLS_KEYWORDS = ("skill",)
+        TOOLS_KEYWORDS = ("mcp tool", "custom mcp", "tool",)
+        for header, body in named:
+            tokens = count("## " + header + "\n" + body) if body else count("## " + header)
+            if any(k in header for k in SKILLS_KEYWORDS):
+                by_source["skills"] += tokens
+            elif any(k in header for k in TOOLS_KEYWORDS):
+                by_source["tools"] += tokens
+            else:
+                # SOUL, IDENTITY (Current Role), USER (About the User),
+                # MEMORY, daily (Today's Session Log), Workspace, etc.
+                by_source["system"] += tokens
+
+        # ---- History (messages[1:]) ----
+        for msg in self.messages[1:]:
+            if isinstance(msg.content, str):
+                by_source["messages"] += count(msg.content)
+            elif isinstance(msg.content, list):
+                for block in msg.content:
+                    if isinstance(block, dict):
+                        by_source["messages"] += count(str(block))
+            if msg.thinking:
+                by_source["messages"] += count(msg.thinking)
+            if msg.tool_calls:
+                by_source["messages"] += count(str(msg.tool_calls))
+            # Per-message metadata overhead (same as _estimate_tokens).
+            by_source["messages"] += 4
+
+        # ---- mcp_deferred placeholder ----
+        # TODO(minimax-m3): implement a relevance-based MCP deferral
+        # strategy. For now we report 0 (the "loaded" set covers all
+        # tools the agent has access to).
+
+        total = sum(by_source.values())
+        return {**by_source, "total": total}
 
     async def _summarize_messages(self):
         """Message history summarization: summarize conversations between user messages when tokens exceed limit
