@@ -240,8 +240,10 @@ function ContextCard({ icon: Icon, title, badge, id, usage, fetchFile, saveFile,
   const { t } = useTranslation()
   const [editing, setEditing] = useState(false)
   const [content, setContent] = useState(null)  // null = not loaded
+  const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
+  const [loadError, setLoadError] = useState(null)  // distinct from save error
   // Preset tracking (only used when presetSelector is provided):
   //   - selectedPreset = the id the user picked from the dropdown
   //     ('' means "Custom — current content doesn't match any preset")
@@ -250,6 +252,53 @@ function ContextCard({ icon: Icon, title, badge, id, usage, fetchFile, saveFile,
   const [selectedPreset, setSelectedPreset] = useState('')
   const [savedPreset, setSavedPreset] = useState('')
 
+  // Auto-fetch the file once on mount so the user can SEE the
+  // current content (read-only preview) without first clicking
+  // Edit. Previously the card was opaque until Edit was clicked —
+  // for the SOUL.md card this meant the personality text was
+  // invisible in the modal. Loading state is brief (one HTTP
+  // round-trip to /api/agent-context/{id}).
+  const loadPreview = useCallback(async () => {
+    if (content !== null || loading) return
+    setLoading(true)
+    setLoadError(null)
+    try {
+      const data = await fetchFile(id)
+      const loaded = data.content || ''
+      setContent(loaded)
+      // Also detect the active preset so the dropdown shows the
+      // current value (not blank "Custom") right away.
+      if (presetSelector?.presets?.length) {
+        const match = presetSelector.presets.find(
+          (p) => p.body && p.body === loaded,
+        )
+        const matchedId = match?.id || ''
+        setSelectedPreset(matchedId)
+        setSavedPreset(matchedId)
+      }
+    } catch (e) {
+      // Missing file (404) is normal pre-onboarding; show an
+      // empty-state hint instead of an error.
+      const msg = e.message || String(e)
+      if (/404|not found|missing/i.test(msg)) {
+        setContent('')
+      } else {
+        setLoadError(msg)
+      }
+    } finally {
+      setLoading(false)
+    }
+  }, [content, loading, fetchFile, id, presetSelector])
+
+  // Auto-load on mount (preview should appear without user action).
+  // Only for the cards that opted in via presetSelector — the
+  // other cards (IDENTITY/USER/MEMORY) keep the original behaviour
+  // where Edit is the trigger.
+  useEffect(() => {
+    if (presetSelector) loadPreview()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, presetSelector ? true : false])
+
   const startEdit = useCallback(async () => {
     setEditing(true)
     if (content === null) {
@@ -257,9 +306,6 @@ function ContextCard({ icon: Icon, title, badge, id, usage, fetchFile, saveFile,
         const data = await fetchFile(id)
         const loaded = data.content || ''
         setContent(loaded)
-        // If the loaded content matches one of the preset bodies
-        // exactly, treat that as the active preset. Otherwise the
-        // user has hand-edited it — call it Custom.
         if (presetSelector?.presets?.length) {
           const match = presetSelector.presets.find(
             (p) => p.body && p.body === loaded,
@@ -430,10 +476,47 @@ function ContextCard({ icon: Icon, title, badge, id, usage, fetchFile, saveFile,
             </div>
           </div>
         ) : (
-          <div className="flex items-center justify-end">
-            <button onClick={startEdit} className="text-xs text-primary hover:underline">
-              {t('agentContext.memory.edit')}
-            </button>
+          // Read-only preview of the file's content. Shown by default
+          // so the user can SEE the personality / role / memory
+          // without first clicking Edit. Renders as a <pre> with
+          // line-clamp so a 2 kB personality doesn't overflow the
+          // modal — clicking Edit reveals the full textarea. When
+          // the file doesn't exist yet (pre-onboarding) we show an
+          // empty-state hint instead of an empty box.
+          <div className="space-y-2">
+            {loading ? (
+              <div className="flex items-center gap-2 text-[11px] text-muted-foreground py-2">
+                <Loader2 size={11} className="animate-spin" />
+                {t('common.loading') || 'Loading…'}
+              </div>
+            ) : loadError ? (
+              <div className="text-xs text-red-600 dark:text-red-400 bg-red-500/10 border border-red-500/30 rounded-lg p-2">
+                {loadError}
+              </div>
+            ) : content && content.trim() ? (
+              <pre
+                className="
+                  text-[11px] leading-relaxed
+                  font-mono whitespace-pre-wrap break-words
+                  max-h-40 overflow-y-auto
+                  px-3 py-2.5
+                  bg-surface/60 border border-border rounded-lg
+                  text-foreground
+                "
+                data-testid={`preview-${id}`}
+              >
+                {content}
+              </pre>
+            ) : (
+              <div className="text-[11px] text-muted-foreground italic px-3 py-2 bg-surface/40 border border-dashed border-border rounded-lg">
+                No content yet. Pick a preset above or click Edit to write your own.
+              </div>
+            )}
+            <div className="flex items-center justify-end">
+              <button onClick={startEdit} className="text-xs text-primary hover:underline">
+                {t('agentContext.memory.edit')}
+              </button>
+            </div>
           </div>
         )}
       </div>

@@ -392,4 +392,73 @@ describe('ContextModal — Personality preset selector', () => {
       expect(mockSaveFile).toHaveBeenCalledWith('soul', 'You are dense and technical.')
     })
   })
+
+  it('auto-loads and shows the SOUL.md content as a preview without clicking Edit', async () => {
+    // The Personality card should fetch the file on mount and
+    // display the content in a read-only <pre> block. Previously
+    // the user had to click Edit to see the personality text.
+    openModalWithPresets(SAMPLE_PRESETS)
+    mockFetchFile.mockResolvedValue({
+      content: '# Personality\n\nYou are direct and minimal.\n\n## Style\n- Direct.',
+    })
+    render(<ContextModal />)
+    // fetchFile is called automatically on mount (no Edit click).
+    await waitFor(() => expect(mockFetchFile).toHaveBeenCalledWith('soul'))
+    // The preview <pre> is rendered with the fetched content.
+    const preview = await screen.findByTestId('preview-soul')
+    expect(preview).toBeInTheDocument()
+    expect(preview.textContent).toContain('You are direct and minimal.')
+    expect(preview.textContent).toContain('## Style')
+  })
+
+  it('shows an empty-state hint when the SOUL.md file does not exist', async () => {
+    openModalWithPresets(SAMPLE_PRESETS)
+    // fetchFile rejects with a 404-like error. The component
+    // treats "missing file" as the empty case (not an error) so
+    // the wizard can write the file fresh.
+    mockFetchFile.mockRejectedValue(new Error('404 not found'))
+    render(<ContextModal />)
+    await waitFor(() => expect(mockFetchFile).toHaveBeenCalledWith('soul'))
+    // No red error banner. The SOUL.md card shows its empty-state
+    // hint (and so do the other cards, but for different reasons —
+    // theirs is "not loaded yet"). We just verify no 404 error is
+    // shown to the user.
+    expect(screen.queryByText(/404/)).toBeNull()
+    // The SOUL.md card header is rendered with title "Personality".
+    // Its body should now show either the preview or the empty hint
+    // — find it by walking up from the header.
+    const soulTitle = screen.getByText('agentContext.file.soul')
+    const soulCard = soulTitle.closest('.rounded-xl')
+    expect(soulCard.textContent).toMatch(/No content yet|Pick a preset/i)
+  })
+
+  it('auto-loads ONLY the SOUL.md card (1 fetchFile call), not the other 3', async () => {
+    // Only SOUL.md opts in to the preset selector preview. The other
+    // 3 context cards (IDENTITY/USER/MEMORY) keep the original
+    // "click Edit to load" behavior — no auto-fetch. So we expect
+    // exactly 1 fetchFile call (soul), not 4.
+    openModal()
+    mockUseAgentContext.mockReturnValue({
+      status: {
+        banner_visible: false,
+        missing: [],
+        char_usage: {
+          soul:     { used: 50, limit: 100 },
+          identity: { used: 10, limit: 100 },
+          user:     { used: 5,  limit: 100 },
+          memory:   { used: 0,  limit: 100 },
+        },
+      },
+      dailies: [],
+      loading: false,
+      fetchFile: mockFetchFile,
+      saveFile: mockSaveFile,
+      fetchDaily: mockFetchDaily,
+      refreshStatus: mockRefreshStatus,
+      // NO presets / getPresetBody — only SOUL.md opts in.
+    })
+    render(<ContextModal />)
+    await waitFor(() => expect(mockFetchFile).toHaveBeenCalledTimes(1))
+    expect(mockFetchFile).toHaveBeenCalledWith('soul')
+  })
 })

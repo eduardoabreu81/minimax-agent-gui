@@ -530,7 +530,13 @@ function ContextChip() {
           <circle cx="12" cy="12" r="10" />
           <path d="M12 6v6l4 2" />
         </svg>
-        <span className="text-[11.5px] tabular-nums">{formatTokenCount(used)} / {formatTokenCount(limit)} ({pct}%)</span>
+        {/* Explicit "tokens" suffix — without it "12k / 1.0M"
+            reads like 12 kilobytes / 1 megabyte (which is what the
+            original Claude Code reference confused the user with).
+            Showing the unit removes the ambiguity. */}
+        <span className="text-[11.5px] tabular-nums">
+          {formatTokenCount(used)} / {formatTokenCount(limit)} <span className="text-muted-foreground">tokens</span> ({pct}%)
+        </span>
         <span className="w-[42px] h-[5px] rounded-full bg-secondary overflow-hidden inline-block">
           <span className="block h-full transition-all duration-300" style={barStyle} />
         </span>
@@ -541,7 +547,7 @@ function ContextChip() {
           <div className="flex items-center justify-between mb-2">
             <span className="text-[12.5px] font-semibold text-foreground">Context window</span>
             <span className="text-[11px] text-muted-foreground tabular-nums">
-              {formatTokenCount(used)} / {formatTokenCount(limit)} ({pct}%)
+              {formatTokenCount(used)} / {formatTokenCount(limit)} tokens ({pct}%)
             </span>
           </div>
           <div className="h-2 rounded-full bg-secondary overflow-hidden mb-3">

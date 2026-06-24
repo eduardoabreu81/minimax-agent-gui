@@ -168,6 +168,52 @@ describe('StatusBar ContextChip — gradient + plan bar', () => {
     // The chip is rendered even with no data
     expect(screen.getByTitle('Context window & plan')).toBeInTheDocument()
   })
+
+  it('shows the explicit "tokens" suffix on the chip so users don\'t confuse it with bytes', () => {
+    // Without an explicit unit, "12k / 1.0M (0%)" reads like
+    // 12 kilobytes / 1 megabyte — Edu flagged this confusion in
+    // v0.4.x because the original Claude Code reference looked
+    // similar but was using different units. Adding the literal
+    // word "tokens" disambiguates.
+    mockUseSessionTokens.mockReturnValue({
+      sessions: {
+        'sess-1': {
+          lastModel: 'MiniMax-M3',
+          lastTurnInput: 50_000,
+          input_tokens: 50_000,
+          output_tokens: 0,
+          turnCount: 3,
+        },
+      },
+      activeSessionId: 'sess-1',
+    })
+    render(<StatusBar model="MiniMax-M3" setModel={vi.fn()} thinkingEnabled={false} setThinkingEnabled={vi.fn()} supportsThinking={true} />)
+    const chip = screen.getByTitle('Context window & plan')
+    // The chip text contains both the number AND the word "tokens"
+    expect(chip.textContent).toMatch(/[\d.]+[kM]\s*\/\s*[\d.]+[kM]\s+tokens\s*\(\d+%\)/)
+  })
+
+  it('shows "tokens" inside the popover context-window header too', async () => {
+    mockUseSessionTokens.mockReturnValue({
+      sessions: {
+        'sess-1': {
+          lastModel: 'MiniMax-M3',
+          lastTurnInput: 50_000,
+          input_tokens: 50_000,
+          output_tokens: 0,
+          turnCount: 3,
+        },
+      },
+      activeSessionId: 'sess-1',
+    })
+    render(<StatusBar model="MiniMax-M3" setModel={vi.fn()} thinkingEnabled={false} setThinkingEnabled={vi.fn()} supportsThinking={true} />)
+    screen.getByTitle('Context window & plan').click()
+    await screen.findByText('Plan usage')
+    // The popover's "Context window" header has a token count
+    expect(screen.getByText(/Context window/)).toBeInTheDocument()
+    // And the suffix should appear there too
+    expect(screen.getByText(/tokens\s*\(\d+%\)/)).toBeInTheDocument()
+  })
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
