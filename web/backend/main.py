@@ -114,6 +114,17 @@ def _build_mcp_section(mcp_tools) -> str:
     section = "\n\n## MCP Servers\n"
 
     # Sub-block A: MiniMax built-in servers. Always present.
+    #
+    # The "How MCP tools reach you" paragraph below is load-bearing
+    # for preventing the agent from hallucinating shell commands
+    # like `claude mcp list` / `claude mcp add` (Claude Code CLI
+    # patterns bleeding through from training data). MCP tools in
+    # this app are exposed as native Anthropic `tool_use` functions
+    # — they're in the `tools` array of every request, not behind a
+    # shell command. The agent should never run bash to discover or
+    # install MCP servers. If a tool the user asked about isn't in
+    # the function list, it was toggled off in Settings (or the
+    # server failed to start), not "needs to be installed".
     section += (
         "\n### MiniMax (built-in)\n"
         "Two MCP servers from MiniMax are always available:\n"
@@ -122,12 +133,26 @@ def _build_mcp_section(mcp_tools) -> str:
         "news, or anything that might be outside your training cutoff.\n"
         "- **understand_image**: analyzes an image and returns a "
         "description. Use this whenever the user attaches an image "
-        "(path or URL) and asks for analysis, OCR, or visual Q&A.\n"
+        "(path or URL) and asks for analysis, OCR, or visual Q&A.\n\n"
+        "How MCP tools reach you: MiniMax exposes MCP tools as native "
+        "function-call definitions in the `tools` array of every "
+        "request — you receive them the same way you receive the "
+        "built-in tools (`read_file`, `write_file`, `bash`, etc.). "
+        "You do NOT need to run shell commands to discover, install, "
+        "or list MCP servers. Specifically:\n"
+        "- NEVER run `claude mcp list`, `claude mcp add`, "
+        "`npx @modelcontextprotocol/...`, `pip install mcp-...`, "
+        "or any other shell command to discover or configure MCP "
+        "servers. There is no `claude` CLI in this app — the name "
+        "is a coincidence with the protocol, not a tool.\n"
+        "- To see what's available, look at the `functions` in your "
+        "current request. Anything listed there is callable right now.\n"
+        "- If a tool the user mentioned isn't in the list, it was "
+        "toggled OFF in Settings → MCP Servers, or its server failed "
+        "to start at session boot. Tell the user plainly instead of "
+        "trying to install it yourself.\n\n"
         "Both tools live on the MiniMax coding-plan endpoint and "
-        "respect the same auth as the chat model. If the user "
-        "toggled one off in Settings → MCP Servers (MiniMax), it "
-        "won't be in your tool list at runtime — you'll discover "
-        "that on first use."
+        "respect the same auth as the chat model."
     )
 
     if not mcp_tools:

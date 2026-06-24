@@ -63,8 +63,14 @@ def test_section_explains_minimax_endpoint_inheritance():
     result = _build_mcp_section([])
     assert "MiniMax coding-plan endpoint" in result
     # And explains the toggle-off behavior so the agent
-    # doesn't get confused if a tool is missing.
-    assert "toggled one off" in result
+    # doesn't get confused if a tool is missing. The exact
+    # phrasing has shifted over time (see the anti-hallucination
+    # block) — accept any of the documented forms.
+    assert (
+        "toggled OFF" in result
+        or "toggled off" in result
+        or "toggled one off" in result
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -179,3 +185,57 @@ def test_function_is_exported_from_backend_main():
     prompt builder."""
     assert hasattr(backend_main, "_build_mcp_section")
     assert callable(backend_main._build_mcp_section)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Anti-hallucination — the agent must NOT try to run shell commands
+# (`claude mcp list`, `claude mcp add`, `pip install mcp-...`, etc.)
+# to discover or install MCP servers. MCP tools in this app are
+# exposed natively via Anthropic tool_use, not behind a CLI.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_section_explains_mcp_tools_are_native_function_calls():
+    """The agent should be told MCP tools come in via the `tools`
+    array of the request, not via shell commands."""
+    result = _build_mcp_section([])
+    # Native exposure language
+    assert "tool_use" in result or "function-call" in result or "function call" in result.lower()
+    assert "`tools` array" in result or "tools array" in result.lower()
+
+
+def test_section_explicitly_forbids_claude_mcp_list_command():
+    """The agent's training data associates MCP with the Claude Code
+    CLI (`claude mcp list`). Spell out that this CLI does not exist
+    in this app — running it via bash would just fail."""
+    result = _build_mcp_section([])
+    assert "claude mcp list" in result
+    assert "NEVER run" in result or "Do NOT" in result or "do not" in result
+
+
+def test_section_warns_about_install_commands():
+    """Same family of hallucinations: agent tries to `pip install`
+    or `npx @modelcontextprotocol/...` an MCP server. Spell out
+    that's wrong here."""
+    result = _build_mcp_section([])
+    assert "pip install mcp" in result
+    assert "npx" in result and "@modelcontextprotocol" in result
+
+
+def test_section_points_agent_to_function_definitions_for_discovery():
+    """Tell the agent WHERE to look (the `functions` array), not
+    just 'don't run shell'. Pure-don't language without an
+    alternative is what produces the 'what should I do then?'
+    follow-up hallucination."""
+    result = _build_mcp_section([])
+    # Should mention functions/tool list as the source of truth
+    assert "functions" in result
+
+
+def test_section_handles_missing_tool_as_settings_toggle_not_install():
+    """When the user asks about a tool that's not in the function
+    list, the agent should conclude 'toggled off / failed' — not
+    'needs install'. The section should explicitly bridge that."""
+    result = _build_mcp_section([])
+    assert "toggled OFF" in result or "toggled off" in result or "toggled one off" in result
+    assert "Settings" in result
