@@ -388,9 +388,9 @@ export function Composer({
                 }}
                 placeholder={isBusy ? `Waiting for ${expertLabel}…` : t("chat.placeholder")}
                 disabled={disabled}
-                rows={1}
+                rows={2}
                 data-testid="composer-textarea"
-                className="w-full resize-none border-0 bg-transparent py-1.5 text-sm outline-none placeholder:text-muted-foreground focus:ring-0 disabled:opacity-50"
+                className="w-full resize-none border-0 bg-transparent py-2.5 text-sm outline-none placeholder:text-muted-foreground focus:ring-0 disabled:opacity-50"
               />
               {autocompleteOpen && partial && (
                 <ContextRefAutocomplete
