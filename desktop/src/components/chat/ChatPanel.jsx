@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { apiFetch, apiWebSocketUrl } from '../../lib/api.js'
 import { useTranslation } from 'react-i18next'
 import { Send, ArrowRight, Plus, User, Bot, Loader2, Paperclip, X, Image as ImageIcon, FileText, MessageSquarePlus, Trash2, ChevronDown, Pencil, Search } from 'lucide-react'
@@ -8,6 +8,8 @@ import { useSessionTokens } from '../../context/SessionTokensContext'
 import ThinkingBlock from '../shared/ThinkingBlock'
 import CopyButton from '../shared/CopyButton'
 import MarkdownRenderer from '../MarkdownRenderer'
+import ContextWarningBanner from '../shared/ContextWarningBanner'
+import { getCompactThresholds, getContextLimit } from '../../lib/modelLimits'
 
 function generateId() {
   return Math.random().toString(36).substring(2, 10)
@@ -33,6 +35,11 @@ export default function ChatPanel({
   const [input, setInput] = useState('')
   const [isConnected, setIsConnected] = useState(false)
   const [isThinking, setIsThinking] = useState(false)
+  // True between sending {type:'compact'} and receiving the matching
+  // compact_done event. Drives the spinner in the ContextWarningBanner
+  // for the auto/max tiers so the user sees feedback while the backend
+  // runs _summarize_messages (can take 1-3s for long histories).
+  const [compactInFlight, setCompactInFlight] = useState(false)
   const [attachment, setAttachment] = useState(null)
   const [sessionId, setSessionId] = useState(() => {
     // Persist the chat sessionId in localStorage so it survives tab
@@ -70,6 +77,10 @@ export default function ChatPanel({
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState(null)
   const [searchLoading, setSearchLoading] = useState(false)
+  // Permission request from the agent (shown as an inline modal in the chat).
+  // Read-only tools (risk === "low") are auto-approved; medium/high risk
+  // surface here so the user can approve or reject.
+  const [permissionRequest, setPermissionRequest] = useState(null)
   const wsRef = useRef(null)
   const scrollRef = useRef(null)
   const fileInputRef = useRef(null)
@@ -219,25 +230,67 @@ export default function ChatPanel({
         onProcessingChange?.(false)
         setMessages((prev) => [...prev, { type: 'system', content: `Skill '${data.skill}' activated` }])
       } else if (data.type === 'permission_request') {
-        // Chat does not have a permission modal yet; auto-reject for safety
-        wsRef.current?.send(JSON.stringify({
-          type: 'permission_response',
-          request_id: data.request_id,
-          approved: false,
-        }))
-        setMessages((prev) => [...prev, {
-          type: 'system',
-          content: `Permission required for tool: ${data.tool_name}. Rejected in chat mode.`,
-        }])
+        // Auto-approve read-only tools (risk === "low" per the backend's
+        // classifier) so the chat doesn't break for harmless lookups
+        // (web_search, read_file, glob, grep, list_directory, get_skill,
+        // understand_image, bash_output, …). Destructive / medium+high
+        // risk surface as an inline modal so the user can decide.
+        const risk = data.classification?.risk
+        if (risk === 'low') {
+          wsRef.current?.send(JSON.stringify({
+            type: 'permission_response',
+            request_id: data.request_id,
+            approved: true,
+          }))
+          setMessages((prev) => [...prev, {
+            type: 'system',
+            content: `Auto-approved read-only tool: ${data.tool_name}.`,
+          }])
+        } else {
+          setPermissionRequest(data)
+          setMessages((prev) => [...prev, {
+            type: 'system',
+            content: `Permission requested for ${data.tool_name} (${risk ?? 'unknown'} risk).`,
+          }])
+        }
       } else if (data.type === 'usage') {
         // Backend sends per-turn token usage so the StatusBar's context
         // chip can show live progress. Anthropic usage shape:
         //   { input_tokens, output_tokens, cache_read_input_tokens, cache_creation_input_tokens }
-        // Only record if the payload actually has any numbers — older
-        // backends or proxy events may send { type:'usage' } with no fields.
+        // Always record when the backend emits this event — earlier we
+        // dropped the payload when both input+output were 0, which
+        // masked the fact that agent.last_usage was being populated with
+        // the wrong field names (always 0). Trust the backend to emit
+        // this event only when there's something meaningful.
         console.log('[ChatPanel] got usage event:', { sessionId, usage: data.usage, model: data.model })
-        if (data.usage && (data.usage.input_tokens || data.usage.output_tokens)) {
+        if (data.usage) {
           recordUsage(sessionId, data.usage, data.model || null)
+        }
+      } else if (data.type === 'compact_done') {
+        // Backend finished _summarize_messages for our manual [Compact]
+        // click. The follow-up `usage` event below carries the new
+        // (post-compact) input_tokens so the StatusBar drops immediately.
+        setCompactInFlight(false)
+        setMessages((prev) => [...prev, {
+          type: 'system',
+          content: `Context compacted (${data.before_tokens?.toLocaleString() ?? '?'} → ${data.after_tokens?.toLocaleString() ?? '?'} tokens).`,
+        }])
+      } else if (data.type === 'compact_failed') {
+        setCompactInFlight(false)
+        setError?.(data.detail || 'Compact failed.')
+        setMessages((prev) => [...prev, {
+          type: 'system',
+          content: `Context compact failed: ${data.detail || 'unknown error'}`,
+        }])
+      } else if (data.type === 'daily_updated') {
+        // Backend appended to .agent/daily/{date}.md. Broadcast so any
+        // open ContextModal / DocViewer can refresh without the user
+        // re-opening it. Window-level event keeps it decoupled from
+        // ChatPanel's tree (mirrors the minimax:media-complete pattern).
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('minimax:daily-updated', {
+            detail: { date: data.date, path: data.path },
+          }))
         }
       } else {
         setIsThinking(false)
@@ -245,7 +298,7 @@ export default function ChatPanel({
         // Some backends pack usage into the assistant event instead of a
         // separate 'usage' event — record it either way so the StatusBar
         // sees real numbers even if the dedicated event isn't emitted.
-        if (data.usage && (data.usage.input_tokens || data.usage.output_tokens)) {
+        if (data.usage) {
           recordUsage(sessionId, data.usage, data.model || null)
         }
         // The final assistant message arrives AFTER all the text_delta
@@ -319,17 +372,51 @@ export default function ChatPanel({
   // Register the current chat session with the StatusBar so the context
   // chip tracks tokens for THIS conversation. The bucket persists across
   // session changes (you can switch to an old chat and see its old totals).
-  const { setActiveSessionId, recordUsage } = useSessionTokens()
+  const { setActiveSessionId, recordUsage, sessions, activeSessionId } = useSessionTokens()
   useEffect(() => {
     setActiveSessionId(sessionId)
     return () => setActiveSessionId(null)
   }, [sessionId, setActiveSessionId])
 
+  // Context window pct + banner level. Computed from the live token
+  // bucket for THIS session so it tracks the active conversation (not
+  // the model picker selection — see bucket.lastModel below).
+  //
+  // Tier ladder (per MODEL_COMPACT_THRESHOLDS, mirror of mini-agent):
+  //   max  (90%) > auto (80%) > warn (50%, M3-only)
+  //
+  // Banner state-based: re-renders show banner whenever pct >= threshold.
   useEffect(() => {
     fetchConversations()
     connectWebSocket(sessionId)
     return () => wsRef.current?.close()
   }, [sessionId, connectWebSocket])
+
+  const banner = useMemo(() => {
+    const bucket = activeSessionId ? sessions[activeSessionId] : null
+    const modelId = bucket?.lastModel || activeModelProp || null
+    if (!modelId) return { level: null, pct: 0, used: 0, limit: 0 }
+    const used = bucket?.lastTurnInput || bucket?.input_tokens || 0
+    const limit = getContextLimit(modelId)
+    if (limit <= 0) return { level: null, pct: 0, used, limit }
+    const pct = Math.min(100, (used / limit) * 100)
+    const t = getCompactThresholds(modelId)
+    let level = null
+    if (pct >= t.max * 100)        level = 'max'
+    else if (pct >= t.auto * 100)  level = 'auto'
+    else if (t.warn != null && pct >= t.warn * 100) level = 'warn'
+    return { level, pct, used, limit }
+  }, [sessions, activeSessionId, activeModelProp])
+
+  // Send {type:'compact'} on the active WebSocket. Used by the [Compact]
+  // button in the warn-tier banner (manual user opt-in) and by the
+  // auto-tier banner (UI feedback while the backend triggers pre-LLM
+  // summarize at 80%).
+  const triggerCompact = useCallback(() => {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
+    setCompactInFlight(true)
+    wsRef.current.send(JSON.stringify({ type: 'compact', model: activeModelProp }))
+  }, [activeModelProp])
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
@@ -401,6 +488,28 @@ export default function ChatPanel({
     setInput('')
     setShowSkills(false)
   }
+
+  const handlePermissionApprove = useCallback(() => {
+    if (!permissionRequest || !wsRef.current) return
+    wsRef.current.send(JSON.stringify({
+      type: 'permission_response',
+      request_id: permissionRequest.request_id,
+      approved: true,
+    }))
+    setMessages(prev => [...prev, { type: 'system', content: `Tool approved: ${permissionRequest.tool_name}` }])
+    setPermissionRequest(null)
+  }, [permissionRequest])
+
+  const handlePermissionReject = useCallback(() => {
+    if (!permissionRequest || !wsRef.current) return
+    wsRef.current.send(JSON.stringify({
+      type: 'permission_response',
+      request_id: permissionRequest.request_id,
+      approved: false,
+    }))
+    setMessages(prev => [...prev, { type: 'system', content: `Tool rejected: ${permissionRequest.tool_name}` }])
+    setPermissionRequest(null)
+  }, [permissionRequest])
 
   const sendMessage = useCallback(() => {
     if ((!input.trim() && !attachment) || !wsRef.current) return
@@ -484,6 +593,17 @@ export default function ChatPanel({
 
   return (
     <div className="flex flex-col h-full bg-card">
+      {/* Context window warning banner — appears whenever the active
+          session's pct crosses a threshold (50/80/90). State-based:
+          shows again on every render where pct >= threshold; dismissal
+          is per-mount (in-memory, see ContextWarningBanner). */}
+      <ContextWarningBanner
+        level={banner.level}
+        pct={banner.pct}
+        compacting={compactInFlight}
+        onCompact={triggerCompact}
+      />
+
       {/* Header */}
       <div className="flex items-center justify-between px-[22px] border-b border-border" style={{ height: 52, flexShrink: 0 }}>
         <div className="relative flex items-center gap-2.5" ref={convListRef}>
@@ -750,6 +870,69 @@ export default function ChatPanel({
           <p className="text-[10px] text-muted-foreground mt-2 text-center">Enter to send · Shift+Enter for new line</p>
         </div>
       </div>
+
+      {/* Inline permission modal — only for medium/high risk tools.
+          Read-only tools (risk === "low") are auto-approved in the WS
+          handler above and never reach this branch. */}
+      {permissionRequest && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="w-full max-w-md bg-card border border-border rounded-xl shadow-2xl p-5 space-y-4">
+            <div className="flex items-center gap-2">
+              <span className="w-5 h-5 flex items-center justify-center text-amber-400">⚠</span>
+              <h3 className="text-sm font-semibold">Tool Permission Required</h3>
+            </div>
+            <div className="space-y-2 text-xs">
+              <div className="flex items-center gap-2">
+                <span className="text-muted-foreground">Tool:</span>
+                <span className="font-mono font-medium text-foreground">{permissionRequest.tool_name}</span>
+              </div>
+              {permissionRequest.classification && (
+                <>
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground">Category:</span>
+                    <span className="px-1.5 py-0.5 rounded bg-surface border border-border">{permissionRequest.classification.category}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground">Risk:</span>
+                    <span className={`px-1.5 py-0.5 rounded ${
+                      permissionRequest.classification.risk === 'high'
+                        ? 'bg-red-400/10 text-red-400'
+                        : permissionRequest.classification.risk === 'medium'
+                        ? 'bg-amber-400/10 text-amber-400'
+                        : 'bg-green-400/10 text-green-400'
+                    }`}>
+                      {permissionRequest.classification.risk}
+                    </span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="text-muted-foreground shrink-0">Reason:</span>
+                    <span className="text-foreground">{permissionRequest.classification.reason}</span>
+                  </div>
+                </>
+              )}
+              {permissionRequest.arguments && Object.keys(permissionRequest.arguments).length > 0 && (
+                <div className="bg-surface border border-border rounded-lg p-2 max-h-32 overflow-y-auto">
+                  <pre className="text-[10px] font-mono text-muted-foreground whitespace-pre-wrap">{JSON.stringify(permissionRequest.arguments, null, 2)}</pre>
+                </div>
+              )}
+            </div>
+            <div className="flex items-center gap-2 pt-2">
+              <button
+                onClick={handlePermissionApprove}
+                className="flex-1 py-2 bg-primary hover:bg-primary-hover text-white text-xs font-medium rounded-lg transition-colors"
+              >
+                Approve
+              </button>
+              <button
+                onClick={handlePermissionReject}
+                className="flex-1 py-2 bg-surface hover:bg-error/10 border border-border text-foreground hover:text-error text-xs font-medium rounded-lg transition-colors"
+              >
+                Reject
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
