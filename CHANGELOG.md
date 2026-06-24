@@ -454,6 +454,137 @@ controls and fixed a number of Token Plan API quirks.
   directly without rendering. Total vitest: **83 passed** (was
   72, +11 new), 9 files, zero regression.
 
+- **`tests/test_token_attribution.py`** (NEW, 10 tests) —
+  covers `Agent.estimate_by_source()`, the per-source token
+  breakdown that powers the StatusBar popover "Breakdown by
+  source" section. Tests cover: shape invariants (6 keys,
+  total = sum of parts), section categorization (preamble →
+  system, `## Available Skills` → skills, `## Custom MCP Tools`
+  → tools, agent-context sections default to system, history
+  → messages), `mcp_deferred` is always 0 today (TODO marked in
+  the estimator), and the tiktoken fallback path. Catches a
+  real bug in the regex split (a naive `\n## ` split attaches
+  the leading newline to the preamble and silently misses
+  every named section; the fix is `re.split(r"^## ",
+  system_content, flags=re.MULTILINE)`). Total pytest: **279
+  passed** (was 269, +10), 20 failed (all pre-existing).
+
+- **`desktop/src/components/shared/StatusBar.test.jsx`**
+  (extended, +3 tests) — covers the per-source breakdown
+  rendering: hidden when `bucket.lastBySource` is null,
+  renders all 5 row labels when present, percentages match
+  expected. Total vitest: **86 passed** (was 83, +3 new), 9
+  files, zero regression.
+
+- **`desktop/src/components/settings/SettingsPanel.test.jsx`**
+  (NEW, 4 tests) — covers the auto-compact toggle flow:
+  renders with the i18n label + description, default state
+  matches backend `auto_compact: true`, reflects backend
+  `auto_compact: false` when returned, and clicking the
+  toggle + Save button sends `auto_compact: false` in the
+  PUT body (catches the bug where a user turning it off
+  would round-trip as omitted and the toggle would silently
+  re-enable on next load). Total vitest: **90 passed** (was
+  86, +4 new), 10 files.
+
+- **`desktop/src/components/settings/SettingsPanel.mcp.test.jsx`**
+  (NEW, 4 tests) — covers the i18n label changes for the
+  MiniMax MCP section: settings.tools maps to "MCP Servers
+  (MiniMax)", settings.webSearch / settings.imageUnderstanding
+  include the "(MCP)" suffix, settings.webSearchDesc calls
+  out "MiniMax MCP server". Hard guard against reverting to
+  the original generic "Tools" label. Total vitest: **94
+  passed** (was 90, +4 new), 11 files.
+
+### Added — Token attribution (by source)
+
+- **`Agent.estimate_by_source()`** — new method that
+  approximates how the current context window is split across
+  content sources. Categories: `system` (agent context
+  SOUL/IDENTITY/USER/MEMORY/daily + base preamble), `skills`
+  (section whose header mentions skill), `tools` (section
+  whose header mentions mcp tool / custom mcp / tool),
+  `messages` (user/assistant/tool history), `mcp_deferred`
+  (always 0 today — TODO: relevance-based MCP deferral
+  strategy), `total` (sum of parts). Uses the same
+  tiktoken cl100k_base encoder as `_estimate_tokens()` with a
+  ~2.5 chars/token fallback when tiktoken is unavailable.
+  Splits the system prompt by `^## ` headers
+  (MULTILINE-flagged) and categorizes each section by header
+  keyword. Best-effort: any section whose header doesn't
+  match a known keyword falls into `system` (safe default).
+
+- **WS `usage` event includes `by_source`** — both the
+  per-turn `usage` event and the `assistant` event now carry
+  a `by_source` field (the result of `estimate_by_source()`).
+  Field is optional and the frontend is defensive: missing it
+  just renders no breakdown. The estimator is wrapped in
+  try/except so any failure doesn't break the response
+  stream. Three emission sites updated: standalone `usage`
+  event, `assistant` event fallback, and the re-emitted
+  `usage` after a frontend-triggered compact (recalculates
+  because the system prompt shrinks when summarization runs).
+
+- **StatusBar popover renders "Breakdown by source"** — new
+  sub-section inside the Context window section, rendered
+  only when `bucket.lastBySource` is populated. Five rows
+  (Messages / System / Skills / Tools / MCP deferred) each
+  with a 1.5px-tall bar + label + percent of total. Hidden
+  gracefully when no breakdown is available yet (no clutter
+  on the first turn). Plumbed through `SessionTokensContext`
+  (new `lastBySource` field on the bucket; `recordUsage()`
+  accepts an optional 4th arg, bySource) and `ChatPanel`
+  (two `recordUsage` call sites pass `data.by_source`).
+
+### Added — Settings (auto-compact toggle + dedicated Agent Save)
+
+- **Auto-compact toggle in Settings → Agent** — new Row
+  with Toggle in the existing Agent Card. Label "Auto-compact
+  at 80%" + description that makes the 90%-safety-net
+  behavior explicit. The 80% auto-compact threshold respects
+  the toggle; the 90% safety net is NEVER overridable (per
+  invariant #14, AGENTS.local.md). Added `auto_compact:
+  Optional[bool]` to `AgentConfigUpdate` on the backend and
+  `cfg["auto_compact"]` write in the PUT handler. The
+  frontend coerces to Boolean so a user turning the toggle
+  OFF actually round-trips as `false`, not omitted.
+
+- **Dedicated Save button in the Agent section** — the
+  original Save button (in the API key row) was disabled
+  when the API key field was empty, so the user could only
+  persist agent settings by also typing a new API key.
+  Added a dedicated Save button to the Agent Card, scoped to
+  the agent settings (max_steps, auto_compact, region,
+  api_base, model), wired to a new `handleSaveAgent()` that
+  does only the PUT /api/config/agent. The API key save
+  still uses the original `handleSave()`.
+
+### Added — Settings (MCP Servers MiniMax label)
+
+- **Settings → "Tools" section renamed to "MCP Servers
+  (MiniMax)"** — the section that holds the web_search and
+  understand_image toggles was labeled just "Tools", but
+  those toggles are MiniMax MCP servers, not generic
+  "tools". A second section later in the rail is called
+  "MCP servers" (for the user-configured MCP servers) — the
+  two were easy to confuse. Renamed the label across all 6
+  locales, added "(MCP)" suffix to the toggle labels, and
+  expanded the webSearch description to call out "MiniMax
+  MCP server". The MCP section further down (user-configured
+  MCP servers) is unchanged.
+
+- **System prompt gets a "## MiniMax MCP Servers" block** —
+  before this, the system prompt had a "## Custom MCP Tools"
+  block for user-configured MCP servers but said nothing
+  about the two native MiniMax ones. The new block names
+  `web_search` and `understand_image`, explains when the
+  agent should use each (current events / image analysis),
+  and notes that both live on the MiniMax coding-plan
+  endpoint with the same auth as the chat model. If the
+  user toggled a tool off in Settings, the agent discovers
+  the missing tool on first use via the runtime tool list
+  (which reflects the toggle).
+
 ### Settings Modal: custom API base URL
 
 - The Agent tab now lets users override the default MiniMax
