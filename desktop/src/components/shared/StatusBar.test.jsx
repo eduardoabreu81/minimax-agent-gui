@@ -104,7 +104,7 @@ describe('contextBarGradient', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('StatusBar ContextChip — gradient + plan bar', () => {
-  it('renders the gradient bar style when the popover is open', async () => {
+  it('renders the theme-colored bar when the popover is open', async () => {
     mockUseSessionTokens.mockReturnValue({
       sessions: {
         'sess-1': {
@@ -150,12 +150,14 @@ describe('StatusBar ContextChip — gradient + plan bar', () => {
     const chip = screen.getByTitle('Context window & plan')
     chip.click()
 
-    // The popover has a context-window bar — find it by its
-    // container's height class and assert the inline style.
-    const popovers = await screen.findAllByRole('button')
-    // The popover is rendered after click; assert the gradient is
-    // present somewhere in the document.
-    expect(document.body.innerHTML).toContain(contextBarGradient)
+    // The bar follows the active theme's accent color (default theme =
+    // #60a5fa blue), not the old green→amber→red gradient. React
+    // serializes inline styles as rgb(), so match the rgb equivalent
+    // of #60a5fa.
+    await screen.findAllByRole('button')
+    expect(document.body.innerHTML).toMatch(/rgb\(96,\s*165,\s*250\)/i)
+    // The old gradient must NOT be in the DOM anymore.
+    expect(document.body.innerHTML).not.toContain(contextBarGradient)
   })
 
   it('falls back to muted color when quota has no text bucket (null state)', () => {

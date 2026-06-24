@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { ChevronDown, ChevronRight, Loader2, Brain, AlertCircle } from 'lucide-react'
 import { useSessionTokens } from '../../context/SessionTokensContext'
 import { useAgentActivity } from '../../context/AgentActivityContext'
+import { useTheme, THEMES } from '../../context/ThemeContext'
 import { getContextLimit, formatTokenCount, formatByteCount, DEFAULT_MODEL } from '../../lib/modelLimits'
 import { apiFetch } from '../../lib/api.js'
 
@@ -224,11 +225,16 @@ export const contextBarGradient = 'linear-gradient(to right, hsl(142 71% 45%) 0%
 // (kept for future expansion) but the UI no longer renders them.
 
 
-function ContextChip() {
+function ContextChip({ model }) {
   const { sessions, activeSessionId } = useSessionTokens()
   const { data: quotaData, items: quotaItems } = useQuota()
+  const { theme: themeId } = useTheme()
   const bucket = activeSessionId ? sessions[activeSessionId] : null
-  const modelId = bucket?.lastModel || DEFAULT_MODEL
+  // Prefer the live picker selection (`model` prop) so the limit updates
+  // the moment the user switches model in the picker, even before the
+  // first usage event for the new model arrives. Falls back to the
+  // bucket's lastModel (set when a usage event lands), then DEFAULT_MODEL.
+  const modelId = model || bucket?.lastModel || DEFAULT_MODEL
   const limit = getContextLimit(modelId)
 
   // Latest turn's input_tokens is what determines "will the next send
@@ -238,9 +244,16 @@ function ContextChip() {
 
   console.log('[ContextChip] bucket:', { activeSessionId, bucketExists: !!bucket, lastModel: bucket?.lastModel, lastTurnInput: bucket?.lastTurnInput, inputTokens: bucket?.input_tokens, outputTokens: bucket?.output_tokens, turnCount: bucket?.turnCount, modelId, limit, used, pct })
 
-  // Continuous gradient bar — color at the leading edge reflects the
-  // current pct (50% filled shows amber at the edge, 95% shows red).
-  const barStyle = { width: `${pct}%`, background: contextBarGradient }
+  // Bar color follows the active theme so the chip visually belongs to
+  // the rest of the UI. Switch to red at >= 80% fill as a hard warning
+  // — except when the theme itself is the red "minimax" theme, where
+  // red is already the brand color and flipping it on 80% would lose
+  // the signal (everything would look the same).
+  const themeMeta = THEMES.find((t) => t.id === themeId)
+  const themeAccent = (themeMeta?.preview?.darkText) || '#60a5fa'
+  const isRedTheme = themeId === 'minimax'
+  const barColor = !isRedTheme && pct >= 80 ? '#ef4444' : themeAccent
+  const barStyle = { width: `${pct}%`, background: barColor }
 
   // Plan usage — pull the text bucket (5h + weekly)
   const textQuota = quotaItems.find(i => i.group === 'text' && !i.available)
@@ -663,7 +676,7 @@ export default function StatusBar({
 
       {/* Right: context (popover merges context + plan) | model + thinking + agent */}
       <div className="flex items-center gap-0.5">
-        <ContextChip />
+        <ContextChip model={model} />
 
         <div className="w-px h-4 bg-border mx-1" />
 
