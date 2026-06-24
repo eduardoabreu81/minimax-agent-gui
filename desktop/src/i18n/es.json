@@ -306,6 +306,7 @@
     "vocalPlaceholder": "ej. barítono masculino cálido, soprano femenina brillante, dúo con armonías",
     "lyrics": "Letra",
     "autoGenLyrics": "Generar letra automáticamente",
+    "characters": "{count} / 2.000 caracteres",
     "characters3500": "{count} / 3.500 caracteres",
     "exceedsLimit": "¡Límite excedido!",
     "generating": "Generando...",

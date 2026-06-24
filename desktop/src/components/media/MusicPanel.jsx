@@ -620,8 +620,7 @@ export default function MusicPanel() {
               rows={3}
             />
             <div className="flex items-center justify-between mt-1">
-              <p className="text-[10px] text-muted-foreground">{t('image.characters', { count: prompt.length.toLocaleString() })}</p>
-              {prompt.length > 2000 && <p className="text-[10px] text-error">{t('music.exceedsLimit')}</p>}
+              <p className="text-[10px] text-muted-foreground">{t('music.characters', { count: prompt.length.toLocaleString() })}</p>
             </div>
           </div>
 

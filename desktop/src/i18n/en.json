@@ -416,6 +416,7 @@
     "instrumentalNeedsPrompt": "Instrumental mode requires a style prompt.",
     "promptTooLong": "Prompt exceeds 2000 character limit.",
     "autoGenLyrics": "Auto-generate lyrics",
+    "characters": "{count} / 2,000 characters",
     "characters3500": "{count} / 3,500 characters",
     "exceedsLimit": "Exceeds limit!",
     "generating": "Generating...",

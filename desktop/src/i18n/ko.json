@@ -306,6 +306,7 @@
     "vocalPlaceholder": "예: 따뜻한 남성 바리톤, 밝은 여성 소프라노, 하모니 듀엣",
     "lyrics": "가사",
     "autoGenLyrics": "가사 자동 생성",
+    "characters": "{count} / 2,000 자",
     "characters3500": "{count} / 3,500 자",
     "exceedsLimit": "한도 초과!",
     "generating": "생성 중...",

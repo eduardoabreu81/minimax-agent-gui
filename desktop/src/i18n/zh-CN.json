@@ -306,6 +306,7 @@
     "vocalPlaceholder": "例如:温暖男中音,明亮女高音,和声二重唱",
     "lyrics": "歌词",
     "autoGenLyrics": "自动生成歌词",
+    "characters": "{count} / 2,000 字符",
     "characters3500": "{count} / 3,500 字符",
     "exceedsLimit": "超出限制!",
     "generating": "生成中...",

@@ -306,6 +306,7 @@
     "vocalPlaceholder": "例:温かい男性バリトン、明るい女性ソプラノ、ハーモニーのデュエット",
     "lyrics": "歌詞",
     "autoGenLyrics": "歌詞を自動生成",
+    "characters": "{count} / 2,000 文字",
     "characters3500": "{count} / 3,500 文字",
     "exceedsLimit": "上限を超えました!",
     "generating": "生成中...",

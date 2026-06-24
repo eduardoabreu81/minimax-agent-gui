@@ -24,6 +24,14 @@ i18n
     fallbackLng: 'en',
     interpolation: {
       escapeValue: false,
+      // i18next 23+ changed the default placeholder syntax from `{name}`
+      // to `{{name}}` (mustache-style). Our translation files still use
+      // single-curly, so without these overrides every interpolated
+      // value renders literally as `{count}` etc. — see TaskBoard's
+      // stats bar and the music/image char counters. Pin back to v3-style
+      // delimiters so the existing locale JSON keeps working.
+      prefix: '{',
+      suffix: '}',
     },
     detection: {
       order: ['localStorage', 'navigator'],
