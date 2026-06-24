@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { ChevronDown, ChevronRight, Loader2, Brain, AlertCircle } from 'lucide-react'
 import { useSessionTokens } from '../../context/SessionTokensContext'
 import { useAgentActivity } from '../../context/AgentActivityContext'
-import { getContextLimit, formatTokenCount, formatTokenCountExact, formatByteCount, DEFAULT_MODEL } from '../../lib/modelLimits'
+import { getContextLimit, formatTokenCount, formatByteCount, DEFAULT_MODEL } from '../../lib/modelLimits'
 import { apiFetch } from '../../lib/api.js'
 
 // StatusBar — global footer anchored above the bottom of the app.
@@ -254,14 +254,12 @@ function ContextChip() {
   const [open, setOpen] = useState(false)
   // The 6-row breakdown (Messages / Skills / Memory files / Custom
   // agents / System prompt / MCP tools) defaults to expanded. The
-  // user can collapse it via the small chevron next to the section
-  // header to focus on just the bar + total. Hidden in the
-  // collapsed state to keep the popover compact.
+  // chevron next to "Context window" collapses the entire section
+  // (header + bar + rows) when the user just wants the plan usage
+  // below. Edu's v0.4.x: "tirar by source, e deixar a setinha ao
+  // lado de context window" — chevron belongs on the section
+  // header, not as a separate "By source" sub-section.
   const [breakdownOpen, setBreakdownOpen] = useState(true)
-  // Token breakdown section — collapsed by default. Six rows of
-  // raw cache/turn metrics is debug info most users don't need
-  // every time they open the popover. Toggle exposes it on demand.
-  const [showTokenDetail, setShowTokenDetail] = useState(false)
 
   return (
     <div className="relative">
@@ -292,36 +290,36 @@ function ContextChip() {
       <Popover open={open} onClose={() => setOpen(false)} anchorRef={anchorRef} width={320}>
         <div className="p-3.5">
           {/* Section 1 — Context window */}
+          {/* Section 1 — Context window. The chevron next to the
+              title collapses the entire section (header + bar +
+              6 breakdown rows). Edu's v0.4.x: "tirar by source, e
+              deixar a setinha ao lado de context window" — the
+              toggle belongs on the section header, not as a
+              separate "By source" sub-section. Default expanded
+              so the breakdown is visible on first open. */}
           <div className="flex items-center justify-between mb-2">
-            <span className="text-[12.5px] font-semibold text-foreground">Context window</span>
-            <span className="text-[11px] text-muted-foreground tabular-nums">
-              {formatTokenCount(used)} / {formatTokenCount(limit)} tokens ({pct}%)
-            </span>
-          </div>
-          <div className="h-2 rounded-full bg-secondary overflow-hidden mb-3">
-            <div className="h-full transition-all duration-300" style={barStyle} />
-          </div>
-
-          {/* Chevron toggle for the 6-row breakdown below — keeps
-              the popover compact when the user just wants the bar.
-              Default expanded so the breakdown is visible on first
-              open (matches Edu's screenshot). */}
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-              By source
-            </span>
             <button
               type="button"
               onClick={() => setBreakdownOpen((v) => !v)}
               data-testid="breakdown-toggle"
               aria-expanded={breakdownOpen}
-              className="p-0.5 rounded hover:bg-surface/60 text-muted-foreground transition-colors"
+              className="flex items-center gap-1 text-[12.5px] font-semibold text-foreground hover:text-primary transition-colors"
               title={breakdownOpen ? 'Hide breakdown' : 'Show breakdown'}
             >
               {breakdownOpen
-                ? <ChevronDown size={12} />
-                : <ChevronRight size={12} />}
+                ? <ChevronDown size={13} />
+                : <ChevronRight size={13} />}
+              <span>Context window</span>
             </button>
+            <span className="text-[11px] text-muted-foreground tabular-nums">
+              {formatTokenCount(used)} / {formatTokenCount(limit)} tokens ({pct}%)
+            </span>
+          </div>
+          {/* Bar margin adapts: tight when rows are collapsed (just
+              space above the next section), roomy when expanded
+              (space below the bar before the 6 rows). */}
+          <div className={`h-2 rounded-full bg-secondary overflow-hidden ${breakdownOpen ? 'mb-3' : 'mb-0'}`}>
+            <div className="h-full transition-all duration-300" style={barStyle} />
           </div>
 
           {/* Section 1b — Per-source token breakdown, inlined.
@@ -471,49 +469,13 @@ function ContextChip() {
             </div>
           )}
 
-          {/* Section 3 — Per-token detail (debug). Hidden by default
-              because the six rows of cache/turn metrics are noise
-              for normal use. A small "Show details" toggle at the
-              bottom of the popover reveals them on demand. */}
-          {bucket && (
-            <div className="mt-3 pt-2 border-t border-border">
-              <button
-                type="button"
-                onClick={() => setShowTokenDetail((v) => !v)}
-                data-testid="token-detail-toggle"
-                aria-expanded={showTokenDetail}
-                className="
-                  w-full flex items-center justify-between
-                  text-[10.5px] text-muted-foreground
-                  hover:text-foreground transition-colors
-                  py-1 px-1 rounded
-                "
-              >
-                <span className="font-medium uppercase tracking-wider">
-                  {showTokenDetail ? 'Hide token details' : 'Show token details'}
-                </span>
-                {showTokenDetail
-                  ? <ChevronDown size={11} />
-                  : <ChevronRight size={11} />}
-              </button>
-              {showTokenDetail && (
-                <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5 text-[11px]">
-                  <span className="text-muted-foreground">Input (this turn)</span>
-                  <span className="font-mono tabular-nums text-right text-foreground">{formatTokenCountExact(bucket?.lastTurnInput)}</span>
-                  <span className="text-muted-foreground">Input (cumulative)</span>
-                  <span className="font-mono tabular-nums text-right text-foreground">{formatTokenCountExact(bucket?.input_tokens)}</span>
-                  <span className="text-muted-foreground">Cache read</span>
-                  <span className="font-mono tabular-nums text-right text-foreground">{formatTokenCountExact(bucket?.cache_read_input_tokens)}</span>
-                  <span className="text-muted-foreground">Cache write</span>
-                  <span className="font-mono tabular-nums text-right text-foreground">{formatTokenCountExact(bucket?.cache_creation_input_tokens)}</span>
-                  <span className="text-muted-foreground">Output (cumulative)</span>
-                  <span className="font-mono tabular-nums text-right text-foreground">{formatTokenCountExact(bucket?.output_tokens)}</span>
-                  <span className="text-muted-foreground">Turns</span>
-                  <span className="font-mono tabular-nums text-right text-foreground">{bucket?.turnCount || 0}</span>
-                </div>
-              )}
-            </div>
-          )}
+          {/* Per-token detail (cache read/write, turn count, exact
+              input/output) was removed in v0.4.x. Edu: "podemos
+              tirar show token details" — those 6 rows of raw
+              Anthropic API metrics are debug noise. The 6 source
+              rows above (Messages/Skills/Memory files/Custom
+              agents/System prompt/MCP tools) already give the user
+              what they need to decide whether to compact. */}
         </div>
       </Popover>
     </div>

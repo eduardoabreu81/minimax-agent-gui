@@ -548,94 +548,18 @@ describe('StatusBar ContextChip — simplified 6-row breakdown', () => {
 // collapsed-by-default behaviour + the aria-expanded wiring.
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('StatusBar ContextChip — token detail toggle', () => {
-  beforeEach(() => {
-    mockApiFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ success: true, plan: 'plus', data: { model_remains: [] } }),
-    })
-  })
-
-  it('hides the token detail rows by default (no cache/turn metrics shown)', async () => {
-    mockUseSessionTokens.mockReturnValue({
-      sessions: {
-        'sess-1': {
-          lastModel: 'MiniMax-M3',
-          lastTurnInput: 4_665,
-          input_tokens: 9_330,
-          cache_read_input_tokens: 0,
-          cache_creation_input_tokens: 0,
-          output_tokens: 794,
-          turnCount: 2,
-        },
-      },
-      activeSessionId: 'sess-1',
-    })
-    render(<StatusBar model="MiniMax-M3" setModel={vi.fn()} thinkingEnabled={false} setThinkingEnabled={vi.fn()} supportsThinking={true} />)
-    screen.getByTitle('Context window & plan').click()
-    await screen.findByText('Plan usage')
-    // The toggle button is visible
-    expect(screen.getByTestId('token-detail-toggle')).toBeInTheDocument()
-    // But the debug rows are hidden
-    expect(screen.queryByText(/Cache read/)).toBeNull()
-    expect(screen.queryByText(/Cache write/)).toBeNull()
-    expect(screen.queryByText(/Input \(cumulative\)/)).toBeNull()
-  })
-
-  it('expanding the toggle reveals the debug rows (cache, turn count, exact numbers)', async () => {
-    mockUseSessionTokens.mockReturnValue({
-      sessions: {
-        'sess-1': {
-          lastModel: 'MiniMax-M3',
-          lastTurnInput: 4_665,
-          input_tokens: 9_330,
-          cache_read_input_tokens: 0,
-          cache_creation_input_tokens: 0,
-          output_tokens: 794,
-          turnCount: 2,
-        },
-      },
-      activeSessionId: 'sess-1',
-    })
-    const { default: user } = await import('@testing-library/user-event')
-    const u = user.setup({ delay: null })
-    render(<StatusBar model="MiniMax-M3" setModel={vi.fn()} thinkingEnabled={false} setThinkingEnabled={vi.fn()} supportsThinking={true} />)
-    await u.click(screen.getByTitle('Context window & plan'))
-    await screen.findByText('Plan usage')
-    // Click the toggle to expand
-    await u.click(screen.getByTestId('token-detail-toggle'))
-    // Debug rows are now visible
-    expect(screen.getByText(/Cache read/)).toBeInTheDocument()
-    expect(screen.getByText(/Cache write/)).toBeInTheDocument()
-    expect(screen.getByText(/Input \(cumulative\)/)).toBeInTheDocument()
-    expect(screen.getByText(/Output \(cumulative\)/)).toBeInTheDocument()
-    expect(screen.getByText(/Turns/)).toBeInTheDocument()
-  })
-
-  it('clicking the toggle a second time hides the debug rows again', async () => {
-    mockUseSessionTokens.mockReturnValue({
-      sessions: {
-        'sess-1': {
-          lastModel: 'MiniMax-M3',
-          lastTurnInput: 4_665,
-          input_tokens: 9_330,
-          cache_read_input_tokens: 0,
-          cache_creation_input_tokens: 0,
-          output_tokens: 794,
-          turnCount: 2,
-        },
-      },
-      activeSessionId: 'sess-1',
-    })
-    const { default: user } = await import('@testing-library/user-event')
-    const u = user.setup({ delay: null })
-    render(<StatusBar model="MiniMax-M3" setModel={vi.fn()} thinkingEnabled={false} setThinkingEnabled={vi.fn()} supportsThinking={true} />)
-    await u.click(screen.getByTitle('Context window & plan'))
-    await screen.findByText('Plan usage')
-    // Expand then collapse
-    await u.click(screen.getByTestId('token-detail-toggle'))
-    expect(screen.getByText(/Cache read/)).toBeInTheDocument()
-    await u.click(screen.getByTestId('token-detail-toggle'))
-    expect(screen.queryByText(/Cache read/)).toBeNull()
-  })
-})
+// ─────────────────────────────────────────────────────────────────────────────
+// Token detail toggle (cache read/write, turn count, exact input/
+// output numbers) was removed in v0.4.x. Edu: "podemos tirar show
+// token details" — those 6 rows of raw Anthropic API metrics were
+// debug noise; the 6 source rows above (Messages/Skills/Memory
+// files/Custom agents/System prompt/MCP tools) already give the
+// user what they need to decide whether to compact.
+//
+// The 3 tests for the removed toggle used to live here:
+//   - hides by default
+//   - expanding reveals the debug rows
+//   - clicking again hides them
+// All 3 are now obsolete (the toggle and the data-testid
+// "token-detail-toggle" no longer exist).
+// ─────────────────────────────────────────────────────────────────────────────
