@@ -860,6 +860,94 @@ loop between sessions that the spec requires.
   `docs/roadmap/v0.5-hermes-context-features.md`. PR C
   (Live Todo Progress) is next.
 
+### Added — Live Todo Progress (CodingPanel side panel, imperative)
+
+Hermes-spec live task list in the CodingPanel side panel
+(per Edu's v0.5+ feedback: "imperative ficar na janela
+lateral do code"). When the agent creates/updates tasks
+during a coding turn, the side panel shows them in real-time
+with progress X/Y, status icons, and auto-collapse when all
+done.
+
+- **Backend** — cross-session WebSocket broadcast
+  - **`tasks_tool.py`** — `TasksBaseTool` accepts an optional
+    `on_change` callback. `TasksCreateTool` and `TasksUpdateTool`
+    call it after a successful write with `(task, action)`.
+    Callback errors are caught (broadcast failures must NOT
+    roll back the disk write). `source_session_id` parameter
+    added to create (default None for back-compat).
+  - **`web/backend/main.py`** — new module-level `_ws_registry`
+    (session_id → set[WebSocket]). `chat_websocket` registers
+    on accept + unregisters on disconnect (in a `finally`).
+    New async `broadcast_task_event(task, action)` sends
+    `{type: "task_updated", action, task}` to matching
+    WebSockets — filtered by `source_session_id` (or ALL
+    sessions for tasks without a source, which is the
+    TaskBoard-panel case). Best-effort delivery — dead WS
+    are silently skipped.
+  - **Tool wiring** — the per-session tool instantiation
+    passes a callback that stamps the session's id and
+    schedules the broadcast via `asyncio.ensure_future` on
+    the running event loop. Sync callback signature bridges
+    to the async broadcast without blocking the tool return.
+
+- **Frontend** — compact list component + WS subscription
+  - **`<LiveTodoProgress>`** in `desktop/src/components/taskboard/`
+    - Header: chevron + "Tasks" label + X/Y counter
+    - Per-row icon: `Circle` (pending), `CircleDashed` (in-progress,
+      with `animate-pulse`), `CheckCircle2` (done)
+    - Done items: line-through + emerald-500 icon
+    - Auto-collapses 2s after the last task is marked done
+      (gives the user the "all green" moment before the panel
+      quietly disappears)
+    - Empty state: "No tasks yet" hint, takes minimal space
+    - Sort: order asc, then created_at asc (matches TaskBoard)
+  - **`useLiveTodos({sessionId, websocket})`** hook
+    - Initial fetch via `GET /api/tasks`, filtered by
+      `source_session_id` on the client
+    - WebSocket event handler filters by session, ignores
+      `task_updated` events for other sessions, ignores
+      tasks with no source (TaskBoard-only), ignores
+      non-JSON frames
+    - Dedup on duplicate `create` events, field-merge on
+      `update` events
+  - **`WorkspaceSidebar` integration** — the existing
+    "Todos (demo)" tab (renamed to "Todos") now renders
+    `<LiveTodoProgress>` via `useLiveTodos`. `codingWs` +
+    `codingSessionId` flow from `CodingPanel` through
+    `WorkspaceSidebar` to the new `TodosPanel`.
+
+- **Tests** — 19 new tests across 3 files
+  - `test_tasks_tool_callback.py` (6): fires on create,
+    fires on update, doesn't fire on invalid input, doesn't
+    fire when no actual changes, callback exception is
+    tolerated, no callback is fine
+  - `test_task_ws_registry.py` (7): register/unregister
+    round-trip, unregister unknown is safe, multiple WS per
+    session, broadcast targets matching session, broadcast
+    with no source goes to all, dead WS doesn't break
+    broadcast, no listeners is a no-op
+  - `LiveTodoProgress.test.jsx` (21, was 14 in the previous
+    batch but I added 7 more this batch for the integration
+    angle): empty state, header + counter, counter updates,
+    collapse/expand, toggle on click, sort order, status
+    icons, strikethrough on done, auto-collapse 2s after
+    all-done, no collapse when some pending, initial fetch
+    + filter, fetch failure graceful, create event, update
+    event, ignore other sessions, ignore no-source, ignore
+    non-task_updated events, dedup, ignore non-JSON
+  - `WorkspaceSidebar.test.jsx` (5): renders live component
+    on Todos tab, passes WS + sessionId, renders live tasks,
+    counter reflects done count, fallback when no sessionId
+  - **Total: 19 new tests + 14 already-shipped = 33 tests
+    covering the feature**
+
+- **Roadmap** — PR C marked complete in
+  `docs/roadmap/v0.5-hermes-context-features.md`. Next
+  pending: PR D (progressive subdirectory discovery),
+  PR E (more personality presets), PR F (CLAUDE.md /
+  .cursorrules detection).
+
   Test counts: pytest **311/311** pass (was 292, +19);
   vitest **102/102** pass (was 95, +7).
 
