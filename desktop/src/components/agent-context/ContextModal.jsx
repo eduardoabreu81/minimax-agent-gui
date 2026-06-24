@@ -17,7 +17,7 @@
 // wizard does (or stay open if they cancel — the modal's close
 // button is the explicit exit).
 
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { X, Sparkles, User, Briefcase, Brain, Calendar, FileText, Loader2, Save, Eye, Edit3 } from 'lucide-react'
 import { useContextModal } from './ContextProvider.jsx'
@@ -28,6 +28,8 @@ export default function ContextModal() {
   const { t } = useTranslation()
   const { open, closeModal, openModalAndWizard } = useContextModal()
   const { status, dailies, loading, fetchFile, saveFile, fetchDaily } = useAgentContext()
+  const containerRef = useRef(null)
+  const previouslyFocusedRef = useRef(null)
 
   // ESC closes the modal
   useEffect(() => {
@@ -36,6 +38,63 @@ export default function ContextModal() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [open, closeModal])
+
+  // A11y — focus management:
+  //   - On open: remember the previously-focused element so we can
+  //     restore it on close (otherwise focus jumps to <body> and the
+  //     keyboard user loses their place).
+  //   - Move focus into the modal so screen readers announce it.
+  //   - Trap Tab/Shift+Tab so focus can't escape into the page behind
+  //     the backdrop (otherwise Tab moves out and the user is editing
+  //     an invisible element).
+  //   - On close: restore the previously-focused element.
+  useEffect(() => {
+    if (!open) return
+    previouslyFocusedRef.current = document.activeElement
+
+    // Defer focus to next tick so the modal DOM is mounted.
+    const id = requestAnimationFrame(() => {
+      const container = containerRef.current
+      if (!container) return
+      const focusables = container.querySelectorAll(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      )
+      const first = focusables[0]
+      if (first) first.focus()
+    })
+
+    const onKey = (e) => {
+      if (e.key !== 'Tab') return
+      const container = containerRef.current
+      if (!container) return
+      const focusables = Array.from(
+        container.querySelectorAll(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        )
+      )
+      if (focusables.length === 0) return
+      const first = focusables[0]
+      const last = focusables[focusables.length - 1]
+      const active = document.activeElement
+      if (e.shiftKey && active === first) {
+        e.preventDefault()
+        last.focus()
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault()
+        first.focus()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+
+    return () => {
+      cancelAnimationFrame(id)
+      window.removeEventListener('keydown', onKey)
+      const prev = previouslyFocusedRef.current
+      if (prev && typeof prev.focus === 'function') {
+        try { prev.focus() } catch { /* element gone, ignore */ }
+      }
+    }
+  }, [open])
 
   if (!open) return null
 
@@ -46,19 +105,25 @@ export default function ContextModal() {
     <div
       className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
       onClick={(e) => e.target === e.currentTarget && closeModal()}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="context-modal-title"
     >
-      <div className="
-        w-full max-w-2xl max-h-[88vh]
-        bg-card border border-border rounded-2xl shadow-2xl
-        overflow-hidden flex flex-col
-      ">
+      <div
+        ref={containerRef}
+        className="
+          w-full max-w-2xl max-h-[88vh]
+          bg-card border border-border rounded-2xl shadow-2xl
+          overflow-hidden flex flex-col
+        "
+      >
         {/* Header */}
         <div className="flex items-start gap-3 px-5 py-4 border-b border-border">
-          <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center text-primary shrink-0">
+          <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center text-primary shrink-0" aria-hidden="true">
             <Brain size={18} />
           </div>
           <div className="flex-1 min-w-0">
-            <h2 className="text-base font-semibold text-foreground">
+            <h2 id="context-modal-title" className="text-base font-semibold text-foreground">
               {t('agentContext.title') || 'Agent context'}
             </h2>
             <p className="text-xs text-muted-foreground mt-0.5">
@@ -76,16 +141,17 @@ export default function ContextModal() {
                 border border-primary/30
                 transition-colors
               "
+              aria-label={t('agentContext.rerunOnboarding') || 'Re-run onboarding'}
             >
-              <Sparkles size={12} />
+              <Sparkles size={12} aria-hidden="true" />
               {t('agentContext.rerunOnboarding') || 'Re-run onboarding'}
             </button>
             <button
               onClick={closeModal}
               className="p-1.5 rounded-md hover:bg-surface text-muted-foreground transition-colors"
-              aria-label="Close"
+              aria-label={t('common.close') || 'Close'}
             >
-              <X size={16} />
+              <X size={16} aria-hidden="true" />
             </button>
           </div>
         </div>
@@ -302,6 +368,25 @@ function DailyLogsCard({ dailies, fetchDaily }) {
     }
   }
 
+  // Auto-refresh: when the chat agent appends to today's daily log
+  // (per Agent Context §5.2) the backend emits a daily_updated WS
+  // event. ChatPanel broadcasts it as a window CustomEvent; if the
+  // date matches what we're currently displaying, re-fetch. Otherwise
+  // (modal closed, list view) the parent refreshes dailies via its
+  // own status poll.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const handler = (e) => {
+      const date = e?.detail?.date
+      if (!date || date !== viewingDate) return
+      fetchDaily(date)
+        .then((data) => setViewing(data))
+        .catch((err) => setViewing({ content: `Error: ${err.message}` }))
+    }
+    window.addEventListener('minimax:daily-updated', handler)
+    return () => window.removeEventListener('minimax:daily-updated', handler)
+  }, [viewingDate, fetchDaily])
+
   return (
     <>
       <div className="rounded-xl border border-border bg-card overflow-hidden">
@@ -361,18 +446,53 @@ function DailyLogsCard({ dailies, fetchDaily }) {
 
 function DailyViewer({ date, content, onClose }) {
   const { t } = useTranslation()
+  const containerRef = useRef(null)
+  const previouslyFocusedRef = useRef(null)
+
+  // ESC + focus trap (same pattern as the parent ContextModal). The
+  // viewer is a nested dialog, so the focus trap here is local — Tab
+  // cycles only between the Close button and the scrollable content.
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation()
+        onClose()
+      }
+    }
+    previouslyFocusedRef.current = document.activeElement
+    const id = requestAnimationFrame(() => {
+      const closeBtn = containerRef.current?.querySelector('button[data-close]')
+      closeBtn?.focus()
+    })
+    window.addEventListener('keydown', onKey, true) // capture — runs before modal's ESC handler
+    return () => {
+      cancelAnimationFrame(id)
+      window.removeEventListener('keydown', onKey, true)
+      const prev = previouslyFocusedRef.current
+      if (prev && typeof prev.focus === 'function') {
+        try { prev.focus() } catch { /* ignore */ }
+      }
+    }
+  }, [onClose])
+
   return (
     <div
       className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
       onClick={(e) => e.target === e.currentTarget && onClose()}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="daily-viewer-title"
     >
-      <div className="w-full max-w-2xl max-h-[80vh] bg-card border border-border rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+      <div
+        ref={containerRef}
+        className="w-full max-w-2xl max-h-[80vh] bg-card border border-border rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+      >
         <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-          <h3 className="text-sm font-semibold">
+          <h3 id="daily-viewer-title" className="text-sm font-semibold">
             {t('agentContext.viewer.daily.title', { date })}
           </h3>
-          <button onClick={onClose} className="p-1 rounded-md hover:bg-surface text-muted-foreground" aria-label="Close">
-            <X size={14} />
+          <button data-close onClick={onClose} className="p-1 rounded-md hover:bg-surface text-muted-foreground" aria-label={t('common.close') || 'Close'}>
+            <X size={14} aria-hidden="true" />
           </button>
         </div>
         <pre className="flex-1 overflow-y-auto p-4 text-xs font-mono leading-relaxed whitespace-pre-wrap break-words bg-surface">
