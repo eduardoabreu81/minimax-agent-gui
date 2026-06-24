@@ -728,6 +728,77 @@ controls and fixed a number of Token Plan API quirks.
   labels, percentage computation, empty-details hidden,
   expandable click → per-server entries visible.
 
+### Added — Context references (`@file:` / `@folder:` / `@diff` / `@staged` / `@git:N` / `@url:`)
+
+Hermes-spec inline references. The user types `@file:src/main.py` in
+the composer and the LLM sees the file contents under an
+`--- Attached Context ---` block at send time. Closes the biggest
+gap in the v0.5+ Hermes feature roadmap
+(`docs/roadmap/v0.5-hermes-context-features.md`).
+
+- **Backend** — new module `web/backend/context_refs.py`
+  - **Parser** — 6 syntaxes (`@file:`, `@folder:`, `@diff`,
+    `@staged`, `@git:N`, `@url:`). Strips trailing punctuation
+    but preserves line-range colons (`@file:foo.py:10-25`).
+  - **Sensitive path blocklist** — `~/.ssh`, `~/.aws`, `~/.gnupg`,
+    `~/.kube`, `~/.netrc`, `~/.pgpass`, `~/.npmrc`, `~/.pypirc`,
+    shell profiles, `.env`. Both exact file match and directory
+    prefix match. Symlink-resolved (so `~/./ssh/id_rsa` is caught).
+  - **Path resolution** — relative to `workspace_dir` only.
+    Rejects absolute paths and `../` traversal via
+    `.resolve() + relative_to()` check.
+  - **File reader** — UTF-8 with `errors='replace'`, 1-indexed
+    inclusive line ranges.
+  - **Binary detection** — null-byte scan in the first 8KB.
+  - **Folder tree** — recursive walk with max 200 entries
+    (Hermes spec), dirs-before-files, truncation marker.
+  - **Git ops** — `diff` / `staged` via subprocess
+    (10s timeout, 5MB cap), `git:N` clamped to `[1, 10]`.
+  - **URL fetcher** — `httpx` GET, 10s timeout, 50KB cap, HTML
+    stripped (drops tags + script/style + decodes common entities
+    + collapses whitespace). http/https only.
+  - **Size limits** — soft 25% (warn, all refs still expand) /
+    hard 50% (refuse all, original message unchanged). 1 token ≈
+    4 bytes (matches `mini_agent/agent.py` fallback).
+  - **Per-ref failure model** — sensitive path / binary / not
+    found / path traversal / git error / URL error each become
+    a `result.error` string. Errors do NOT abort other refs.
+
+- **Backend endpoints** — registered in `web/backend/main.py`
+  - `POST /api/context-refs/expand` — `{session_id, message}` →
+    `{results, total_bytes, soft_warning, refused, refusal_reason, parsed_refs}`.
+  - `POST /api/context-refs/list` — `{session_id, prefix, max_entries}` →
+    `{entries: [{path, is_dir, size}], truncated}`. Powers the
+    path autocomplete popover.
+
+- **Frontend** — new components in `desktop/src/components/context-refs/`
+  - `parseRefs.js` — JS port of the Python regex.
+  - `partialRefAt()` — finds the in-progress `@`-ref at the cursor
+    for the autocomplete popover.
+  - `useContextRefs({draft, cursor, sessionId})` — pure-React hook
+    that surfaces `parsed`, `partial`, `report` (debounced expand),
+    `suggestions` (debounced list), `isExpanding`, `isListing`.
+  - `<ContextRefChips>` — one chip per parsed ref. Green check
+    for success, red triangle for errors, neutral for pending.
+    Soft-limit warning as a full-width banner.
+  - `<ContextRefAutocomplete>` — popover over the textarea.
+    Shows the 6 ref types when user types `@` or `@<partial>`;
+    shows file/folder path suggestions when user types
+    `@file:` / `@folder:`. Outside-click closes. Escape closes.
+  - **Composer.tsx** — wires it all up. On submit, re-runs
+    `/api/context-refs/expand` to get fresh attached context,
+    appends the `--- Attached Context ---` block to the message,
+    and calls `onSend` with the augmented text. Hard-limit
+    refusal blocks the send (alert + disabled button).
+  - **ChatPanel.tsx** — passes `state.sessionId` to the Composer.
+
+- **Tests** — 50 pytest (context_refs) + 13 pytest (endpoint) +
+  27 vitest (parser + chips) + 7 vitest (Composer integration) =
+  **97 new tests** across the feature. All green.
+- **Docs** — `docs/roadmap/v0.5-hermes-context-features.md` updated
+  with PR A marked complete (path forward for PR B is the
+  memory tool).
+
   Test counts: pytest **311/311** pass (was 292, +19);
   vitest **102/102** pass (was 95, +7).
 
