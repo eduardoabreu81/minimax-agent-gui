@@ -218,7 +218,7 @@ export function ContextRefAutocomplete({
       ref={popoverRef}
       role="listbox"
       data-testid="context-ref-autocomplete"
-      className="absolute z-50 mt-1 w-[420px] max-h-80 overflow-y-auto rounded-lg border border-border bg-popover text-popover-foreground shadow-xl"
+      className="absolute z-50 bottom-full left-0 mb-1.5 w-full max-w-[420px] max-h-[28rem] overflow-y-auto rounded-lg border border-border bg-popover text-popover-foreground shadow-xl"
     >
       {groups.map((group, gi) => (
         <div key={group.key}>
