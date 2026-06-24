@@ -244,9 +244,6 @@ class Agent:
           - system_tools_deferred: Always 0 today (placeholder for
                                  future "core tools not in this turn"
                                  attribution).
-          - free_space:          ``max(0, model_context_limit - total)``.
-                                 What the agent could still write
-                                 before auto-compact kicks in.
           - total:               Sum of all categorized tokens (matches
                                  ``self._estimate_tokens()`` approx).
           - limit:               The model's context window (echo of
@@ -274,7 +271,7 @@ class Agent:
             "messages": 0, "skills": 0, "memory_files": 0,
             "custom_agents": 0, "system_prompt": 0, "mcp_tools": 0,
             "mcp_deferred": 0, "system_tools_deferred": 0,
-            "free_space": 0, "total": 0, "limit": self.model_context_limit,
+            "total": 0, "limit": self.model_context_limit,
             "details": {
                 "mcp_tools_list": [],
                 "memory_files_list": [],
@@ -449,7 +446,6 @@ class Agent:
 
         total = sum(by_source.values())
         limit = self.model_context_limit or 0
-        by_source["free_space"] = max(0, limit - total) if limit else 0
 
         return {
             **by_source,

@@ -282,10 +282,12 @@ describe('StatusBar ContextChip — per-source breakdown', () => {
     // Click the header to expand
     await u.click(screen.getByTestId('breakdown-toggle'))
 
-    // All 9 rows are now visible. "Messages" appears in both the
+    // All 8 rows are now visible. "Messages" appears in both the
     // collapsed header AND the expanded row list, so use
-    // getAllByText for that one. The other 8 row labels are unique
-    // to the expanded view.
+    // getAllByText for that one. The other 7 row labels are unique
+    // to the expanded view. (Free space was removed in v0.4.x —
+    // the dominant-row picker was picking it whenever it dwarfed
+    // everything else, producing "Free space · 10734%" headers.)
     expect(screen.getAllByText('Messages').length).toBeGreaterThanOrEqual(2)
     expect(screen.getByText('Skills')).toBeInTheDocument()
     expect(screen.getByText('Memory files')).toBeInTheDocument()
@@ -294,7 +296,8 @@ describe('StatusBar ContextChip — per-source breakdown', () => {
     expect(screen.getByText('MCP tools')).toBeInTheDocument()
     expect(screen.getByText('MCP tools (deferred)')).toBeInTheDocument()
     expect(screen.getByText('System tools (deferred)')).toBeInTheDocument()
-    expect(screen.getByText('Free space')).toBeInTheDocument()
+    // Free space was removed — verify it's NOT in the breakdown.
+    expect(screen.queryByText('Free space')).toBeNull()
   })
 
   it('computes correct percentages for each source (after expand)', async () => {

@@ -261,7 +261,12 @@ export function BreakdownPanel({ bySource }) {
   const total = bySource.total || 1
   const pct = (n) => total > 0 ? (n / total) * 100 : 0
 
-  // Order matches the design (heaviest first, free space at the bottom).
+  // Order matches the design (heaviest first). No "free space" row —
+  // the user explicitly didn't want it (the design doesn't have a
+  // bucket for "context I haven't used yet", and reporting a
+  // derived value like `limit - total` made the dominant-row
+  // detection pick free_space whenever it dwarfed everything else,
+  // producing nonsense headers like "Free space · 198k (10734%)").
   const rows = [
     { key: 'messages',              label: 'Messages' },
     { key: 'skills',                label: 'Skills' },
@@ -271,7 +276,6 @@ export function BreakdownPanel({ bySource }) {
     { key: 'mcp_tools',             label: 'MCP tools' },
     { key: 'mcp_deferred',          label: 'MCP tools (deferred)' },
     { key: 'system_tools_deferred', label: 'System tools (deferred)' },
-    { key: 'free_space',            label: 'Free space' },
   ]
 
   // The dominant row (heaviest bucket) — shown in the collapsed
@@ -291,10 +295,17 @@ export function BreakdownPanel({ bySource }) {
   const agentsList  = details.custom_agents_list || []
 
   // Per-expandable summary line (sum of tokens + count of items).
+  // Pluralize properly — "1 files" looks unprofessional. The helper
+  // is local because it's a 3-line function and only used here.
+  const plural = (n, singular, pluralForm) =>
+    n === 1 ? singular : (pluralForm || singular + 's')
   const summary = {
-    mcp:    { tokens: mcpList.reduce((s, x)    => s + (x.tokens || 0), 0),     n: mcpList.length,     unit: 'tools' },
-    memory: { tokens: memoryList.reduce((s, x) => s + (x.tokens || 0), 0),     n: memoryList.length,  unit: 'files' },
-    agents: { tokens: agentsList.reduce((s, x) => s + (x.tokens || 0), 0),     n: agentsList.length,  unit: 'agents' },
+    mcp:    { tokens: mcpList.reduce((s, x)    => s + (x.tokens || 0), 0), n: mcpList.length,
+              label: plural(mcpList.length, 'tool', 'tools') },
+    memory: { tokens: memoryList.reduce((s, x) => s + (x.tokens || 0), 0), n: memoryList.length,
+              label: plural(memoryList.length, 'file', 'files') },
+    agents: { tokens: agentsList.reduce((s, x) => s + (x.tokens || 0), 0), n: agentsList.length,
+              label: plural(agentsList.length, 'agent', 'agents') },
   }
 
   const toggle = (key) => setExpanded((e) => ({ ...e, [key]: !e[key] }))
@@ -333,26 +344,38 @@ export function BreakdownPanel({ bySource }) {
 
       {outerOpen && (
         <>
-          {/* Flat summary list — 9 rows */}
+          {/* Flat summary list — 8 rows */}
           <div className="space-y-1">
             {rows.map(({ key, label }) => {
               const tokens = bySource[key] || 0
               const rowPct = pct(tokens)
               return (
-                <div key={key} className="flex items-center gap-2 text-[11px]">
-                  <span className="w-[120px] text-muted-foreground truncate">{label}</span>
-                  <span className="flex-1 h-1.5 rounded-full bg-secondary overflow-hidden">
-                    <span
-                      className="block h-full bg-primary/70 transition-all duration-300"
-                      style={{ width: `${Math.min(rowPct, 100)}%` }}
-                    />
-                  </span>
-                  <span className="w-[52px] text-right font-mono tabular-nums text-foreground">
-                    {formatTokenCount(tokens)}
-                  </span>
-                  <span className="w-[36px] text-right font-mono tabular-nums text-muted-foreground">
-                    {rowPct.toFixed(0)}%
-                  </span>
+                <div key={key}>
+                  <div className="flex items-center gap-2 text-[11px]">
+                    <span className="w-[120px] text-muted-foreground truncate">{label}</span>
+                    <span className="flex-1 h-1.5 rounded-full bg-secondary overflow-hidden">
+                      <span
+                        className="block h-full bg-primary/70 transition-all duration-300"
+                        style={{ width: `${Math.min(rowPct, 100)}%` }}
+                      />
+                    </span>
+                    <span className="w-[52px] text-right font-mono tabular-nums text-foreground">
+                      {formatTokenCount(tokens)}
+                    </span>
+                    <span className="w-[36px] text-right font-mono tabular-nums text-muted-foreground">
+                      {rowPct.toFixed(0)}%
+                    </span>
+                  </div>
+                  {/* Subtle hint under Messages — clarifies that the
+                      number covers user + assistant + thinking, so
+                      the user doesn't think "I sent 2 messages, why
+                      is it 598 tokens?" Placed only under Messages
+                      since the other rows have unambiguous labels. */}
+                  {key === 'messages' && tokens > 0 && (
+                    <div className="text-[10px] text-muted-foreground/70 italic pl-[120px] -mt-0.5 mb-0.5">
+                      your messages + agent's responses + thinking
+                    </div>
+                  )}
                 </div>
               )
             })}
@@ -367,7 +390,7 @@ export function BreakdownPanel({ bySource }) {
               {mcpList.length > 0 && (
                 <ExpandableRow
                   label="MCP tools"
-                  summary={`${formatTokenCount(summary.mcp.tokens)} · ${summary.mcp.n} ${summary.mcp.unit}`}
+                  summary={`${formatTokenCount(summary.mcp.tokens)} · ${summary.mcp.n} ${summary.mcp.label}`}
                   expanded={expanded.mcp}
                   onToggle={() => toggle('mcp')}
                   rows={mcpList.map((t) => ({
@@ -384,7 +407,7 @@ export function BreakdownPanel({ bySource }) {
               {memoryList.length > 0 && (
                 <ExpandableRow
                   label="Memory files"
-                  summary={`${formatTokenCount(summary.memory.tokens)} · ${summary.memory.n} ${summary.memory.unit}`}
+                  summary={`${formatTokenCount(summary.memory.tokens)} · ${summary.memory.n} ${summary.memory.label}`}
                   expanded={expanded.memory}
                   onToggle={() => toggle('memory')}
                   rows={memoryList.map((t) => ({
@@ -401,7 +424,7 @@ export function BreakdownPanel({ bySource }) {
               {agentsList.length > 0 && (
                 <ExpandableRow
                   label="Custom agents"
-                  summary={`${formatTokenCount(summary.agents.tokens)} · ${summary.agents.n} ${summary.agents.unit}`}
+                  summary={`${formatTokenCount(summary.agents.tokens)} · ${summary.agents.n} ${summary.agents.label}`}
                   expanded={expanded.agents}
                   onToggle={() => toggle('agents')}
                   rows={agentsList.map((t) => ({

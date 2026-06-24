@@ -80,11 +80,14 @@ def agent():
 
 def test_estimate_by_source_returns_known_keys(agent):
     result = agent.estimate_by_source()
-    # 9 source categories + total + limit + details sub-dict.
+    # 8 source categories + total + limit + details sub-dict.
+    # (free_space was removed in v0.4.x — it dwarfed everything
+    # and made the dominant-row picker in the StatusBar produce
+    # nonsense headers like "Free space · 198k (10734%)".)
     expected = {
         "messages", "skills", "memory_files", "custom_agents",
         "system_prompt", "mcp_tools", "mcp_deferred",
-        "system_tools_deferred", "free_space", "total", "limit",
+        "system_tools_deferred", "total", "limit",
         "details",
     }
     assert set(result.keys()) == expected
@@ -107,19 +110,21 @@ def test_estimate_by_source_empty_messages_returns_zero(agent):
     # truly-empty branch.
     agent.messages = []
     result = agent.estimate_by_source()
-    # All categories are zero (limit + free_space + total may still
-    # reflect the model's context window).
+    # All categories are zero (limit + total may still reflect the
+    # model's context window).
     for key in ("messages", "skills", "memory_files", "custom_agents",
                 "system_prompt", "mcp_tools", "mcp_deferred",
                 "system_tools_deferred"):
         assert result[key] == 0, f"{key} should be 0 for empty messages"
     assert result["total"] == 0
     assert result["limit"] == 1_000_000  # M3 default from stub
+    # free_space key no longer exists — see comment in
+    # test_estimate_by_source_returns_known_keys.
 
 
-def test_total_equals_sum_of_parts_minus_free_space(agent):
-    """total = sum of all 'consumed' categories (NOT including
-    free_space, which is the remaining headroom)."""
+def test_total_equals_sum_of_parts(agent):
+    """total = sum of all categorized tokens (no free_space, no
+    subtraction — total IS the consumed tokens)."""
     agent.messages = [
         Message(role="system", content="base prompt."),
         Message(role="user", content="hello world"),
@@ -134,11 +139,14 @@ def test_total_equals_sum_of_parts_minus_free_space(agent):
     assert result["total"] == consumed
 
 
-def test_free_space_is_limit_minus_total(agent):
+def test_free_space_key_removed(agent):
+    """free_space was removed from the breakdown in v0.4.x. Verify
+    it's gone so any old frontend code falls back gracefully (no
+    silent 10734%-style bugs from picking free_space as the
+    dominant row)."""
     agent.messages = [Message(role="system", content="x" * 1000)]
     result = agent.estimate_by_source()
-    assert result["free_space"] == result["limit"] - result["total"]
-    assert result["free_space"] >= 0
+    assert "free_space" not in result
 
 
 # ─────────────────────────────────────────────────────────────────────────────
