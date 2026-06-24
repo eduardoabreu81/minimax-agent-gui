@@ -262,14 +262,16 @@ class Agent:
         # Split the system prompt into sections by ``## `` headers.
         # The first chunk (before the first ``## ``) is the base
         # preamble (default identity). Subsequent chunks are named
-        # sections, each starting with its header line.
-        chunks = re.split(r"\n## ", "\n" + system_content)
-        # chunks[0] is empty (the leading "\n" we prepended), chunks[1] is
-        # the preamble, chunks[2+] are the named sections, each prefixed
-        # by their header line.
-        preamble = chunks[1] if len(chunks) > 1 else system_content
+        # sections, each starting with their header line.
+        # We split on ``^## `` (anchored, multiline) so the newline
+        # before the header stays in the previous chunk and the
+        # ``## `` stays in the new one. A naive `\n## ` split would
+        # attach the leading newline to the preamble and confuse the
+        # categorization that follows.
+        chunks = re.split(r"^## ", system_content, flags=re.MULTILINE)
+        preamble = chunks[0] if chunks else system_content
         named = []
-        for raw in chunks[2:]:
+        for raw in chunks[1:]:
             header, _, body = raw.partition("\n")
             named.append((header.strip().lower(), body))
 
