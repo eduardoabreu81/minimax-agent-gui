@@ -516,6 +516,11 @@ def _conv_path(conv_id: str) -> Path:
 from conv_store import JSONConversationStore, ConversationStore
 conversation_store: ConversationStore = JSONConversationStore(CONVERSATIONS_DIR)
 
+from context_refs import (  # noqa: E402  (import after conv_store by convention)
+    parse_refs,
+    expand_refs,
+)
+
 
 # --- App workspace + coding workspace management (v0.5 redesign) ---
 #
@@ -1356,6 +1361,178 @@ async def lock_coding_session(session_id: str):
         "session_id": session_id,
         "locked": True,
         "workspace_dir": _load_coding_workspace_for_session(session_id),
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Context references — @file:, @folder:, @diff, @staged, @git:N, @url:
+# See web/backend/context_refs.py for the expansion logic. This
+# endpoint is the frontend's entry point: composer sends the raw
+# message text + the current session_id, backend parses, expands,
+# and returns the report (results + total_bytes + soft/hard flags).
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class ContextRefsExpandRequest(BaseModel):
+    """Request body for ``POST /api/context-refs/expand``."""
+
+    session_id: str = Field(..., description="Session ID — determines the workspace_dir")
+    message: str = Field(..., description="Raw message text with @-refs to expand")
+
+
+class ContextRefsExpandResponse(BaseModel):
+    """Response body — the parsed refs + their expansion results."""
+
+    success: bool
+    results: list[dict]
+    total_bytes: int
+    soft_warning: str = ""
+    refused: bool = False
+    refusal_reason: str = ""
+    # Echoed back so the frontend can render chips without re-parsing
+    parsed_refs: list[dict]
+
+
+@app.post("/api/context-refs/expand")
+async def context_refs_expand(req: ContextRefsExpandRequest):
+    """Expand all @-references in a message.
+
+    The endpoint:
+    1. Parses refs out of the message text (cheap, no I/O)
+    2. Resolves the workspace_dir from the session_id
+    3. Looks up the model's context limit (for the soft/hard gates)
+    4. Calls ``expand_refs()`` which fans out per-ref expansion
+    5. Returns the report — frontend renders warning/error chips
+
+    If the workspace is a coding session, ``coding_workspace_dir`` is
+    used; otherwise the app workspace. This matches the file/git/shell
+    endpoint convention.
+    """
+    # Parse refs (cheap, no I/O)
+    refs = parse_refs(req.message)
+
+    # Resolve workspace — coding sessions get their locked workspace,
+    # non-coding sessions get the app workspace (matches the file
+    # endpoint convention).
+    if req.session_id.startswith("coding-"):
+        workspace = get_session_workspace_dir(req.session_id)
+    else:
+        workspace = get_app_workspace_dir()
+
+    # Model limit — used for the soft/hard size gates. Default to
+    # a conservative 200K if we can't read the configured model
+    # (the same fallback used by the context-window estimator).
+    model_limit = 200_000
+    try:
+        from model_limits import MODEL_CONTEXT_LIMITS  # type: ignore
+        selected = (config.get("minimax", {}) or {}).get("model", "MiniMax-M3")
+        model_limit = MODEL_CONTEXT_LIMITS.get(selected, 200_000)
+    except Exception:
+        pass  # fall back to default
+
+    # Expand
+    report = expand_refs(refs, workspace, model_limit=model_limit)
+
+    # Build response
+    return {
+        "success": True,
+        "results": [r.to_dict() for r in report.results],
+        "total_bytes": report.total_bytes,
+        "soft_warning": report.soft_warning,
+        "refused": report.refused,
+        "refusal_reason": report.refusal_reason,
+        "parsed_refs": [
+            {
+                "raw": r.raw,
+                "type": r.type,
+                "value": r.value,
+                "start": r.start,
+                "end": r.end,
+            }
+            for r in refs
+        ],
+    }
+
+
+class ContextRefsListRequest(BaseModel):
+    """Request body for ``POST /api/context-refs/list`` (path autocomplete)."""
+
+    session_id: str = Field(..., description="Session ID — determines the workspace_dir")
+    prefix: str = Field("", description="Optional path prefix to filter by (relative to workspace)")
+    max_entries: int = Field(200, description="Cap on returned entries")
+
+
+@app.post("/api/context-refs/list")
+async def context_refs_list(req: ContextRefsListRequest):
+    """List files + folders under the workspace for path autocomplete.
+
+    Frontend calls this when the user types ``@file:`` or ``@folder:``
+    in the composer and the autocomplete popover opens. Returns up to
+    200 entries (paths relative to the workspace) plus a flag
+    indicating whether the listing was truncated.
+    """
+    if req.session_id.startswith("coding-"):
+        workspace = get_session_workspace_dir(req.session_id)
+    else:
+        workspace = get_app_workspace_dir()
+
+    prefix = (req.prefix or "").strip().lstrip("/")
+    # Build the candidate root — if prefix is empty, list the workspace
+    # root; otherwise resolve it under the workspace and verify it
+    # stays inside.
+    if not prefix:
+        scan_root = workspace
+    else:
+        from context_refs import resolve_workspace_path  # type: ignore
+        try:
+            scan_root = resolve_workspace_path(workspace, prefix)
+        except (PermissionError, ValueError):
+            return {"success": True, "entries": [], "truncated": False, "error": "invalid prefix"}
+
+    if not scan_root.exists() or not scan_root.is_dir():
+        return {"success": True, "entries": [], "truncated": False}
+
+    entries: list[dict] = []
+    truncated = False
+    cap = max(1, min(req.max_entries, 500))
+
+    def _walk(directory):
+        nonlocal truncated
+        if len(entries) >= cap:
+            truncated = True
+            return
+        try:
+            children = sorted(
+                directory.iterdir(),
+                key=lambda p: (not p.is_dir(), p.name.lower()),
+            )
+        except (PermissionError, OSError):
+            return
+        for child in children:
+            if len(entries) >= cap:
+                truncated = True
+                return
+            try:
+                rel = child.relative_to(workspace)
+            except ValueError:
+                continue
+            try:
+                size = child.stat().st_size if child.is_file() else 0
+            except OSError:
+                size = 0
+            entries.append({
+                "path": str(rel).replace("\\", "/"),
+                "is_dir": child.is_dir(),
+                "size": size,
+            })
+            if child.is_dir():
+                _walk(child)
+
+    _walk(scan_root)
+    return {
+        "success": True,
+        "entries": entries,
+        "truncated": truncated,
     }
 
 
