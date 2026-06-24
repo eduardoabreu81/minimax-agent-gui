@@ -90,6 +90,92 @@ def _log_compact_event(payload: dict) -> None:
     """
     _logger.info(json.dumps(payload))
 
+
+def _build_mcp_section(mcp_tools) -> str:
+    """Build the unified ``## MCP Servers`` block for the system prompt.
+
+    The agent sees a single section that lists the MiniMax built-in
+    servers (always present) and the user's own configured MCP
+    servers (only when at least one is loaded). The shape matches
+    the Settings panel: a "MiniMax (built-in)" sub-block and a
+    "Custom (user-configured)" sub-block inside the same Card.
+
+    Args:
+        mcp_tools: List of ``ExternalMCPTool`` (or any object with
+            ``.server_id`` and ``.server_config``) loaded by
+            ``load_mcp_tools_for_agent``. May be empty or None.
+
+    Returns:
+        A markdown string starting with ``\\n\\n## MCP Servers`` and
+        containing both sub-blocks. The Custom sub-block is only
+        emitted when there's at least one user-configured server
+        with tools.
+    """
+    section = "\n\n## MCP Servers\n"
+
+    # Sub-block A: MiniMax built-in servers. Always present.
+    section += (
+        "\n### MiniMax (built-in)\n"
+        "Two MCP servers from MiniMax are always available:\n"
+        "- **web_search**: searches the web for real-time information. "
+        "Use this whenever the user asks about current events, recent "
+        "news, or anything that might be outside your training cutoff.\n"
+        "- **understand_image**: analyzes an image and returns a "
+        "description. Use this whenever the user attaches an image "
+        "(path or URL) and asks for analysis, OCR, or visual Q&A.\n"
+        "Both tools live on the MiniMax coding-plan endpoint and "
+        "respect the same auth as the chat model. If the user "
+        "toggled one off in Settings → MCP Servers (MiniMax), it "
+        "won't be in your tool list at runtime — you'll discover "
+        "that on first use."
+    )
+
+    if not mcp_tools:
+        return section
+
+    # Sub-block B: Custom (user-configured) servers. Group
+    # tools by server_id so the agent gets a per-server count
+    # + display name. Only emit when at least one server
+    # produced tools (empty groups are noise).
+    by_server = {}
+    for tool in mcp_tools:
+        sid = getattr(tool, "server_id", None)
+        if not sid:
+            continue
+        by_server.setdefault(sid, []).append(tool)
+
+    if not by_server:
+        return section
+
+    section += "\n### Custom (user-configured)\n"
+    section += (
+        "The following user-configured MCP servers are "
+        "loaded into this session:\n"
+    )
+    for sid, tools in by_server.items():
+        display_name = sid
+        first = tools[0] if tools else None
+        if first is not None and hasattr(first, "server_config") \
+                and isinstance(first.server_config, dict):
+            configured = first.server_config.get("name") or sid
+            if configured:
+                display_name = configured
+        # When the user didn't supply a display name, just use
+        # the id alone — "**filesystem** — 3 tool(s)" reads
+        # better than "**filesystem** (filesystem) — 3 tool(s)".
+        if display_name == sid:
+            section += f"- **{sid}** — {len(tools)} tool(s)\n"
+        else:
+            section += f"- **{sid}** ({display_name}) — {len(tools)} tool(s)\n"
+    section += (
+        "Tool names are prefixed with `mcp_{server_id}_`. "
+        "Use them when relevant to the task at hand. "
+        "If a server is listed but no tools show up at "
+        "call time, the server may have failed to start — "
+        "report the failure rather than retrying blindly."
+    )
+    return section
+
 # Load config
 CONFIG_PATH = PROJECT_ROOT / "config" / "config.yaml"
 try:
@@ -994,32 +1080,14 @@ Be concise, friendly, and helpful."""
         if sections["daily"]:
             system_prompt = system_prompt + f"\n\n## Today's Session Log (daily/{ctx.daily.path.name})\n{sections['daily']}"
 
-        if mcp_tools:
-            system_prompt += "\n\n## Custom MCP Tools\nAdditional MCP tools are available from user-configured MCP servers. Use them when relevant. Tool names are prefixed with mcp_{server_id}_."
-
-        # Native MiniMax MCP servers. These are always available
-        # by default and don't need any setup. The agent should
-        # reach for them whenever a question needs current
-        # information (web_search) or a visual analysis of an
-        # image (understand_image) — both work via the MiniMax
-        # coding-plan endpoints under the hood. If the user
-        # toggled a tool off in Settings → MCP Servers (MiniMax),
-        # it won't be in the agent's tool list at runtime and the
-        # agent will discover that on first use.
-        system_prompt += (
-            "\n\n## MiniMax MCP Servers\n"
-            "Two MCP servers from MiniMax are always available:\n"
-            "- **web_search**: MiniMax MCP server that searches the "
-            "web for real-time information. Use this whenever the user "
-            "asks about current events, recent news, or anything that "
-            "might be outside your training cutoff.\n"
-            "- **understand_image**: MiniMax MCP server that analyzes "
-            "an image and returns a description. Use this whenever the "
-            "user attaches an image (path or URL) and asks for "
-            "analysis, OCR, or visual Q&A.\n"
-            "Both tools live on the MiniMax coding-plan endpoint and "
-            "respect the same auth as the chat model."
-        )
+        # Single unified "## MCP Servers" section in the system
+        # prompt — lists the MiniMax built-in servers (always
+        # present) and the user's own configured MCP servers
+        # (only when at least one is loaded). The same shape the
+        # Settings panel uses, so the agent and the UI agree on
+        # what's available. See build_mcp_section() for the
+        # actual rendering.
+        system_prompt += _build_mcp_section(mcp_tools or [])
 
         # Stash the context on the SessionManager so /api/config can expose
         # the missing/corrupt flags → banner + wizard triggers on frontend.
