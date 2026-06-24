@@ -581,17 +581,36 @@ controls and fixed a number of Token Plan API quirks.
   The rail loses the separate "Tools" entry and keeps just
   the "MCP Servers" entry.
 
-- **System prompt gets a "## MiniMax MCP Servers" block** —
-  before this, the system prompt had a "## Custom MCP Tools"
-  block for user-configured MCP servers but said nothing
-  about the two native MiniMax ones. The new block names
-  `web_search` and `understand_image`, explains when the
-  agent should use each (current events / image analysis),
-  and notes that both live on the MiniMax coding-plan
-  endpoint with the same auth as the chat model. If the
-  user toggled a tool off in Settings, the agent discovers
-  the missing tool on first use via the runtime tool list
-  (which reflects the toggle).
+- **System prompt gets a unified "## MCP Servers" section**
+  — the agent now sees both the MiniMax built-in servers
+  AND the user-configured MCP servers in one place, with
+  the same shape the Settings panel uses. The first version
+  of this block only documented the two MiniMax servers
+  (`web_search`, `understand_image`) and added a separate
+  generic "## Custom MCP Tools" block that just said
+  "additional tools are available". Eduardo caught that the
+  two should be unified and the Custom block should list
+  the actual configured servers, not a generic stub. New
+  shape:
+  ```
+  ## MCP Servers
+  ### MiniMax (built-in)
+    - **web_search**: searches the web for real-time information...
+    - **understand_image**: analyzes an image and returns a description...
+  ### Custom (user-configured)   [omitted entirely if no custom servers]
+    - **filesystem** (Local Filesystem) — 3 tool(s)
+    - **github** (GitHub API) — 2 tool(s)
+    Tool names are prefixed with `mcp_{server_id}_`. ...
+  ```
+  The Custom sub-block is omitted entirely when the user
+  has no MCP servers configured (no empty placeholders).
+  Tool counts are computed by grouping
+  `ExternalMCPTool` instances by `server_id`. If a server
+  config has no `name` field, the section shows the id alone
+  ("**filesystem** — 3 tool(s)") rather than
+  "**filesystem** (filesystem) — 3 tool(s)". Extracted to
+  a pure `_build_mcp_section(mcp_tools)` function in
+  `web/backend/main.py` for unit testing.
 
 ### Settings Modal: custom API base URL
 
