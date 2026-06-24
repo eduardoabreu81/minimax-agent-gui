@@ -997,6 +997,30 @@ Be concise, friendly, and helpful."""
         if mcp_tools:
             system_prompt += "\n\n## Custom MCP Tools\nAdditional MCP tools are available from user-configured MCP servers. Use them when relevant. Tool names are prefixed with mcp_{server_id}_."
 
+        # Native MiniMax MCP servers. These are always available
+        # by default and don't need any setup. The agent should
+        # reach for them whenever a question needs current
+        # information (web_search) or a visual analysis of an
+        # image (understand_image) — both work via the MiniMax
+        # coding-plan endpoints under the hood. If the user
+        # toggled a tool off in Settings → MCP Servers (MiniMax),
+        # it won't be in the agent's tool list at runtime and the
+        # agent will discover that on first use.
+        system_prompt += (
+            "\n\n## MiniMax MCP Servers\n"
+            "Two MCP servers from MiniMax are always available:\n"
+            "- **web_search**: MiniMax MCP server that searches the "
+            "web for real-time information. Use this whenever the user "
+            "asks about current events, recent news, or anything that "
+            "might be outside your training cutoff.\n"
+            "- **understand_image**: MiniMax MCP server that analyzes "
+            "an image and returns a description. Use this whenever the "
+            "user attaches an image (path or URL) and asks for "
+            "analysis, OCR, or visual Q&A.\n"
+            "Both tools live on the MiniMax coding-plan endpoint and "
+            "respect the same auth as the chat model."
+        )
+
         # Stash the context on the SessionManager so /api/config can expose
         # the missing/corrupt flags → banner + wizard triggers on frontend.
         self.last_context = ctx
