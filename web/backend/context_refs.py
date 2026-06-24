@@ -541,17 +541,226 @@ class ExpansionReport:
     ``total_bytes`` is the sum of all successful expansions'
     ``size_bytes``. The caller compares this against the model's
     context limit to decide whether to warn (25%) or refuse (50%).
+
+    ``refused`` is True when the hard limit (50%) is hit, meaning
+    NO refs were expanded and the original message should be
+    returned unchanged. ``soft_warning`` is set when the total
+    exceeds 25% of the context limit but stays under 50% — all
+    refs still expand, the caller surfaces a yellow warning.
     """
 
     results: list[ExpansionResult] = field(default_factory=list)
     total_bytes: int = 0
-    soft_limit_hit: bool = False
-    hard_limit_hit: bool = False
+    soft_warning: str = ""
+    refused: bool = False
+    refusal_reason: str = ""
 
     def to_dict(self) -> dict:
         return {
             "results": [r.to_dict() for r in self.results],
             "total_bytes": self.total_bytes,
-            "soft_limit_hit": self.soft_limit_hit,
-            "hard_limit_hit": self.hard_limit_hit,
+            "soft_warning": self.soft_warning,
+            "refused": self.refused,
+            "refusal_reason": self.refusal_reason,
         }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Size limits
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Hermes spec: soft 25% / hard 50% of context length.
+# We compute against a model_limit (in TOKENS) provided by the caller.
+# Bytes → tokens is approximate; we use 1 token ≈ 4 bytes (English
+# prose average). This matches the rough heuristic used elsewhere
+# in the project (see mini_agent/agent.py _estimate_tokens fallback).
+_BYTES_PER_TOKEN = 4
+
+# Soft/hard thresholds. Hermes spec literal values.
+SOFT_LIMIT_FRACTION = 0.25
+HARD_LIMIT_FRACTION = 0.50
+
+
+def _check_size_limits(
+    total_bytes: int,
+    model_limit: int,
+) -> tuple[bool, str, bool, str]:
+    """Compute soft/hard limit flags for a given byte total.
+
+    Returns (soft_warning_str, soft_warning, refused, refusal_reason).
+
+    Note the unusual return order: the first tuple element is the
+    soft_warning message (string, possibly empty), the second is a
+    bool (kept for back-compat), then refused bool + reason. We use
+    strings as the primary signal because the caller (frontend)
+    surfaces the message text directly.
+    """
+    if model_limit <= 0:
+        # No limit info → can't evaluate. Default to no warning/refusal.
+        return "", False, False, ""
+
+    limit_bytes = model_limit * _BYTES_PER_TOKEN
+    soft_limit = int(limit_bytes * SOFT_LIMIT_FRACTION)
+    hard_limit = int(limit_bytes * HARD_LIMIT_FRACTION)
+
+    if total_bytes >= hard_limit:
+        return (
+            "",
+            False,
+            True,
+            f"expanded content is {total_bytes:,} bytes "
+            f"(>= {int(HARD_LIMIT_FRACTION * 100)}% of context, "
+            f"hard limit). Original message returned unchanged.",
+        )
+    if total_bytes >= soft_limit:
+        return (
+            f"expanded content is {total_bytes:,} bytes "
+            f"(>= {int(SOFT_LIMIT_FRACTION * 100)}% of context). "
+            f"Consider removing some @-refs.",
+            True,
+            False,
+            "",
+        )
+    return "", False, False, ""
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Main expand dispatcher
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _expand_single(ref: Ref, workspace: Path) -> ExpansionResult:
+    """Expand one ref. Returns ExpansionResult with either content or error.
+
+    Per-ref failures (sensitive path, binary file, network error)
+    become ``error`` strings attached to the result — they do NOT
+    abort the rest of the expansion. The caller surfaces them as
+    warning chips in the UI.
+    """
+    result = ExpansionResult(ref=ref)
+
+    if ref.type == "diff":
+        out = git_diff(workspace)
+    elif ref.type == "staged":
+        out = git_staged(workspace)
+    elif ref.type == "git":
+        try:
+            n = int(ref.value)
+        except ValueError:
+            return _err(ref, f"@git: requires a number, got {ref.value!r}")
+        out = git_log_n(workspace, n)
+    elif ref.type == "url":
+        out = fetch_url(ref.value)
+    elif ref.type == "file":
+        try:
+            resolved = resolve_workspace_path(workspace, ref.value)
+        except (PermissionError, ValueError) as e:
+            return _err(ref, str(e))
+
+        # Sensitive path check FIRST (before filesystem access)
+        if (reason := is_sensitive(resolved)) is not None:
+            return _err(ref, f"sensitive path ({reason})")
+
+        if not resolved.exists():
+            return _err(ref, f"file not found: {ref.value}")
+        if not resolved.is_file():
+            return _err(ref, f"not a file: {ref.value}")
+
+        if _looks_like_binary(resolved):
+            return _err(ref, "binary files are not supported")
+
+        # Parse line range from value (if present)
+        line_range = None
+        if _looks_like_line_range(ref.value):
+            try:
+                _, range_part = ref.value.rsplit(":", 1)
+                if "-" in range_part:
+                    a, b = range_part.split("-", 1)
+                    line_range = (int(a), int(b))
+                else:
+                    line_range = (int(range_part), int(range_part))
+            except (ValueError, IndexError):
+                line_range = None  # fall through to full file
+
+        try:
+            out = _read_text_file(resolved, line_range=line_range)
+        except (OSError, UnicodeDecodeError) as e:
+            return _err(ref, f"read failed: {e.__class__.__name__}")
+
+    elif ref.type == "folder":
+        try:
+            resolved = resolve_workspace_path(workspace, ref.value)
+        except (PermissionError, ValueError) as e:
+            return _err(ref, str(e))
+
+        if (reason := is_sensitive(resolved)) is not None:
+            return _err(ref, f"sensitive path ({reason})")
+
+        try:
+            listing, _count = read_folder_tree(resolved)
+        except FileNotFoundError:
+            return _err(ref, f"folder not found: {ref.value}")
+        out = listing
+    else:
+        return _err(ref, f"unknown ref type: {ref.type}")
+
+    # Check for sentinel BLOCKED markers (git errors, URL errors)
+    if isinstance(out, str) and out.startswith("[BLOCKED:"):
+        return _err(ref, out.removeprefix("[BLOCKED:").removesuffix("]"))
+
+    result.content = out
+    result.size_bytes = len(out.encode("utf-8"))
+    return result
+
+
+def _err(ref: Ref, message: str) -> ExpansionResult:
+    """Build an ExpansionResult with an error and no content."""
+    r = ExpansionResult(ref=ref)
+    r.error = message
+    return r
+
+
+def expand_refs(
+    refs: Iterable[Ref],
+    workspace_dir: Path,
+    *,
+    model_limit: int = 0,
+) -> ExpansionReport:
+    """Expand all refs against ``workspace_dir``.
+
+    The hard limit (50% of context) is enforced AT THE END: if the
+    total expanded bytes exceeds it, ``ExpansionReport.refused`` is
+    set to True and ``results`` is empty. The caller (frontend) sees
+    the refusal and returns the original message unchanged — none
+    of the partial expansions are kept.
+
+    The soft limit (25%) is enforced as a warning on the report; all
+    refs still expand in this case.
+
+    Per-ref failures (sensitive path, binary, network error) become
+    ``error`` strings on individual results. They do NOT block the
+    other refs.
+    """
+    report = ExpansionReport()
+
+    for ref in refs:
+        result = _expand_single(ref, workspace_dir)
+        report.results.append(result)
+        # Only successful expansions count toward the total. Errors
+        # and blocked refs contribute 0 bytes (they have no content).
+        report.total_bytes += result.size_bytes
+
+    # Enforce hard limit AT THE END. If total > 50% of context, the
+    # entire expansion is rejected (return original message unchanged).
+    soft_msg, _soft_flag, refused, reason = _check_size_limits(
+        report.total_bytes, model_limit
+    )
+    report.soft_warning = soft_msg
+    if refused:
+        report.refused = True
+        report.refusal_reason = reason
+        # Drop the partial results — caller will use the original msg
+        report.results = []
+        report.total_bytes = 0
+
+    return report

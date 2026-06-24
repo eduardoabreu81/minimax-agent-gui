@@ -438,3 +438,167 @@ class TestFetchUrl:
         out = cr.fetch_url(f"http://{http_server}/missing")
         assert "BLOCKED" in out
         assert "404" in out
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Size limits
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestCheckSizeLimits:
+    def test_no_limit_when_model_limit_zero(self):
+        soft_msg, soft_flag, refused, reason = cr._check_size_limits(100_000, 0)
+        assert soft_msg == ""
+        assert refused is False
+
+    def test_under_soft_limit(self):
+        # model_limit=1000 → 4000 bytes cap; 25% = 1000 bytes
+        soft_msg, soft_flag, refused, reason = cr._check_size_limits(500, 1000)
+        assert soft_msg == ""
+        assert refused is False
+
+    def test_at_soft_limit_triggers_warning(self):
+        # 25% of 1000 tokens = 250 tokens = 1000 bytes (1 token = 4 bytes)
+        soft_msg, soft_flag, refused, reason = cr._check_size_limits(1000, 1000)
+        assert "25%" in soft_msg
+        assert refused is False
+
+    def test_under_hard_limit_no_refusal(self):
+        # 49% of 1000 tokens = 1960 bytes
+        soft_msg, soft_flag, refused, reason = cr._check_size_limits(1960, 1000)
+        assert refused is False
+
+    def test_at_hard_limit_refuses(self):
+        # 50% of 1000 tokens = 2000 bytes
+        soft_msg, soft_flag, refused, reason = cr._check_size_limits(2000, 1000)
+        assert refused is True
+        assert "50%" in reason
+        assert "hard limit" in reason.lower()
+
+    def test_over_hard_limit_refuses(self):
+        # 100% of context — way over
+        soft_msg, soft_flag, refused, reason = cr._check_size_limits(100_000, 1000)
+        assert refused is True
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# expand_refs dispatcher
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestExpandRefs:
+    def test_file_expansion(self, tmp_path: Path):
+        (tmp_path / "a.py").write_text("hello world\n" * 50)
+        ref = cr.Ref(raw="@file:a.py", type="file", value="a.py", start=0, end=10)
+        report = cr.expand_refs([ref], tmp_path)
+        assert len(report.results) == 1
+        assert report.results[0].ok
+        assert "hello world" in report.results[0].content
+        assert report.total_bytes > 0
+
+    def test_file_with_line_range(self, tmp_path: Path):
+        (tmp_path / "a.py").write_text("a\nb\nc\nd\ne\n")
+        ref = cr.Ref(raw="@file:a.py:2-3", type="file", value="a.py:2-3", start=0, end=12)
+        report = cr.expand_refs([ref], tmp_path)
+        assert "b" in report.results[0].content
+        assert "c" in report.results[0].content
+        assert "a" not in report.results[0].content  # line 1 excluded
+        assert "e" not in report.results[0].content  # line 5 excluded
+
+    def test_sensitive_path_error(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        fake_key = tmp_path / "id_rsa"
+        fake_key.write_text("secret")
+        monkeypatch.setattr(cr, "SENSITIVE_FILE_PATHS", (str(fake_key),))
+        ref = cr.Ref(raw="@file:id_rsa", type="file", value="id_rsa", start=0, end=12)
+        report = cr.expand_refs([ref], tmp_path)
+        assert not report.results[0].ok
+        assert "sensitive" in report.results[0].error.lower()
+        # Errors don't count toward total_bytes
+        assert report.total_bytes == 0
+
+    def test_binary_file_error(self, tmp_path: Path):
+        (tmp_path / "blob.bin").write_bytes(b"\x00\x01binary")
+        ref = cr.Ref(raw="@file:blob.bin", type="file", value="blob.bin", start=0, end=14)
+        report = cr.expand_refs([ref], tmp_path)
+        assert not report.results[0].ok
+        assert "binary" in report.results[0].error.lower()
+
+    def test_path_traversal_error(self, tmp_path: Path):
+        ref = cr.Ref(raw="@file:../etc/passwd", type="file", value="../etc/passwd", start=0, end=19)
+        report = cr.expand_refs([ref], tmp_path)
+        assert not report.results[0].ok
+
+    def test_absolute_path_error(self, tmp_path: Path):
+        ref = cr.Ref(raw="@file:/etc/passwd", type="file", value="/etc/passwd", start=0, end=15)
+        report = cr.expand_refs([ref], tmp_path)
+        assert not report.results[0].ok
+
+    def test_missing_file_error(self, tmp_path: Path):
+        ref = cr.Ref(raw="@file:nope.py", type="file", value="nope.py", start=0, end=13)
+        report = cr.expand_refs([ref], tmp_path)
+        assert not report.results[0].ok
+        assert "not found" in report.results[0].error.lower()
+
+    def test_folder_expansion(self, tmp_path: Path):
+        (tmp_path / "a.py").write_text("x")
+        (tmp_path / "b.md").write_text("x")
+        ref = cr.Ref(raw="@folder:.", type="folder", value=".", start=0, end=9)
+        report = cr.expand_refs([ref], tmp_path)
+        assert report.results[0].ok
+        assert "a.py" in report.results[0].content
+        assert "b.md" in report.results[0].content
+
+    def test_multiple_refs_partial_failure(self, tmp_path: Path):
+        # One good file, one missing
+        (tmp_path / "good.py").write_text("ok")
+        refs = [
+            cr.Ref(raw="@file:good.py", type="file", value="good.py", start=0, end=13),
+            cr.Ref(raw="@file:bad.py", type="file", value="bad.py", start=14, end=26),
+        ]
+        report = cr.expand_refs(refs, tmp_path)
+        assert len(report.results) == 2
+        assert report.results[0].ok
+        assert not report.results[1].ok
+        # Only the good one counts
+        assert report.total_bytes == report.results[0].size_bytes
+
+    def test_hard_limit_refuses_all(self, tmp_path: Path):
+        # Big file (5000 bytes) + model_limit=200 (800 byte cap; 50% = 400 bytes)
+        (tmp_path / "big.py").write_text("x" * 5000)
+        ref = cr.Ref(raw="@file:big.py", type="file", value="big.py", start=0, end=12)
+        report = cr.expand_refs([ref], tmp_path, model_limit=200)
+        assert report.refused is True
+        # Hard refusal drops all results
+        assert report.results == []
+        assert report.total_bytes == 0
+        assert "50%" in report.refusal_reason
+
+    def test_soft_limit_warns_but_keeps_refs(self, tmp_path: Path):
+        # model_limit=200 → 800 byte cap; 25% = 200 bytes, 50% = 400 bytes
+        # File of 300 bytes > 200 (soft) and < 400 (hard) → just warn
+        (tmp_path / "med.py").write_text("x" * 300)
+        ref = cr.Ref(raw="@file:med.py", type="file", value="med.py", start=0, end=12)
+        report = cr.expand_refs([ref], tmp_path, model_limit=200)
+        assert report.refused is False
+        assert "25%" in report.soft_warning
+        # Refs still present
+        assert len(report.results) == 1
+        assert report.results[0].ok
+
+    def test_url_ref_expansion(self, tmp_path: Path):
+        ref = cr.Ref(raw="@url:https://example.com", type="url",
+                     value="https://example.com", start=0, end=23)
+        # No real network in tests — we expect a BLOCKED warning
+        # (either timeout, refused, or DNS error). The point is
+        # the dispatcher routes the ref to fetch_url without
+        # crashing on an unknown scheme.
+        report = cr.expand_refs([ref], tmp_path)
+        assert len(report.results) == 1
+        # Either a real response (unlikely in CI) or a BLOCKED error
+        assert report.results[0].error or report.results[0].content
+
+    def test_git_ref_bad_n(self, git_workspace: Path):
+        ref = cr.Ref(raw="@git:abc", type="git", value="abc", start=0, end=8)
+        report = cr.expand_refs([ref], git_workspace)
+        assert not report.results[0].ok
+        assert "number" in report.results[0].error.lower()
