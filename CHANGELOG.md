@@ -951,7 +951,109 @@ done.
   Test counts: pytest **311/311** pass (was 292, +19);
   vitest **102/102** pass (was 95, +7).
 
-### Settings Modal: custom API base URL
+### Added — PR A polish (Composer consolidation + popover)
+
+The PR A foundation (PR A in-place → Composer → spacious popover →
+fixes) was added in a previous batch and is documented in the
+"Added — Context references" section above. This entry covers the
+polish batch that landed on top of it to make the @-ref autocomplete
+feel like part of the same control surface as the slash menu.
+
+- **`Composer` consolidates slash menu + attachment + @-ref** —
+  the ChatPanel's inline `textarea + popover` wiring for `@`-refs
+  was originally hand-rolled around the existing textarea
+  (`PR A in-place`, `8a819d7`). The slash menu and paperclip
+  attachment lived in a separate copy. Refactored to a single
+  `Composer.tsx` component (`698afe7`) that owns the textarea,
+  the slash menu, the @-ref autocomplete popover, and the
+  attachment chip. ChatPanel lost ~315 lines of duplication.
+  The Composer is the single source of truth for chat input;
+  the CodingPanel still has its own inline textarea (separate
+  migration, not in scope this batch).
+- **Spacious autocomplete popover** (`945f350`) — popover went
+  from 320px / 28px row / bare `path` label to 420px / 48px row /
+  filename (medium mono) on top + parent dir (dim mono) below +
+  right-aligned human-readable size (`1.2 KB` not `1234 bytes`).
+  Folders grouped before files with a subtle "Folders" / "Files"
+  header. Footer hint `↑↓ navigate · ↵ select · Esc close` makes
+  the keyboard nav discoverable. ↑↓ arrow keys + Enter to select
+  (no mouse needed). `shadow-xl` + folder icon in yellow for
+  visual distinction.
+- **Popover opens upward + responsive width** (`c6bb82a`) —
+  mirrored the SlashMenu positioning pattern. `bottom-full left-0
+  mb-1.5` (was `mt-1`) so the popover no longer covers the
+  model/thinking status row below the composer. Width changed
+  from hardcoded `w-[420px]` to `w-full max-w-[420px]` so it
+  collapses gracefully on narrow viewports. Max-height bumped
+  from `max-h-80` (320px) to `max-h-[28rem]` (448px) so the 6
+  ref types + headers + footer all fit without scroll.
+- **Cursor state stays in sync with text** (`c712026`) — when
+  the user picked a type from the popover (e.g. "File"),
+  `handleAutocompleteSelect` updated the React `text` state and
+  the DOM `selectionRange` but never updated the React `cursor`
+  state. Result: `partialRefAt('@file:', cursor=1)` computed the
+  wrong partial on re-render, the popover reopened as the type
+  picker (instead of file suggestions), and the next click
+  duplicated `@file:` to `@file:file:`. Fixed by also calling
+  `setCursor(newCursor)` inside the same functional update.
+  Same fix adds `e.preventDefault()` to the Enter handler when
+  `autocompleteOpen` (was relying on the popover's document-level
+  handler, which only preventDefaults on truthy `insertion` —
+  the empty-state row's Enter was inserting a stray newline).
+  Regression test in `Composer.test.tsx`: pressing Enter twice
+  on the type picker no longer duplicates the prefix.
+- **Composer matches Coding textarea height** (`0b2936f`) —
+  the Chat composer's empty state was `rows=1 / py-1.5` (~32px
+  textarea + ~16px card padding = ~48px total), while the Coding
+  AgentChat textarea was `rows=2 / py-3` (~64px + ~16px = ~80px).
+  Bumped Chat to `rows=2 / py-2.5` (~60px + ~16px = ~76px) —
+  close enough to Coding to feel like the same family of input.
+  Auto-grow cap of 200px unchanged.
+- **`ContextChip` tracks the live model picker** (`f3a7bbc`) —
+  `modelId` was derived from `bucket?.lastModel || DEFAULT_MODEL`,
+  so the moment the user switched the picker to M2.7 the chip
+  still showed 1.0M until the first M2.7 usage landed. Now
+  prefers the live `model` prop (App.jsx passes `activeModel`)
+  and falls back to the bucket's `lastModel` then `DEFAULT_MODEL`.
+- **`ContextChip` uses theme accent + 80% red warning**
+  (`f3a7bbc`) — replaced the fixed green→amber→red gradient
+  with the active theme's accent color (blue for default,
+  cyan for ocean, green for forest, etc.). At `pct ≥ 80%` the
+  bar flips to `#ef4444` as a hard warning — except when the
+  theme is `minimax` (the red theme), where red is already
+  the brand color and the flip would lose the signal. The
+  `contextBarGradient` export is kept for the unit test but
+  no longer used by the chip. Updated test asserts the theme
+  accent appears in the DOM and the old gradient does NOT.
+
+### Fixed — `get_minimax_config` UnboundLocalError
+
+- **Chat WebSocket crashed on cold start with UnboundLocalError**
+  (`869d1c2`) — `web/backend/main.py` referenced
+  `get_minimax_config()` inside a try block but only assigned it
+  in the except branch. On the success path the name was
+  undefined → UnboundLocalError → WS disconnect. Reordered so
+  the assignment happens unconditionally before the function
+  is used.
+
+### Fixed — M3 thinking reverts to spec-documented values
+
+- **M3 thinking reverts to documented `adaptive` / `disabled`**
+  (`f6bdf5c`) — earlier in the day a `2570ef2` commit switched
+  M3's thinking from `{"type": "adaptive"}` to an invented
+  `{"type": "enabled", "budget_tokens": 4096}` (intuition was
+  "always force M3 to think so the ThinkingBlock never
+  disappears"). The MiniMax Anthropic-compatible API spec only
+  documents two valid values: `adaptive` (on, model decides
+  reasoning depth) and `disabled` (off). The invented value
+  was not in the spec. Reverted to `adaptive` and added an
+  explicit `disabled` branch for `thinking=False`. The
+  ThinkingToggle continues to control ON/OFF; for M3 with
+  `adaptive`, the model can still skip reasoning on trivial
+  turns (greetings, etc.) — that's documented behavior, not
+  a bug. New rule registered: never invent model-specific
+  parameter values — always cross-check the upstream spec
+  before changing them.
 
 - The Agent tab now lets users override the default MiniMax
   Anthropic-compatible endpoint. The backend validates the URL and
