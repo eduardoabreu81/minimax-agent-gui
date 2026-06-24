@@ -388,7 +388,10 @@
     "personality": {
       "preset": "Preset",
       "reset": "Restaurar padrão",
-      "customPlaceholder": "Personalidade customizada…"
+      "customPlaceholder": "Personalidade customizada…",
+      "customOption": "Customizado (suas edições)",
+      "choosePreset": "Escolha um preset ou edite livremente",
+      "appliedHint": "Preset aplicado — clique em Salvar para persistir"
     },
     "identity": {
       "quickSwitch": "Trocar papel",

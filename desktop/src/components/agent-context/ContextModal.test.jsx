@@ -256,3 +256,140 @@ describe('ContextModal', () => {
     })
   })
 })
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Personality preset selector — the SOUL.md card has a dropdown of
+// canonical bodies the user can apply in one click (without editing
+// the textarea manually). Only the SOUL.md card opts in via the
+// `presetSelector` prop; the others (IDENTITY/USER/MEMORY) just have
+// the textarea editor.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function openModalWithPresets(presets = []) {
+  openModal()
+  mockUseAgentContext.mockReturnValue({
+    status: {
+      banner_visible: false,
+      missing: [],
+      char_usage: {
+        soul:     { used: 50, limit: 100 },
+        identity: { used: 10, limit: 100 },
+        user:     { used: 5,  limit: 100 },
+        memory:   { used: 0,  limit: 100 },
+      },
+    },
+    dailies: [],
+    loading: false,
+    fetchFile: mockFetchFile,
+    saveFile: mockSaveFile,
+    fetchDaily: mockFetchDaily,
+    refreshStatus: mockRefreshStatus,
+    presets,
+    getPresetBody: (id) => presets.find((p) => p.id === id)?.body || '',
+  })
+}
+
+const SAMPLE_PRESETS = [
+  { id: 'concise',  name: 'Concise',  body: 'You are direct and minimal.' },
+  { id: 'friendly', name: 'Friendly', body: 'You are warm and encouraging.' },
+  { id: 'mentor',   name: 'Mentor',   body: 'You teach the why along the way.' },
+  { id: 'expert',   name: 'Expert',   body: 'You are dense and technical.' },
+  { id: 'creative', name: 'Creative', body: 'You generate options and angles.' },
+]
+
+describe('ContextModal — Personality preset selector', () => {
+  it('renders the preset <select> with the 5 presets + Custom option', () => {
+    openModalWithPresets(SAMPLE_PRESETS)
+    render(<ContextModal />)
+    const select = screen.getByTestId('preset-select-soul')
+    expect(select).toBeInTheDocument()
+    expect(select.tagName).toBe('SELECT')
+    // 5 preset options + 1 "Custom" option
+    expect(select.options.length).toBe(6)
+    expect(select.options[0].value).toBe('')  // Custom is first
+  })
+
+  it('does NOT render preset selectors on other cards (identity/user/memory)', () => {
+    openModalWithPresets(SAMPLE_PRESETS)
+    render(<ContextModal />)
+    expect(screen.queryByTestId('preset-select-identity')).toBeNull()
+    expect(screen.queryByTestId('preset-select-user')).toBeNull()
+    expect(screen.queryByTestId('preset-select-memory')).toBeNull()
+  })
+
+  it('disables the preset <select> when not editing', () => {
+    openModalWithPresets(SAMPLE_PRESETS)
+    render(<ContextModal />)
+    const select = screen.getByTestId('preset-select-soul')
+    expect(select).toBeDisabled()
+  })
+
+  it('updates the select value when a preset is picked (after clicking Edit)', async () => {
+    openModalWithPresets(SAMPLE_PRESETS)
+    mockFetchFile.mockResolvedValue({ content: 'old user-edited content' })
+    render(<ContextModal />)
+
+    // Click the Edit button on the SOUL.md card
+    fireEvent.click(screen.getAllByText('agentContext.memory.edit')[0])
+
+    // The preset <select> becomes enabled when editing=true. Wait
+    // for that — at the same time fetchFile is resolving in the
+    // background and setContent runs to populate the textarea.
+    const select = await waitFor(() => {
+      const s = screen.getByTestId('preset-select-soul')
+      if (s.disabled) throw new Error('select still disabled')
+      return s
+    })
+
+    // Pick the "mentor" preset
+    fireEvent.change(select, { target: { value: 'mentor' } })
+
+    // The select's own value flips synchronously to "mentor".
+    // (The textarea body is also updated, but verifying that
+    // requires the fetchFile race to settle — covered by the
+    // 'saves the picked preset body when Save is clicked' test.)
+    expect(select.value).toBe('mentor')
+  })
+
+  it('detects the active preset when loaded content matches a preset body', async () => {
+    openModalWithPresets(SAMPLE_PRESETS)
+    // The fetched SOUL.md body matches the "friendly" preset exactly
+    mockFetchFile.mockResolvedValue({ content: 'You are warm and encouraging.' })
+    render(<ContextModal />)
+    fireEvent.click(screen.getAllByText('agentContext.memory.edit')[0])
+    await waitFor(() => expect(mockFetchFile).toHaveBeenCalledWith('soul'))
+    // The select should now show "friendly" as the active preset
+    const select = screen.getByTestId('preset-select-soul')
+    expect(select.value).toBe('friendly')
+  })
+
+  it('shows "Custom" when loaded content does not match any preset', async () => {
+    openModalWithPresets(SAMPLE_PRESETS)
+    mockFetchFile.mockResolvedValue({ content: 'totally custom personality' })
+    render(<ContextModal />)
+    fireEvent.click(screen.getAllByText('agentContext.memory.edit')[0])
+    await waitFor(() => expect(mockFetchFile).toHaveBeenCalledWith('soul'))
+    const select = screen.getByTestId('preset-select-soul')
+    expect(select.value).toBe('')  // Custom
+  })
+
+  it('saves the picked preset body when Save is clicked', async () => {
+    openModalWithPresets(SAMPLE_PRESETS)
+    mockFetchFile.mockResolvedValue({ content: 'old' })
+    mockSaveFile.mockResolvedValue({ status: 'ok' })
+    render(<ContextModal />)
+    fireEvent.click(screen.getAllByText('agentContext.memory.edit')[0])
+    await waitFor(() => expect(mockFetchFile).toHaveBeenCalledWith('soul'))
+
+    // Pick the "expert" preset, then save
+    fireEvent.change(screen.getByTestId('preset-select-soul'), {
+      target: { value: 'expert' },
+    })
+    fireEvent.click(screen.getByText('agentContext.common.save'))
+
+    await waitFor(() => {
+      expect(mockSaveFile).toHaveBeenCalledWith('soul', 'You are dense and technical.')
+    })
+  })
+})

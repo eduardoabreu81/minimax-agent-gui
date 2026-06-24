@@ -496,7 +496,10 @@
     "personality": {
       "preset": "Preset",
       "reset": "Reset to default",
-      "customPlaceholder": "Custom personality…"
+      "customPlaceholder": "Custom personality…",
+      "customOption": "Custom (your edits)",
+      "choosePreset": "Pick a preset or edit freely",
+      "appliedHint": "Preset applied — click Save to persist"
     },
     "identity": {
       "quickSwitch": "Quick switch",

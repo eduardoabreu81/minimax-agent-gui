@@ -27,7 +27,8 @@ import AboutYouCard from './AboutYouCard.jsx'
 export default function ContextModal() {
   const { t } = useTranslation()
   const { open, closeModal, openModalAndWizard } = useContextModal()
-  const { status, dailies, loading, fetchFile, saveFile, fetchDaily } = useAgentContext()
+  const { status, dailies, loading, fetchFile, saveFile, fetchDaily,
+          presets, getPresetBody } = useAgentContext()
   const containerRef = useRef(null)
   const previouslyFocusedRef = useRef(null)
 
@@ -178,6 +179,7 @@ export default function ContextModal() {
                 usage={usageOf('soul')}
                 fetchFile={fetchFile}
                 saveFile={saveFile}
+                presetSelector={{ presets, getPresetBody }}
               />
               <ContextCard
                 icon={Briefcase}
@@ -228,24 +230,49 @@ function Loader2Icon() {
 // Generic card with icon, title, optional badge, and the body slot.
 // Each card owns its edit/view state and uses the same fetchFile /
 // saveFile from useAgentContext.
-function ContextCard({ icon: Icon, title, badge, id, usage, fetchFile, saveFile }) {
+//
+// `presetSelector` is an optional prop for cards that have a small
+// library of canonical bodies the user can apply in one click
+// (currently just SOUL.md / Personality). When provided, the card
+// shows a dropdown above the editor and a "detected preset" pill
+// after a successful save.
+function ContextCard({ icon: Icon, title, badge, id, usage, fetchFile, saveFile, presetSelector }) {
   const { t } = useTranslation()
   const [editing, setEditing] = useState(false)
   const [content, setContent] = useState(null)  // null = not loaded
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
+  // Preset tracking (only used when presetSelector is provided):
+  //   - selectedPreset = the id the user picked from the dropdown
+  //     ('' means "Custom — current content doesn't match any preset")
+  //   - savedPreset    = the preset id that was active at the last
+  //     successful save (used to render the "Current" pill below)
+  const [selectedPreset, setSelectedPreset] = useState('')
+  const [savedPreset, setSavedPreset] = useState('')
 
   const startEdit = useCallback(async () => {
     setEditing(true)
     if (content === null) {
       try {
         const data = await fetchFile(id)
-        setContent(data.content || '')
+        const loaded = data.content || ''
+        setContent(loaded)
+        // If the loaded content matches one of the preset bodies
+        // exactly, treat that as the active preset. Otherwise the
+        // user has hand-edited it — call it Custom.
+        if (presetSelector?.presets?.length) {
+          const match = presetSelector.presets.find(
+            (p) => p.body && p.body === loaded,
+          )
+          const matchedId = match?.id || ''
+          setSelectedPreset(matchedId)
+          setSavedPreset(matchedId)
+        }
       } catch (e) {
         setError(e.message)
       }
     }
-  }, [content, fetchFile, id])
+  }, [content, fetchFile, id, presetSelector])
 
   const cancelEdit = () => { setEditing(false); setError(null) }
 
@@ -255,6 +282,13 @@ function ContextCard({ icon: Icon, title, badge, id, usage, fetchFile, saveFile 
     try {
       await saveFile(id, content)
       setEditing(false)
+      // After save: re-evaluate preset match against the new content.
+      if (presetSelector?.presets?.length) {
+        const match = presetSelector.presets.find(
+          (p) => p.body && p.body === content,
+        )
+        setSavedPreset(match?.id || '')
+      }
     } catch (e) {
       setError(e.message)
     } finally {
@@ -262,10 +296,28 @@ function ContextCard({ icon: Icon, title, badge, id, usage, fetchFile, saveFile 
     }
   }
 
+  // Apply a preset from the dropdown. Replaces the textarea content
+  // immediately so the user sees the canonical body and can save (or
+  // further edit). When the dropdown flips to "Custom" (empty value),
+  // we leave the existing content alone — Custom just means "I'll
+  // type my own from here".
+  const applyPreset = (presetId) => {
+    setSelectedPreset(presetId)
+    if (presetId && presetSelector?.getPresetBody) {
+      const body = presetSelector.getPresetBody(presetId)
+      if (body) setContent(body)
+    }
+  }
+
   const used = content?.length ?? 0
   const limit = usage.limit || 0
   const overLimit = limit > 0 && used > limit
   const pct = limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0
+
+  // The dropdown shows the LAST applied (or saved) preset when not
+  // editing. While editing, it tracks what the user just picked so
+  // they can switch presets before saving without losing changes.
+  const presetValue = editing ? selectedPreset : savedPreset
 
   return (
     <div className="rounded-xl border border-border bg-card overflow-hidden">
@@ -298,6 +350,44 @@ function ContextCard({ icon: Icon, title, badge, id, usage, fetchFile, saveFile 
                 style={{ width: `${pct}%` }}
               />
             </div>
+          </div>
+        )}
+
+        {/* Preset selector — only when the card opted in via the
+            `presetSelector` prop (currently SOUL.md / Personality).
+            Shows above the editor so the user can swap presets
+            without scrolling. Selecting a preset fills the textarea
+            with the canonical body — saving commits the swap. */}
+        {presetSelector && (
+          <div className="flex items-center gap-2" data-testid={`preset-selector-${id}`}>
+            <label
+              htmlFor={`preset-select-${id}`}
+              className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider shrink-0"
+            >
+              {t('settings.personality.preset') || 'Preset'}
+            </label>
+            <select
+              id={`preset-select-${id}`}
+              value={presetValue}
+              onChange={(e) => applyPreset(e.target.value)}
+              disabled={!editing}
+              data-testid={`preset-select-${id}`}
+              className="
+                flex-1 px-2.5 py-1.5 text-xs
+                bg-surface border border-border rounded-md
+                focus:outline-none focus:border-primary
+                disabled:opacity-60 disabled:cursor-not-allowed
+              "
+            >
+              <option value="">
+                {t('agentContext.personality.customOption') || 'Custom (your edits)'}
+              </option>
+              {presetSelector.presets?.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name || p.id}
+                </option>
+              ))}
+            </select>
           </div>
         )}
 
