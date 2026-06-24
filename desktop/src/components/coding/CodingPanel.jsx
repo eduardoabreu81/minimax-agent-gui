@@ -1497,6 +1497,8 @@ const sendCodingMessage = useCallback(() => {
         {workspaceSidebarVisible && (
           <WorkspaceSidebar
             visible={workspaceSidebarVisible}
+            websocket={codingWs}
+            sessionId={codingSessionId}
             onToggle={() => {
               const next = !workspaceSidebarVisible
               setWorkspaceSidebarVisible(next)

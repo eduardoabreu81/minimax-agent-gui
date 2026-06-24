@@ -7,15 +7,29 @@ import {
 } from 'lucide-react'
 import { useAgentActivity } from '../../context/AgentActivityContext'
 import { useSelectedModel } from '../../hooks/useSelectedModel'
+import { useLiveTodos } from '../../hooks/useLiveTodos'
+import { LiveTodoProgress } from '../taskboard/LiveTodoProgress'
 
 const TABS = [
   { id: 'plan', label: 'Plan', icon: Search },
-  { id: 'todos', label: 'Todos (demo)', icon: CheckSquare },
+  { id: 'todos', label: 'Todos', icon: CheckSquare },
   { id: 'tasks', label: 'Tasks', icon: ListTodo },
   { id: 'agents', label: 'Agents', icon: Bot },
-]
+];
 
-export default function WorkspaceSidebar({ visible, onToggle }) {
+/**
+ * @param {Object} props
+ * @param {boolean} props.visible
+ * @param {() => void} props.onToggle
+ * @param {WebSocket | null} [props.websocket]   - chat WS (for live todo updates)
+ * @param {string | null} [props.sessionId]     - coding session id (for filter)
+ */
+export default function WorkspaceSidebar({
+  visible,
+  onToggle,
+  websocket,
+  sessionId,
+}) {
   const { t } = useTranslation()
   const [activeTab, setActiveTab] = useState('tasks')
   const activity = useAgentActivity()
@@ -81,7 +95,9 @@ export default function WorkspaceSidebar({ visible, onToggle }) {
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-3">
         {activeTab === 'plan' && <PlanPanel />}
-        {activeTab === 'todos' && <TodosPanel />}
+        {activeTab === 'todos' && (
+          <TodosPanel websocket={websocket} sessionId={sessionId} />
+        )}
         {activeTab === 'tasks' && <TasksPanel />}
         {activeTab === 'agents' && <AgentsPanel />}
       </div>
@@ -285,40 +301,24 @@ function PlanPanel() {
   )
 }
 
-function TodosPanel() {
-  const [todos, setTodos] = useState([
-    { id: 1, text: 'Setup project structure', done: true },
-    { id: 2, text: 'Implement sidebar component', done: false },
-    { id: 3, text: 'Add mode toggles', done: false },
-  ])
-
-  const toggleTodo = (id) => {
-    setTodos(prev => prev.map(t => t.id === id ? { ...t, done: !t.done } : t))
-  }
+function TodosPanel({ websocket, sessionId }) {
+  // Live Todo Progress — PR C. Wires the chat WebSocket to the
+  // LiveTodoProgress component, filtered by this coding session's
+  // id. Replaces the previous hardcoded demo data.
+  const { tasks } = useLiveTodos({
+    sessionId,
+    websocket,
+    skipFetch: !sessionId,
+  })
+  const [collapsed, setCollapsed] = useState(false)
 
   return (
-    <div className="space-y-2">
-      {todos.map(todo => (
-        <div
-          key={todo.id}
-          onClick={() => toggleTodo(todo.id)}
-          className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-colors ${
-            todo.done ? 'bg-surface/50' : 'bg-surface hover:bg-surface/80'
-          }`}
-        >
-          <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${
-            todo.done ? 'bg-primary border-primary' : 'border-border'
-          }`}>
-            {todo.done && <CheckSquare size={10} className="text-white" />}
-          </div>
-          <span className={`text-[11px] ${todo.done ? 'text-muted-foreground line-through' : 'text-foreground'}`}>
-            {todo.text}
-          </span>
-        </div>
-      ))}
-      <p className="text-[10px] text-muted-foreground pt-2">
-        Demo data — auto-generated agent todos are coming soon.
-      </p>
+    <div>
+      <LiveTodoProgress
+        tasks={tasks}
+        collapsed={collapsed}
+        onCollapsedChange={setCollapsed}
+      />
     </div>
   )
 }
