@@ -2671,11 +2671,22 @@ async def chat_websocket(websocket: WebSocket, session_id: str):
                     })
                     # Re-emit usage so the StatusBar reflects the drop
                     if last_usage:
-                        await websocket.send_json({
+                        # Refresh by_source — the system prompt may
+                        # have shrunk thanks to the summary, so the
+                        # breakdown changed.
+                        compact_by_source = None
+                        try:
+                            compact_by_source = agent.estimate_by_source()
+                        except Exception as est_err:
+                            _logger.debug(f"estimate_by_source after compact failed: {est_err}")
+                        payload = {
                             "type": "usage",
                             "usage": last_usage,
                             "model": effective_model,
-                        })
+                        }
+                        if compact_by_source is not None:
+                            payload["by_source"] = compact_by_source
+                        await websocket.send_json(payload)
                     _log_compact_event({
                         "event": "completed",
                         "compact_id": compact_id,
@@ -2988,17 +2999,31 @@ async def chat_websocket(websocket: WebSocket, session_id: str):
                 full_thinking = "\n\n".join(s for s in accumulated_thinking if s) or None
                 last_usage = getattr(agent, "last_usage", None)
 
+                # Per-source token breakdown — best-effort approximation
+                # (see Agent.estimate_by_source). Forwarded alongside
+                # `usage` so the StatusBar popover can render a
+                # "Token breakdown by source" section. The frontend is
+                # defensive: missing `by_source` falls back to no breakdown.
+                by_source = None
+                try:
+                    by_source = agent.estimate_by_source()
+                except Exception as est_err:
+                    _logger.debug(f"estimate_by_source failed: {est_err}")
+
                 # Forward per-turn token usage to the StatusBar BEFORE the
                 # assistant event, so the context chip can update immediately
                 # when the agent finishes a turn. The frontend also accepts
                 # `usage` inside the assistant event as a fallback for older
                 # proxies that drop the standalone event.
                 if last_usage:
-                    await websocket.send_json({
+                    payload = {
                         "type": "usage",
                         "usage": last_usage,
                         "model": effective_model,
-                    })
+                    }
+                    if by_source is not None:
+                        payload["by_source"] = by_source
+                    await websocket.send_json(payload)
 
                 await websocket.send_json({
                     "type": "assistant",
@@ -3006,6 +3031,7 @@ async def chat_websocket(websocket: WebSocket, session_id: str):
                     "thinking": full_thinking,
                     "model": effective_model,
                     "usage": last_usage,
+                    "by_source": by_source,
                 })
 
                 # Auto-save: append assistant message (with thinking + model)
