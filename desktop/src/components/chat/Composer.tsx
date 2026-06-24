@@ -5,7 +5,19 @@ import { cn } from "@/lib/utils";
 import { useContextRefs } from "@/components/context-refs/useContextRefs.js";
 import { ContextRefChips } from "@/components/context-refs/ContextRefChips.jsx";
 import { ContextRefAutocomplete } from "@/components/context-refs/ContextRefAutocomplete.jsx";
+import { buildAttachedContext } from "@/components/context-refs/buildAttachedContext.js";
 import { apiFetch } from "@/lib/api.js";
+
+// NOTE: This component is currently a "clean reference" — it is NOT
+// wired into the ChatPanel. As of 2026-06-24, the @-ref integration
+// is wired in-place inside ChatPanel.jsx (around the existing inline
+// textarea that has the `/skill` slash menu and the paperclip
+// attachment button — features the Composer doesn't have yet).
+//
+// This file is kept as the spec/clean version we can revive when
+// (a) CodingPanel also wants @-refs and shares a unified Composer,
+// or (b) we want to consolidate the ChatPanel input into a single
+// reusable component. Until then, treat this as documentation.
 
 interface ComposerProps {
   onSend: (text: string, attachment?: { name: string; path: string; type: string }) => void;
@@ -14,30 +26,6 @@ interface ComposerProps {
   expertLabel: string;
   /** Session ID — used to resolve the workspace for @file:/@folder: refs. */
   sessionId: string;
-}
-
-/**
- * Build the "--- Attached Context ---" block from a successful
- * expansion report. This block is appended to the user's message
- * before it goes to the agent, so the LLM sees the file contents
- * inline. Format mirrors the spec's "attached context" section.
- */
-function buildAttachedContext(
-  report: { results: Array<{ ref: { raw: string; type: string }; content: string; error: string; size_bytes: number }> }
-): string {
-  const ok = report.results.filter((r) => !r.error && r.content);
-  if (ok.length === 0) return "";
-
-  const lines: string[] = ["--- Attached Context ---"];
-  for (const r of ok) {
-    lines.push("");
-    lines.push(`### ${r.ref.raw}  (${r.size_bytes} bytes)`);
-    lines.push("");
-    lines.push(r.content);
-  }
-  lines.push("");
-  lines.push("--- End Attached Context ---");
-  return lines.join("\n");
 }
 
 export function Composer({ onSend, disabled, status, expertLabel, sessionId }: ComposerProps) {

@@ -5,6 +5,7 @@ src-tauri/Cargo.lock
 # Vite / React
 node_modules/
 dist/
+dist-check/
 
 # OS / Editor noise
 .DS_Store
