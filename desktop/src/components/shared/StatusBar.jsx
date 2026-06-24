@@ -222,7 +222,16 @@ export const contextBarGradient = 'linear-gradient(to right, hsl(142 71% 45%) 0%
 // JSX inside ContextChip stays readable.
 //
 // Visual layout (matches the Claude Code reference):
+//
+//   COLLAPSED (default):
 //   ┌──────────────────────────────────────────────────────┐
+//   │ Breakdown by source                        718.2k  v  │
+//   └──────────────────────────────────────────────────────┘
+//
+//   EXPANDED (click the header):
+//   ┌──────────────────────────────────────────────────────┐
+//   │ Breakdown by source                        718.2k  ^  │
+//   │ ──────────────────────────────────────────────────── │
 //   │ Messages              ▰▰▰▰▰▰▰▰▰▰▰▰▰▱▱▱ 718.2k  72% │
 //   │ Skills                ▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱  30.1k   3% │
 //   │ Memory files          ▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱   7.4k   1% │
@@ -240,6 +249,11 @@ export const contextBarGradient = 'linear-gradient(to right, hsl(142 71% 45%) 0%
 //
 // Exported for unit testing.
 export function BreakdownPanel({ bySource }) {
+  // Outer collapse: hides the entire 9-row + 3-expandable list. The
+  // 3 in-list expandables are tracked separately so a user can
+  // expand a section WITHOUT first expanding the parent — useful
+  // when a user knows exactly which section they want to inspect.
+  const [outerOpen, setOuterOpen] = useState(false)
   const [expanded, setExpanded] = useState({ mcp: false, memory: false, agents: false })
 
   // Hide the whole panel if the backend hasn't sent a breakdown yet.
@@ -260,6 +274,17 @@ export function BreakdownPanel({ bySource }) {
     { key: 'free_space',            label: 'Free space' },
   ]
 
+  // The dominant row (heaviest bucket) — shown in the collapsed
+  // header so the user still sees "what's filling my context"
+  // without expanding. Defaults to the first row if every bucket
+  // is 0 (would otherwise crash on the empty `acc`).
+  const dominant = rows.reduce(
+    (acc, r) => ((bySource[r.key] || 0) > (bySource[acc.key] || 0) ? r : acc),
+    rows[0],
+  )
+  const dominantTokens = bySource[dominant.key] || 0
+  const dominantPct = pct(dominantTokens)
+
   const details = bySource.details || {}
   const mcpList     = details.mcp_tools_list     || []
   const memoryList  = details.memory_files_list  || []
@@ -276,91 +301,121 @@ export function BreakdownPanel({ bySource }) {
 
   return (
     <div className="mb-3">
-      <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
-        Breakdown by source
-      </div>
+      {/* Collapsible header — matches the Claude Code reference.
+          When collapsed: just the dominant row's name + total +
+          chevron (so the user can still tell "what's filling my
+          context" without expanding). When expanded: the full
+          9-row list + 3 expandable sub-sections. */}
+      <button
+        type="button"
+        onClick={() => setOuterOpen(!outerOpen)}
+        data-testid="breakdown-toggle"
+        className="w-full flex items-center gap-2 text-left mb-1.5 hover:bg-surface/60 rounded px-1 py-0.5 -mx-1 transition-colors"
+        aria-expanded={outerOpen}
+      >
+        <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+          Breakdown by source
+        </span>
+        <span className="flex-1 text-[11px] text-foreground">
+          {dominant.label}
+          <span className="text-muted-foreground tabular-nums">
+            {' · '}
+            {formatTokenCount(dominantTokens)} ({dominantPct.toFixed(0)}%)
+          </span>
+        </span>
+        <span className="text-[11px] text-muted-foreground tabular-nums">
+          {formatTokenCount(total)}
+        </span>
+        {outerOpen
+          ? <ChevronDown size={12} className="text-muted-foreground shrink-0" />
+          : <ChevronRight size={12} className="text-muted-foreground shrink-0" />}
+      </button>
 
-      {/* Flat summary list — 9 rows */}
-      <div className="space-y-1">
-        {rows.map(({ key, label }) => {
-          const tokens = bySource[key] || 0
-          const rowPct = pct(tokens)
-          return (
-            <div key={key} className="flex items-center gap-2 text-[11px]">
-              <span className="w-[120px] text-muted-foreground truncate">{label}</span>
-              <span className="flex-1 h-1.5 rounded-full bg-secondary overflow-hidden">
-                <span
-                  className="block h-full bg-primary/70 transition-all duration-300"
-                  style={{ width: `${Math.min(rowPct, 100)}%` }}
+      {outerOpen && (
+        <>
+          {/* Flat summary list — 9 rows */}
+          <div className="space-y-1">
+            {rows.map(({ key, label }) => {
+              const tokens = bySource[key] || 0
+              const rowPct = pct(tokens)
+              return (
+                <div key={key} className="flex items-center gap-2 text-[11px]">
+                  <span className="w-[120px] text-muted-foreground truncate">{label}</span>
+                  <span className="flex-1 h-1.5 rounded-full bg-secondary overflow-hidden">
+                    <span
+                      className="block h-full bg-primary/70 transition-all duration-300"
+                      style={{ width: `${Math.min(rowPct, 100)}%` }}
+                    />
+                  </span>
+                  <span className="w-[52px] text-right font-mono tabular-nums text-foreground">
+                    {formatTokenCount(tokens)}
+                  </span>
+                  <span className="w-[36px] text-right font-mono tabular-nums text-muted-foreground">
+                    {rowPct.toFixed(0)}%
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Expandable sub-sections — only render if there's anything to show.
+              A backend payload from an older session (no `details`) just
+              hides these — no crash. */}
+          {(mcpList.length + memoryList.length + agentsList.length) > 0 && (
+            <div className="mt-2 pt-2 border-t border-border space-y-1">
+              {/* MCP tools (per-server) */}
+              {mcpList.length > 0 && (
+                <ExpandableRow
+                  label="MCP tools"
+                  summary={`${formatTokenCount(summary.mcp.tokens)} · ${summary.mcp.n} ${summary.mcp.unit}`}
+                  expanded={expanded.mcp}
+                  onToggle={() => toggle('mcp')}
+                  rows={mcpList.map((t) => ({
+                    key: `mcp-${t.server_id}`,
+                    primary: t.name || t.server_id,
+                    secondary: `${t.tool_count} tool${t.tool_count === 1 ? '' : 's'}`,
+                    tokens: t.tokens,
+                    pct: pct(t.tokens),
+                  }))}
                 />
-              </span>
-              <span className="w-[52px] text-right font-mono tabular-nums text-foreground">
-                {formatTokenCount(tokens)}
-              </span>
-              <span className="w-[36px] text-right font-mono tabular-nums text-muted-foreground">
-                {rowPct.toFixed(0)}%
-              </span>
+              )}
+
+              {/* Memory files */}
+              {memoryList.length > 0 && (
+                <ExpandableRow
+                  label="Memory files"
+                  summary={`${formatTokenCount(summary.memory.tokens)} · ${summary.memory.n} ${summary.memory.unit}`}
+                  expanded={expanded.memory}
+                  onToggle={() => toggle('memory')}
+                  rows={memoryList.map((t) => ({
+                    key: `mem-${t.file}`,
+                    primary: t.file,
+                    secondary: null,
+                    tokens: t.tokens,
+                    pct: pct(t.tokens),
+                  }))}
+                />
+              )}
+
+              {/* Custom agents */}
+              {agentsList.length > 0 && (
+                <ExpandableRow
+                  label="Custom agents"
+                  summary={`${formatTokenCount(summary.agents.tokens)} · ${summary.agents.n} ${summary.agents.unit}`}
+                  expanded={expanded.agents}
+                  onToggle={() => toggle('agents')}
+                  rows={agentsList.map((t) => ({
+                    key: `agent-${t.agent}`,
+                    primary: t.agent,
+                    secondary: null,
+                    tokens: t.tokens,
+                    pct: pct(t.tokens),
+                  }))}
+                />
+              )}
             </div>
-          )
-        })}
-      </div>
-
-      {/* Expandable sub-sections — only render if there's anything to show.
-          A backend payload from an older session (no `details`) just
-          hides these — no crash. */}
-      {(mcpList.length + memoryList.length + agentsList.length) > 0 && (
-        <div className="mt-2 pt-2 border-t border-border space-y-1">
-          {/* MCP tools (per-server) */}
-          {mcpList.length > 0 && (
-            <ExpandableRow
-              label="MCP tools"
-              summary={`${formatTokenCount(summary.mcp.tokens)} · ${summary.mcp.n} ${summary.mcp.unit}`}
-              expanded={expanded.mcp}
-              onToggle={() => toggle('mcp')}
-              rows={mcpList.map((t) => ({
-                key: `mcp-${t.server_id}`,
-                primary: t.name || t.server_id,
-                secondary: `${t.tool_count} tool${t.tool_count === 1 ? '' : 's'}`,
-                tokens: t.tokens,
-                pct: pct(t.tokens),
-              }))}
-            />
           )}
-
-          {/* Memory files */}
-          {memoryList.length > 0 && (
-            <ExpandableRow
-              label="Memory files"
-              summary={`${formatTokenCount(summary.memory.tokens)} · ${summary.memory.n} ${summary.memory.unit}`}
-              expanded={expanded.memory}
-              onToggle={() => toggle('memory')}
-              rows={memoryList.map((t) => ({
-                key: `mem-${t.file}`,
-                primary: t.file,
-                secondary: null,
-                tokens: t.tokens,
-                pct: pct(t.tokens),
-              }))}
-            />
-          )}
-
-          {/* Custom agents */}
-          {agentsList.length > 0 && (
-            <ExpandableRow
-              label="Custom agents"
-              summary={`${formatTokenCount(summary.agents.tokens)} · ${summary.agents.n} ${summary.agents.unit}`}
-              expanded={expanded.agents}
-              onToggle={() => toggle('agents')}
-              rows={agentsList.map((t) => ({
-                key: `agent-${t.agent}`,
-                primary: t.agent,
-                secondary: null,
-                tokens: t.tokens,
-                pct: pct(t.tokens),
-              }))}
-            />
-          )}
-        </div>
+        </>
       )}
     </div>
   )

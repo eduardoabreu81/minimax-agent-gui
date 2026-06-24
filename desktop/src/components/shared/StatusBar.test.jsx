@@ -200,7 +200,53 @@ describe('StatusBar ContextChip — per-source breakdown', () => {
     expect(screen.queryByText(/Breakdown by source/i)).toBeNull()
   })
 
-  it('renders the breakdown when bucket.lastBySource is present', async () => {
+  it('renders the breakdown collapsed by default — only header + dominant row', async () => {
+    // The Claude Code reference shows the context breakdown as a
+    // collapsed row with the dominant bucket name + total + chevron.
+    // The 9-row list + expandable sub-sections are hidden until the
+    // user clicks the header.
+    mockUseSessionTokens.mockReturnValue({
+      sessions: {
+        'sess-1': {
+          lastModel: 'MiniMax-M3',
+          lastTurnInput: 50_000,
+          input_tokens: 50_000,
+          output_tokens: 0,
+          turnCount: 3,
+          lastBySource: {
+            messages: 3720,  // dominant — should show in header
+            skills: 80,
+            memory_files: 50,
+            custom_agents: 30,
+            system_prompt: 20,
+            mcp_tools: 100,
+            mcp_deferred: 0,
+            system_tools_deferred: 0,
+            free_space: 0,
+            total: 4000,
+            limit: 1_000_000,
+            details: { mcp_tools_list: [], memory_files_list: [], custom_agents_list: [] },
+          },
+        },
+      },
+      activeSessionId: 'sess-1',
+    })
+    render(<StatusBar model="MiniMax-M3" setModel={vi.fn()} thinkingEnabled={false} setThinkingEnabled={vi.fn()} supportsThinking={true} />)
+    screen.getByTitle('Context window & plan').click()
+    await screen.findByText('Plan usage')
+    // Header is rendered
+    expect(screen.getByText(/Breakdown by source/i)).toBeInTheDocument()
+    // Dominant row name shown in collapsed header (Messages 3720 / 4000 = 93%)
+    expect(screen.getByText(/Messages/)).toBeInTheDocument()
+    // 9 row labels NOT yet rendered — collapsed
+    expect(screen.queryByText('Skills')).toBeNull()
+    expect(screen.queryByText('Memory files')).toBeNull()
+    expect(screen.queryByText('Custom agents')).toBeNull()
+    expect(screen.queryByText('System prompt')).toBeNull()
+    expect(screen.queryByText('Free space')).toBeNull()
+  })
+
+  it('expanding the breakdown reveals all 9 rows + percentages', async () => {
     mockUseSessionTokens.mockReturnValue({
       sessions: {
         'sess-1': {
@@ -227,12 +273,20 @@ describe('StatusBar ContextChip — per-source breakdown', () => {
       },
       activeSessionId: 'sess-1',
     })
+    const { default: user } = await import('@testing-library/user-event')
+    const u = user.setup({ delay: null })
     render(<StatusBar model="MiniMax-M3" setModel={vi.fn()} thinkingEnabled={false} setThinkingEnabled={vi.fn()} supportsThinking={true} />)
-    screen.getByTitle('Context window & plan').click()
-    await screen.findByText('Plan usage')
-    expect(screen.getByText(/Breakdown by source/i)).toBeInTheDocument()
-    // All 9 row labels (the design's flat summary list)
-    expect(screen.getByText('Messages')).toBeInTheDocument()
+    await u.click(screen.getByTitle('Context window & plan'))
+    await screen.findByText(/Breakdown by source/i)
+
+    // Click the header to expand
+    await u.click(screen.getByTestId('breakdown-toggle'))
+
+    // All 9 rows are now visible. "Messages" appears in both the
+    // collapsed header AND the expanded row list, so use
+    // getAllByText for that one. The other 8 row labels are unique
+    // to the expanded view.
+    expect(screen.getAllByText('Messages').length).toBeGreaterThanOrEqual(2)
     expect(screen.getByText('Skills')).toBeInTheDocument()
     expect(screen.getByText('Memory files')).toBeInTheDocument()
     expect(screen.getByText('Custom agents')).toBeInTheDocument()
@@ -243,7 +297,7 @@ describe('StatusBar ContextChip — per-source breakdown', () => {
     expect(screen.getByText('Free space')).toBeInTheDocument()
   })
 
-  it('computes correct percentages for each source', async () => {
+  it('computes correct percentages for each source (after expand)', async () => {
     mockUseSessionTokens.mockReturnValue({
       sessions: {
         'sess-1': {
@@ -270,18 +324,22 @@ describe('StatusBar ContextChip — per-source breakdown', () => {
       },
       activeSessionId: 'sess-1',
     })
+    const { default: user } = await import('@testing-library/user-event')
+    const u = user.setup({ delay: null })
     render(<StatusBar model="MiniMax-M3" setModel={vi.fn()} thinkingEnabled={false} setThinkingEnabled={vi.fn()} supportsThinking={true} />)
-    screen.getByTitle('Context window & plan').click()
+    await u.click(screen.getByTitle('Context window & plan'))
     await screen.findByText(/Breakdown by source/i)
-    const breakdown = screen.getByText(/Breakdown by source/i).parentElement
-    expect(breakdown).toBeTruthy()
-    const text = breakdown.parentElement.textContent
+    await u.click(screen.getByTestId('breakdown-toggle'))
+    // Now the rows are rendered; the parent of "Breakdown by source"
+    // holds the whole panel.
+    const breakdown = screen.getByText(/Breakdown by source/i).closest('div')
+    const text = breakdown.textContent
     expect(text).toMatch(/80%/)     // Messages
     expect(text).toMatch(/10%/)     // System prompt
     expect(text).toMatch(/5%/)      // Skills + MCP tools
   })
 
-  it('hides expandable sub-sections when details is empty', async () => {
+  it('hides expandable sub-sections when details is empty (after expand)', async () => {
     mockUseSessionTokens.mockReturnValue({
       sessions: {
         'sess-1': {
@@ -301,16 +359,19 @@ describe('StatusBar ContextChip — per-source breakdown', () => {
       },
       activeSessionId: 'sess-1',
     })
+    const { default: user } = await import('@testing-library/user-event')
+    const u = user.setup({ delay: null })
     render(<StatusBar model="MiniMax-M3" setModel={vi.fn()} thinkingEnabled={false} setThinkingEnabled={vi.fn()} supportsThinking={true} />)
-    screen.getByTitle('Context window & plan').click()
+    await u.click(screen.getByTitle('Context window & plan'))
     await screen.findByText(/Breakdown by source/i)
+    await u.click(screen.getByTestId('breakdown-toggle'))
     // No expandable chevron rows when details are empty
     expect(screen.queryByText(/^MCP tools\s*\u00b7/)).toBeNull()
     expect(screen.queryByText(/^Memory files\s*\u00b7/)).toBeNull()
     expect(screen.queryByText(/^Custom agents\s*\u00b7/)).toBeNull()
   })
 
-  it('renders expandable MCP tools row when mcp_tools_list has entries', async () => {
+  it('expands the breakdown then reveals per-server MCP entries', async () => {
     mockUseSessionTokens.mockReturnValue({
       sessions: {
         'sess-1': {
@@ -343,16 +404,51 @@ describe('StatusBar ContextChip — per-source breakdown', () => {
     await u.click(screen.getByTitle('Context window & plan'))
     await screen.findByText(/Breakdown by source/i)
 
-    // The expandable MCP tools row has a stable data-testid
-    // (`breakdown-expand-mcp-tools`). Use it instead of role+name
-    // which collides with the flat "MCP tools" row label.
+    // Outer breakdown is collapsed — no inner expandables visible yet
+    expect(screen.queryByTestId('breakdown-expand-mcp-tools')).toBeNull()
+    // Expand the outer breakdown first
+    await u.click(screen.getByTestId('breakdown-toggle'))
+    // Now the per-server MCP expandable row is visible
     const button = screen.getByTestId('breakdown-expand-mcp-tools')
     expect(button).toBeTruthy()
     await u.click(button)
-    // After expanding, the per-server entries are visible
+    // Per-server entries are visible
     expect(screen.getByText('Local FS')).toBeInTheDocument()
     expect(screen.getByText('GitHub API')).toBeInTheDocument()
     expect(screen.getByText(/^12 tools$/)).toBeInTheDocument()
     expect(screen.getByText(/^73 tools$/)).toBeInTheDocument()
+  })
+
+  it('clicking the toggle a second time collapses the breakdown again', async () => {
+    mockUseSessionTokens.mockReturnValue({
+      sessions: {
+        'sess-1': {
+          lastModel: 'MiniMax-M3',
+          lastTurnInput: 50_000,
+          input_tokens: 50_000,
+          output_tokens: 0,
+          turnCount: 3,
+          lastBySource: {
+            messages: 5000, skills: 80, memory_files: 0, custom_agents: 0,
+            system_prompt: 0, mcp_tools: 0, mcp_deferred: 0,
+            system_tools_deferred: 0, free_space: 0,
+            total: 5080, limit: 1_000_000,
+            details: { mcp_tools_list: [], memory_files_list: [], custom_agents_list: [] },
+          },
+        },
+      },
+      activeSessionId: 'sess-1',
+    })
+    const { default: user } = await import('@testing-library/user-event')
+    const u = user.setup({ delay: null })
+    render(<StatusBar model="MiniMax-M3" setModel={vi.fn()} thinkingEnabled={false} setThinkingEnabled={vi.fn()} supportsThinking={true} />)
+    await u.click(screen.getByTitle('Context window & plan'))
+    await screen.findByText(/Breakdown by source/i)
+    // Expand
+    await u.click(screen.getByTestId('breakdown-toggle'))
+    expect(screen.getByText('Skills')).toBeInTheDocument()
+    // Collapse
+    await u.click(screen.getByTestId('breakdown-toggle'))
+    expect(screen.queryByText('Skills')).toBeNull()
   })
 })
