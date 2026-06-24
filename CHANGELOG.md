@@ -296,6 +296,54 @@ controls and fixed a number of Token Plan API quirks.
   banner, focus trap, ESC close, focus restore, daily auto-refresh
   via window event. Total frontend test suite: 7 files / 68 tests.
 
+### Added — Observability
+
+- **Structured compact-event logging** — every context-compact call
+  (frontend-triggered via the WebSocket `compact` handler, and
+  backend-triggered via the pre-LLM auto-compact in
+  `Agent._summarize_messages`) now emits a JSON-encoded event line
+  on the standard logger. The two paths share the same shape:
+  - `mini_agent/agent.py` — new `_log_compact_event` helper called
+    from inside `_summarize_messages`. Emits `started {before_tokens,
+    pct_before, compact_reason: "force"|"auto"|"legacy", ...}`,
+    `completed {after_tokens, pct_after, delta_tokens, delta_pct,
+    summaries_created}`, `failed {error, error_type}`, and
+    `skipped {reason}`. `Agent.__init__` accepts a new
+    `session_id` kwarg (default `None`) so events carry the WS
+    session id; `SessionManager.get_or_create_agent` sets it
+    when binding the agent.
+  - `web/backend/main.py` — new module-level
+    `_log_compact_event` helper. The WS handler generates
+    `compact_id = uuid.uuid4().hex[:12]` up front, snapshots
+    `pct_before` from `agent.api_total_tokens / model_context_limit`,
+    emits `started {triggered_by: "frontend", ...}`, then after
+    `_summarize_messages` emits `completed {delta_tokens, ...}`
+    and includes `compact_id` in the `compact_done` payload. On
+    exception emits `failed` and the same `compact_id` in
+    `compact_failed`. The `compact_done` event payload gains
+    a `compact_id` field so the frontend can correlate.
+  - Each call gets a unique `compact_id` (12-char hex) shared by
+    the `started` and `completed` (or `failed`) events for
+    correlation. Dashboards can ingest the JSON stream directly
+    without grep-parsing f-strings.
+
+### Added — StatusBar UI polish
+
+- **Context window bar — continuous green → amber → red gradient**.
+  Replaces the three discrete color bands in the ContextChip
+  (chip + popover) with an inline `background: linear-gradient(...)`
+  whose color at the leading edge always reflects the current fill
+  level (50% shows ~amber at the edge, 95% shows ~red). Stripes
+  are gone — the bar is one smooth gradient.
+- **Plan usage thresholds — 5% / 20% remaining** (was based on %
+  used at 70 / 90). The plan bar and the "X% left" label now
+  flip when the user is **about to run out** rather than after
+  they're already at 90% used: 5% left = critical (red, bold,
+  AlertCircle icon), 20% left = warning (amber, bold, icon),
+  >20% left = normal. Applied to both the 5-hour session bar
+  and the weekly bar. Exports `planBarColor`, `planTextState`,
+  and `contextBarGradient` for unit testing.
+
 ### Fixed
 
 - **Token tracking in `last_usage`** — `Agent` was reading
@@ -364,6 +412,47 @@ controls and fixed a number of Token Plan API quirks.
   `TAURI_SPEC.md`, `support.js`) moved to `desktop/.gitignore` —
   working material, not part of the installable app.
 - `App.jsx` trailing newline restored.
+
+### Tests
+
+- **`tests/test_compact_logging.py`** (NEW, 10 tests) — covers
+  the structured compact-event logging on both trigger paths:
+  - `Agent._summarize_messages` (backend-trigger):
+    - force / auto / legacy compact_reason emitted correctly
+    - force wins over auto when both apply
+    - no trigger emits no `started` event (silent)
+    - `completed` carries `delta_tokens`, `delta_pct`,
+      `summaries_created`
+    - `failed` is emitted on `_create_summary` exception with
+      `error` + `error_type` populated; the exception re-raises
+    - `session_id` propagates to every emitted event when set
+  - Helpers:
+    - `Agent._log_compact_event` echoes payload as a single JSON line
+    - `main._log_compact_event` (web/backend) does the same for
+      events that originate outside the agent
+
+  Uses a stub LLM (no API key) and captures the
+  `mini_agent.agent` logger output via `StringIO` `StreamHandler`
+  so the tests assert on the actual JSON lines emitted. Total
+  pytest: **269 passed** (was 259, +10 new), 20 failed (all
+  pre-existing, unrelated to this change).
+
+- **`desktop/src/components/shared/StatusBar.test.jsx`** (NEW, 11
+  tests) — covers the gradient + plan usage thresholds:
+  - `planBarColor` (pure): null → muted, >20% remaining →
+    primary, 5<x≤20% remaining → amber-400, ≤5% → error
+  - `planTextState` (pure): same thresholds, returns
+    `normal` / `warning` / `critical`
+  - `contextBarGradient` (pure): contains the three hsl stops
+    (green, amber, red) as a `linear-gradient`
+  - Render integration: StatusBar renders the chip with a stub
+    `useSessionTokens`; clicking the chip opens the popover; the
+    gradient is in the DOM; null quota state doesn't crash.
+
+  The three helpers were exported alongside the `StatusBar`
+  default export so the tests can hit the decision logic
+  directly without rendering. Total vitest: **83 passed** (was
+  72, +11 new), 9 files, zero regression.
 
 ### Settings Modal: custom API base URL
 
