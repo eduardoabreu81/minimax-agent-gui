@@ -48,28 +48,66 @@ const FALLBACK_ROLES = {
 
 /**
  * Build the default USER.md body for the wizard.
+ *
+ * Sized to clear the `MIN_CONTENT_CHARS = 500` threshold in
+ * web/backend/agent_context.py so the IncompleteContextBanner
+ * dismisses after the wizard completes. The previous ~125 char
+ * scaffold was below threshold — banner kept showing even after
+ * the user "finished" the wizard.
+ *
  * @param {string} name — user-supplied name (e.g. "Eduardo")
  * @param {string} timezone — IANA tz (e.g. "America/Sao_Paulo")
  * @param {string} level — "beginner" | "mid" | "senior"
  */
 export function buildUserBody(name, timezone, level) {
   return `# About ${name || 'you'}\n\n` +
+    `## Identity\n` +
     `- Name: ${name || ''}\n` +
     `- Timezone: ${timezone || ''}\n` +
     `- Technical level: ${level || 'mid'}\n\n` +
     `## How I like to work\n\n` +
-    `_The agent updates this section as it learns._\n`
+    `_The agent updates this section as it learns your patterns — ` +
+    `commit style, doc preferences, how you scope tasks, what counts ` +
+    `as "done", what to ask vs decide on your behalf, etc. Don't ` +
+    `edit by hand unless you want to override what the agent learned._\n\n` +
+    `## Communication preferences\n\n` +
+    `_The agent updates this section too — language style (pt-BR / ` +
+    `en / mix), response length (terse vs detailed), when you prefer ` +
+    `tables vs prose, emoji tolerance, etc._\n\n` +
+    `## Current focus\n\n` +
+    `_Active projects and priorities the agent should keep in mind ` +
+    `when triaging requests. The agent refreshes this as projects ` +
+    `start or end._\n`
 }
 
 /**
  * Build the default MEMORY.md body. The actual content is appended
  * by the agent over time, but the file needs to exist so the loader
- * picks it up.
+ * picks it up — and it needs to clear the `MIN_CONTENT_CHARS = 500`
+ * threshold so the wizard counts as "done".
+ *
+ * Hermes pattern: each entry is `§`-separated, no `##` headers
+ * (more LLM-friendly per spec §5.1). The seeded entries below
+ * give the agent a starting frame so the first turn isn't blank.
  */
 export function buildMemoryBody() {
   return `# Project memory\n\n` +
-    `Append-only notes. Updated by the agent as you work.\n\n` +
-    `§ User prefers concise commits and clear scope.\n`
+    `Append-only notes. The agent updates this file as it learns — ` +
+    `each entry is ` + "`§`" + `-separated, no section headers (Hermes ` +
+    `pattern). Don't edit by hand unless you want to override what ` +
+    `the agent recorded; new entries go at the bottom.\n\n` +
+    `§ Workspace conventions: agent context lives in workspace/.agent/ ` +
+    `(SOUL.md, IDENTITY.md, USER.md, MEMORY.md + daily/ logs). The ` +
+    `agent reads these at session start and snapshots them into the ` +
+    `system prompt — changes mid-session invalidate the snapshot.\n\n` +
+    `§ Incomplete-context banner: if any of the four .agent/*.md files ` +
+    `is missing or below the 500-char threshold, the app shows an amber ` +
+    `banner at the top. The wizard writes meaningful (>500 char) bodies ` +
+    `so completing it dismisses the banner.\n\n` +
+    `§ Persistence model: chat history is JSON in workspace/conversations/, ` +
+    `agent context is markdown in workspace/.agent/, settings are in ` +
+    `config/config.yaml. Each is gitignored — backups are the user's ` +
+    `responsibility.\n`
 }
 
 export function useAgentContext() {

@@ -106,6 +106,131 @@ class TestLoadAgentContext:
         assert not ctx.is_complete
         assert set(ctx.missing_files) == {"identity", "memory"}
 
+    def test_wizard_written_bodies_complete(self, agent_dir):
+        """End-to-end regression: the wizard writes 4 files via
+        PUT /api/agent-context/{id}. The preset body comes from
+        web/backend/i18n.py, USER/MEMORY bodies come from the
+        frontend useAgentContext.js hook. After a complete wizard
+        run, all 4 files should clear MIN_CONTENT_CHARS so the
+        IncompleteContextBanner dismisses.
+
+        Bug history: 2026-06-24 — preset/role bodies were 320-418
+        chars (below 500), USER was ~125, MEMORY was ~90. Banner
+        kept showing after the user "finished" the wizard.
+        """
+        # Simulate what the frontend hook + backend i18n produce
+        # when the user clicks "Create 4 files". We don't call the
+        # wizard directly (it's a React component) — instead we
+        # use the same canonical bodies the wizard would write.
+        BACKEND = Path(__file__).resolve().parent.parent / "web" / "backend"
+        sys.path.insert(0, str(BACKEND))
+        from i18n import preset_label, role_label
+
+        # Soul: pick the default 'concise' preset body
+        soul_body = preset_label("concise", "en-US", field="body")
+        # Identity: pick the default 'eng' role body
+        identity_body = role_label("eng", "en-US", field="body")
+        # User: simulate buildUserBody() output from useAgentContext.js
+        user_body = (
+            "# About Eduardo\n\n"
+            "## Identity\n"
+            "- Name: Eduardo\n"
+            "- Timezone: America/Sao_Paulo\n"
+            "- Technical level: senior\n\n"
+            "## How I like to work\n\n"
+            "_The agent updates this section as it learns your patterns — "
+            "commit style, doc preferences, how you scope tasks, what counts "
+            "as \"done\", what to ask vs decide on your behalf, etc. Don't "
+            "edit by hand unless you want to override what the agent learned._\n\n"
+            "## Communication preferences\n\n"
+            "_The agent updates this section too — language style, response "
+            "length, when you prefer tables vs prose, emoji tolerance, etc._\n\n"
+            "## Current focus\n\n"
+            "_Active projects and priorities the agent should keep in mind._\n"
+        )
+        # Memory: simulate buildMemoryBody() output (≥500 chars —
+        # matches the actual frontend scaffold in
+        # desktop/src/hooks/useAgentContext.js)
+        memory_body = (
+            "# Project memory\n\n"
+            "Append-only notes. The agent updates this file as it learns — "
+            "each entry is `§`-separated, no section headers (Hermes "
+            "pattern). Don't edit by hand unless you want to override what "
+            "the agent recorded; new entries go at the bottom.\n\n"
+            "§ Workspace conventions: agent context lives in workspace/.agent/ "
+            "(SOUL.md, IDENTITY.md, USER.md, MEMORY.md + daily/ logs). The "
+            "agent reads these at session start and snapshots them into the "
+            "system prompt — changes mid-session invalidate the snapshot.\n\n"
+            "§ Incomplete-context banner: if any of the four .agent/*.md files "
+            "is missing or below the 500-char threshold, the app shows an "
+            "amber banner at the top. The wizard writes meaningful bodies so "
+            "completing it dismisses the banner.\n\n"
+            "§ Persistence model: chat history is JSON in workspace/conversations/, "
+            "agent context is markdown in workspace/.agent/, settings are in "
+            "config/config.yaml. Each is gitignored — backups are the user's "
+            "responsibility.\n"
+        )
+
+        # Sanity: every body must clear the threshold by itself,
+        # otherwise the banner will keep showing.
+        for label, body in (
+            ("soul", soul_body), ("identity", identity_body),
+            ("user", user_body), ("memory", memory_body),
+        ):
+            assert len(body) >= MIN_CONTENT_CHARS, (
+                f"wizard-written {label}.md is {len(body)} chars — "
+                f"below MIN_CONTENT_CHARS={MIN_CONTENT_CHARS}. "
+                f"Banner will keep showing."
+            )
+
+        # Write to disk and reload — the real check.
+        (agent_dir / "SOUL.md").write_text(soul_body, encoding="utf-8")
+        (agent_dir / "IDENTITY.md").write_text(identity_body, encoding="utf-8")
+        (agent_dir / "USER.md").write_text(user_body, encoding="utf-8")
+        (agent_dir / "MEMORY.md").write_text(memory_body, encoding="utf-8")
+
+        ctx = load_agent_context(agent_dir)
+        assert ctx.is_complete, (
+            f"After wizard write, expected is_complete=True. "
+            f"missing_files={ctx.missing_files}"
+        )
+        assert ctx.missing_files == []
+        # Banner should be off
+        assert not ctx.to_incomplete_flag()["banner_visible"]
+
+
+    def test_wizard_default_preset_bodies_each_clear_threshold(self):
+        """Per-preset regression: every preset (pt-BR + en-US) must
+        individually clear MIN_CONTENT_CHARS, not just in aggregate.
+        """
+        BACKEND = Path(__file__).resolve().parent.parent / "web" / "backend"
+        sys.path.insert(0, str(BACKEND))
+        from i18n import preset_label
+
+        for lang in ("en-US", "pt-BR"):
+            for pid in ("concise", "friendly", "mentor", "expert", "creative"):
+                body = preset_label(pid, lang, field="body")
+                assert len(body) >= MIN_CONTENT_CHARS, (
+                    f"preset.{pid} ({lang}) is {len(body)} chars — "
+                    f"below threshold {MIN_CONTENT_CHARS}"
+                )
+
+    def test_wizard_default_role_bodies_each_clear_threshold(self):
+        """Per-role regression: every role body (pt-BR + en-US) must
+        individually clear MIN_CONTENT_CHARS. (custom role is
+        user-typed, no canonical body.)"""
+        BACKEND = Path(__file__).resolve().parent.parent / "web" / "backend"
+        sys.path.insert(0, str(BACKEND))
+        from i18n import role_label
+
+        for lang in ("en-US", "pt-BR"):
+            for rid in ("eng", "reviewer", "pm"):
+                body = role_label(rid, lang, field="body")
+                assert len(body) >= MIN_CONTENT_CHARS, (
+                    f"role.{rid} ({lang}) is {len(body)} chars — "
+                    f"below threshold {MIN_CONTENT_CHARS}"
+                )
+
     def test_over_limit_is_flagged_but_not_truncated(self, agent_dir):
         """Over the char limit: not truncated here, but `over_limit=True`
         so the caller can decide (log warning, or surface to user)."""

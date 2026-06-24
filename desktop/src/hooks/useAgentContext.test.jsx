@@ -289,9 +289,50 @@ describe('body builders', () => {
     expect(body).toContain('senior')
   })
 
+  it('buildUserBody clears the wizard threshold (>500 chars)', () => {
+    // The wizard writes USER.md with the body produced by this
+    // function. If the body is below MIN_CONTENT_CHARS (500, in
+    // web/backend/agent_context.py), the IncompleteContextBanner
+    // keeps showing after the user "finishes" the wizard. This
+    // regression test guards against shrinking the scaffold.
+    const body = buildUserBody('Eduardo', 'America/Sao_Paulo', 'senior')
+    expect(body.length).toBeGreaterThanOrEqual(500)
+  })
+
+  it('buildUserBody clears threshold even with empty name (defensive)', () => {
+    // Even if the user skips the name field, the scaffold should
+    // still clear the threshold so the banner dismisses.
+    const body = buildUserBody('', 'America/Sao_Paulo', 'mid')
+    expect(body.length).toBeGreaterThanOrEqual(500)
+  })
+
+  it('buildUserBody has sections the agent can fill in over time', () => {
+    // The expanded scaffold includes placeholder sections for
+    // workflow + communication preferences + current focus — the
+    // agent updates these as it learns.
+    const body = buildUserBody('Eduardo', 'America/Sao_Paulo', 'senior')
+    expect(body).toContain('How I like to work')
+    expect(body).toContain('Communication preferences')
+    expect(body).toContain('Current focus')
+  })
+
   it('buildMemoryBody is non-empty and starts with a header', () => {
     const body = buildMemoryBody()
     expect(body.length).toBeGreaterThan(20)
     expect(body).toMatch(/^#\s/)
+  })
+
+  it('buildMemoryBody clears the wizard threshold (>500 chars)', () => {
+    const body = buildMemoryBody()
+    expect(body.length).toBeGreaterThanOrEqual(500)
+  })
+
+  it('buildMemoryBody follows Hermes §-separator pattern', () => {
+    // Per spec §5.1 — memory entries are §-separated, no ## headers.
+    // The scaffold seeds a few entries so the first turn isn't blank.
+    const body = buildMemoryBody()
+    expect(body).toContain('§')
+    // No `##` (sub-)headers inside the body
+    expect(body.split('\n').filter(l => l.startsWith('## ')).length).toBe(0)
   })
 })

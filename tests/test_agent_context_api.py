@@ -214,6 +214,25 @@ class TestPresetsEndpoint:
             assert p["body"], f"missing body for {p['id']}"
             assert len(p["body"]) > 50  # real content, not a stub
 
+    def test_each_preset_body_clears_wizard_threshold(self, client):
+        """The wizard writes the preset body to SOUL.md on Create.
+        If the body is below MIN_CONTENT_CHARS (500), the
+        IncompleteContextBanner keeps showing after the user
+        finishes onboarding. This regression test guards against
+        the preset bodies being trimmed back below threshold.
+        """
+        # Both languages need to clear the threshold — the user
+        # gets pt-BR if their config says so.
+        for lang in ("en-US", "pt-BR"):
+            r = client.get(f"/api/agent-context/presets?lang={lang}")
+            assert r.status_code == 200
+            for p in r.json()["presets"]:
+                assert len(p["body"]) >= 500, (
+                    f"preset.{p['id']} ({lang}) is {len(p['body'])} chars "
+                    f"— below the 500-char wizard threshold. Banner will "
+                    f"keep showing after onboarding."
+                )
+
     def test_lang_query_param_pt_br(self, client):
         r = client.get("/api/agent-context/presets?lang=pt-BR")
         assert r.status_code == 200
@@ -251,6 +270,24 @@ class TestRolesEndpoint:
             else:
                 assert "body" in r_, f"{r_['id']} role should have a body"
                 assert len(r_["body"]) > 50
+
+    def test_each_role_body_clears_wizard_threshold(self, client):
+        """Same regression guard as the preset test — the wizard
+        writes the role body to IDENTITY.md on Create. Below
+        threshold → banner keeps showing after onboarding."""
+        for lang in ("en-US", "pt-BR"):
+            r = client.get(f"/api/agent-context/roles?lang={lang}")
+            assert r.status_code == 200
+            for role in r.json()["roles"]:
+                if role["id"] == "custom":
+                    # Custom role is user-typed; no canonical body.
+                    continue
+                assert "body" in role, f"role.{role['id']} ({lang}) missing body"
+                assert len(role["body"]) >= 500, (
+                    f"role.{role['id']} ({lang}) is {len(role['body'])} chars "
+                    f"— below the 500-char wizard threshold. Banner will "
+                    f"keep showing after onboarding."
+                )
 
     def test_lang_pt_br_translates(self, client):
         r = client.get("/api/agent-context/roles?lang=pt-BR")
