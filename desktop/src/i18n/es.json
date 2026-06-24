@@ -237,14 +237,14 @@
   },
   "balance": {
     "credits": "Créditos",
-    "tooltip": "Saldo de créditos: {{balance}} / {{total}}"
+    "tooltip": "Saldo de créditos: {balance} / {total}"
   },
   "media": {
     "cost": "Costo",
-    "costLabel": "Costo: {{credits}} créditos (${{usd}})",
-    "imageCostLabel": "Costo: {{credits}} créditos (${{usd}}) · {{count}} imagen(es)",
+    "costLabel": "Costo: {credits} créditos (${usd})",
+    "imageCostLabel": "Costo: {credits} créditos (${usd}) · {count} imagen(es)",
     "daily": "Diario",
-    "dailyLabel": "Diario: {{used}}/{{limit}}",
+    "dailyLabel": "Diario: {used}/{limit}",
     "costTitle": "Costo de esta generación"
   },
   "image": {

@@ -237,14 +237,14 @@
   },
   "balance": {
     "credits": "积分",
-    "tooltip": "积分余额: {{balance}} / {{total}}"
+    "tooltip": "积分余额: {balance} / {total}"
   },
   "media": {
     "cost": "费用",
-    "costLabel": "费用: {{credits}} 积分 (${{usd}})",
-    "imageCostLabel": "费用: {{credits}} 积分 (${{usd}}) · {{count}} 张",
+    "costLabel": "费用: {credits} 积分 (${usd})",
+    "imageCostLabel": "费用: {credits} 积分 (${usd}) · {count} 张",
     "daily": "每日",
-    "dailyLabel": "每日: {{used}}/{{limit}}",
+    "dailyLabel": "每日: {used}/{limit}",
     "costTitle": "本次生成费用"
   },
   "image": {

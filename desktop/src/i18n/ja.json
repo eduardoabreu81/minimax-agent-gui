@@ -237,14 +237,14 @@
   },
   "balance": {
     "credits": "クレジット",
-    "tooltip": "クレジット残高: {{balance}} / {{total}}"
+    "tooltip": "クレジット残高: {balance} / {total}"
   },
   "media": {
     "cost": "コスト",
-    "costLabel": "コスト: {{credits}} クレジット (${{usd}})",
-    "imageCostLabel": "コスト: {{credits}} クレジット (${{usd}}) · {{count}} 枚",
+    "costLabel": "コスト: {credits} クレジット (${usd})",
+    "imageCostLabel": "コスト: {credits} クレジット (${usd}) · {count} 枚",
     "daily": "本日",
-    "dailyLabel": "本日: {{used}}/{{limit}}",
+    "dailyLabel": "本日: {used}/{limit}",
     "costTitle": "この生成のコスト"
   },
   "image": {

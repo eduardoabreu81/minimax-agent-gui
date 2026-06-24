@@ -237,14 +237,14 @@
   },
   "balance": {
     "credits": "크레딧",
-    "tooltip": "크레딧 잔액: {{balance}} / {{total}}"
+    "tooltip": "크레딧 잔액: {balance} / {total}"
   },
   "media": {
     "cost": "비용",
-    "costLabel": "비용: {{credits}} 크레딧 (${{usd}})",
-    "imageCostLabel": "비용: {{credits}} 크레딧 (${{usd}}) · {{count}}장",
+    "costLabel": "비용: {credits} 크레딧 (${usd})",
+    "imageCostLabel": "비용: {credits} 크레딧 (${usd}) · {count}장",
     "daily": "일일",
-    "dailyLabel": "일일: {{used}}/{{limit}}",
+    "dailyLabel": "일일: {used}/{limit}",
     "costTitle": "이번 생성 비용"
   },
   "image": {
