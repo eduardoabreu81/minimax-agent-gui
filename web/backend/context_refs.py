@@ -45,6 +45,8 @@ from pathlib import Path
 from typing import Iterable, Optional
 from urllib.parse import urlparse
 
+import httpx
+
 logger = logging.getLogger(__name__)
 
 
@@ -413,6 +415,92 @@ def git_log_n(workspace: Path, n: int) -> str:
     # --no-color so the model sees clean text
     # -p shows the patch, --stat adds a summary per commit
     return _run_git(workspace, "log", f"-{n}", "--no-color", "-p", "--stat")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# URL fetcher
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Hermes spec does not specify a default URL size cap, but a 50KB cap
+# keeps a single @url: from blowing up the context window. This matches
+# the spec's general "size limits keep context bounded" stance.
+URL_MAX_BYTES = 50_000
+URL_TIMEOUT_SECONDS = 10.0
+
+# Schemes we allow. http/https/file only. file:// is a future option
+# (would resolve to local fs read), but we don't ship it now — the
+# spec lists only http(s).
+_ALLOWED_URL_SCHEMES = ("http", "https")
+
+
+def _strip_html(html: str) -> str:
+    """Cheap HTML → text. Hermes spec doesn't require rich extraction;
+    we just drop tags + collapse whitespace. For a real implementation
+    we'd use readability-lxml or html2text, but the spec is happy with
+    a stripped version as long as the model gets the prose.
+    """
+    # Remove script/style blocks first (their content is not visible text)
+    html = re.sub(r"<(script|style)[^>]*>.*?</\1>", "", html, flags=re.DOTALL | re.IGNORECASE)
+    # Strip remaining tags
+    text = re.sub(r"<[^>]+>", " ", html)
+    # Decode common HTML entities (basic set; full list is huge)
+    text = (
+        text.replace("&nbsp;", " ")
+        .replace("&amp;", "&")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", '"')
+        .replace("&#39;", "'")
+    )
+    # Collapse runs of whitespace
+    text = re.sub(r"\s+", " ", text)
+    return text.strip()
+
+
+def fetch_url(url: str, *, max_bytes: int = URL_MAX_BYTES) -> str:
+    """Fetch a URL and return its text content.
+
+    Limits:
+      - 50KB response cap (truncated with a marker)
+      - 10s timeout
+      - http/https only
+      - HTML responses are stripped to text; plain text is returned as-is
+    """
+    parsed = urlparse(url)
+    if parsed.scheme not in _ALLOWED_URL_SCHEMES:
+        return f"[BLOCKED: URL scheme '{parsed.scheme}' not allowed]"
+
+    try:
+        # `follow_redirects=True` is httpx's default. We cap redirects
+        # implicitly via the timeout. Don't enable a separate redirect
+        # cap for now — spec doesn't require it.
+        response = httpx.get(
+            url,
+            timeout=URL_TIMEOUT_SECONDS,
+            headers={"User-Agent": "minimax-agent/0.4 (context-refs)"},
+        )
+        response.raise_for_status()
+    except httpx.TimeoutException:
+        return f"[BLOCKED: URL fetch timed out after {URL_TIMEOUT_SECONDS}s]"
+    except httpx.HTTPStatusError as e:
+        return f"[BLOCKED: URL returned HTTP {e.response.status_code}]"
+    except httpx.RequestError as e:
+        return f"[BLOCKED: URL fetch failed: {e.__class__.__name__}]"
+
+    raw = response.content
+    if len(raw) > max_bytes:
+        raw = raw[:max_bytes]
+        truncated_marker = f"\n[...truncated at {max_bytes} bytes]"
+    else:
+        truncated_marker = ""
+
+    content_type = response.headers.get("content-type", "").lower()
+    if "html" in content_type or not content_type:
+        text = _strip_html(raw.decode("utf-8", errors="replace"))
+    else:
+        text = raw.decode("utf-8", errors="replace")
+
+    return text + truncated_marker
 
 
 # ─────────────────────────────────────────────────────────────────────────────

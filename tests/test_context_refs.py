@@ -329,3 +329,112 @@ class TestLooksLikeLineRange:
         assert cr._looks_like_line_range("foo.py") is False
         assert cr._looks_like_line_range("path/to/dir") is False
         assert cr._looks_like_line_range("foo.py:") is False
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# URL fetcher
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestStripHtml:
+    def test_strips_tags(self):
+        out = cr._strip_html("<p>Hello <b>world</b></p>")
+        assert out == "Hello world"
+
+    def test_strips_script_blocks(self):
+        out = cr._strip_html("<p>visible</p><script>alert(1)</script>")
+        assert "visible" in out
+        assert "alert" not in out
+
+    def test_strips_style_blocks(self):
+        out = cr._strip_html("<p>visible</p><style>.x{}</style>")
+        assert "visible" in out
+        assert ".x{}" not in out
+
+    def test_decodes_common_entities(self):
+        out = cr._strip_html("<p>AT&amp;T &nbsp; &lt;3</p>")
+        assert "AT&T" in out
+        assert "<3" in out
+
+    def test_collapses_whitespace(self):
+        out = cr._strip_html("<p>line\n\n   one</p><p>two</p>")
+        assert "  " not in out
+        assert "line one two" in out
+
+
+class TestFetchUrl:
+    """URL fetch uses httpx; we hit a tiny local http.server to avoid
+    depending on the network. If the test environment can't bind a
+    socket, the tests are skipped (not failed) so CI on locked-down
+    runners doesn't break."""
+
+    @pytest.fixture
+    def http_server(self):
+        import http.server
+        import socketserver
+        import threading
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                if self.path == "/hello":
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/html")
+                    self.end_headers()
+                    self.wfile.write(b"<html><body><h1>Hi</h1><p>there</p></body></html>")
+                elif self.path == "/forbidden":
+                    self.send_response(403)
+                    self.end_headers()
+                elif self.path == "/big":
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/plain")
+                    self.end_headers()
+                    self.wfile.write(b"x" * 100_000)
+                else:
+                    self.send_response(404)
+                    self.end_headers()
+
+            def log_message(self, format, *args):  # silence stderr
+                pass
+
+        try:
+            server = socketserver.TCPServer(("127.0.0.1", 0), Handler)
+        except OSError:
+            pytest.skip("can't bind local socket for URL test")
+        port = server.server_address[1]
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        yield f"127.0.0.1:{port}"
+        server.shutdown()
+
+    def test_blocks_non_http_scheme(self):
+        out = cr.fetch_url("file:///etc/passwd")
+        assert "BLOCKED" in out
+        assert "scheme" in out.lower()
+
+    def test_blocks_ftp_scheme(self):
+        out = cr.fetch_url("ftp://example.com/foo")
+        assert "BLOCKED" in out
+
+    def test_fetches_html_and_strips(self, http_server: str):
+        out = cr.fetch_url(f"http://{http_server}/hello")
+        assert "Hi" in out
+        assert "there" in out
+        # Tags should be gone
+        assert "<h1>" not in out
+        assert "<p>" not in out
+
+    def test_handles_http_error(self, http_server: str):
+        out = cr.fetch_url(f"http://{http_server}/forbidden")
+        assert "BLOCKED" in out
+        assert "403" in out
+
+    def test_truncates_large_response(self, http_server: str):
+        out = cr.fetch_url(f"http://{http_server}/big", max_bytes=1000)
+        assert "truncated" in out
+        # Should have cut the content but still contain some 'x's
+        assert "x" in out
+
+    def test_handles_404(self, http_server: str):
+        out = cr.fetch_url(f"http://{http_server}/missing")
+        assert "BLOCKED" in out
+        assert "404" in out
