@@ -728,6 +728,7 @@ Requirements:
         model_override: str | None = None,
         thinking_override: bool | None = None,
         stream_callback: Optional[callable] = None,
+        tool_result_post_processor: Optional[callable] = None,
     ) -> str:
         """Execute agent loop until task is complete or max steps reached.
 
@@ -750,6 +751,15 @@ Requirements:
                               every content_block_delta (thinking or text) as
                               the model generates. Enables real-time streaming
                               of both reasoning and response to the client.
+            tool_result_post_processor: Optional sync or async callable
+                              (tool_name, arguments, result) -> ToolResult | None.
+                              Invoked AFTER tool execution but BEFORE the result
+                              is appended to the message history. Lets callers
+                              mutate the result (e.g. append project context
+                              hints for progressive subdirectory discovery).
+                              Failures are logged and swallowed — must never
+                              break the agent loop. Return None to keep the
+                              original result.
 
         Returns:
             The final response content, or error message (including cancellation message).
@@ -1002,6 +1012,24 @@ Requirements:
                         await tool_callback(function_name, arguments, result)
                     except Exception:
                         pass
+
+                # Apply tool result post-processor (if any). Lets the
+                # caller mutate the result before it becomes part of
+                # the LLM's message history — e.g. the subdirectory
+                # hint tracker appends project context so the model
+                # sees conventions as it navigates the workspace.
+                # Failures must not break the agent loop: log + swallow.
+                if tool_result_post_processor is not None:
+                    try:
+                        processed = tool_result_post_processor(
+                            function_name, arguments, result
+                        )
+                        if processed is not None:
+                            result = processed
+                    except Exception as e:
+                        _logger.warning(
+                            f"tool_result_post_processor raised (swallowed): {e}"
+                        )
 
                 # Add tool result message
                 tool_msg = Message(
