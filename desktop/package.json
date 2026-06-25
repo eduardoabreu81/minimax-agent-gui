@@ -14,8 +14,8 @@
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
     "shots": "node scripts/screenshots.mjs",
-    "readme": "node scripts/generate-readme.mjs",
-    "docs": "npm run shots && npm run readme"
+    "guide": "node scripts/generate-readme.mjs",
+    "docs": "npm run shots && npm run guide"
   },
   "dependencies": {
     "@fontsource/inter": "^5.2.8",

@@ -1,351 +1,216 @@
 <div align="center">
 
-<img src="docs/assets/minimax-agent-gui-banner.png" alt="MiniMax Agent — Desktop" width="100%" />
+<img src="docs/assets/minimax-agent-gui-banner.png" alt="MiniMax Agent" width="100%" />
 
-# MiniMax Agent — Desktop
+# MiniMax Agent ☄
 
-**The all-in-one desktop workspace for MiniMax M3.** Chat, code, image, video, music, speech, MCP tools, skills, and agent workflows — in one Tauri app that updates itself.
+**The all-in-one desktop workspace for MiniMax M3.** Chat, code, generate image / video / music / speech, run skills and MCP tools, and let an autonomous agent carry the work across sessions — in one self-updating Tauri app.
 
-[![Tauri](https://img.shields.io/badge/Tauri-2.1-FFC131?logo=tauri&logoColor=white)](https://tauri.app/)
-[![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white)](https://react.dev/)
-[![Vite](https://img.shields.io/badge/Vite-5.4-646CFF?logo=vite&logoColor=white)](https://vitejs.dev/)
-[![Tailwind](https://img.shields.io/badge/Tailwind-3.4-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.4.0-blue.svg)](CHANGELOG.md)
+[![Tauri](https://img.shields.io/badge/Tauri-2.1-FFC131?style=for-the-badge&logo=tauri&logoColor=white)](https://tauri.app/)
+[![React](https://img.shields.io/badge/React-18-61DAFB?style=for-the-badge&logo=react&logoColor=white)](https://react.dev/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-Python-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![License](https://img.shields.io/badge/License-MIT-22c55e?style=for-the-badge)](LICENSE)
+[![Version](https://img.shields.io/badge/version-0.4.0-3b82f6?style=for-the-badge)](CHANGELOG.md)
 
-**[Releases](https://github.com/<owner>/minimax-agent-gui/releases)** · **[Help](#-in-app-help)** · **[Roadmap](#-roadmap)** · **[Report a Bug](https://github.com/<owner>/minimax-agent-gui/issues)**
+**[⬇ Download](https://github.com/eduardoabreu81/minimax-agent-gui/releases)** ·
+**[📖 User Guide](docs/USER_GUIDE.md)** ·
+**[🗺️ Roadmap](#-roadmap)** ·
+**[🐛 Report a Bug](https://github.com/eduardoabreu81/minimax-agent-gui/issues)**
 
 </div>
 
 ---
 
-## ✨ Highlights
+MiniMax Agent puts the whole MiniMax platform behind a single native window. It talks to **MiniMax M3** with a 1M-token context and a thinking block streamed live next to the reply, runs an autonomous **code agent** in a real workspace, generates media, and remembers who you are between sessions through a small set of `.agent/*.md` files. The backend is a bundled FastAPI sidecar — no CLI to install, no browser tabs, no separate web app.
 
-| | |
-|---|---|
-| 🧠 **M3 by default** — 1M-token context, native image/video input, adaptive thinking block streamed live alongside the response. |
-| 🎬 **Media Studio** — Generate image, video, music, and speech in one place. Reference audio for cover, voice design, voice clone. |
-| 💻 **Code Workspace** — File explorer, Monaco editor, xterm.js terminal, persistent code-chat with Composer (single source-of-truth input across Chat and Code panels). |
-| 🔌 **MCP & Skills** — Built-in web search and image understanding. Bring-your-own MCP servers. Slash-commands for reusable skill templates. |
-| 🧠 **Agent Context** — SOUL/IDENTITY/USER/MEMORY files persist across sessions. The agent picks up where it left off. |
-| 🔄 **Self-updating** — `tauri-plugin-updater` pulls signed releases from GitHub. You click "Restart", that's it. |
-| 🌍 **6 languages** — English, Português (BR), Español, 日本語, 한국어, 中文. |
+> **Heads up:** this is a desktop-first app. The Tauri shell is the only installable interface — everything (chat, media, code, settings) lives in one window that updates itself from signed GitHub releases.
 
----
+## ✨ Features
 
-## 🚀 What's new in v0.4.0
+<table>
+<tr>
+<td width="50%" valign="top">
 
-**Desktop-first migration.** The Tauri shell is now the only installable interface — no separate web app, no CLI to install, no browser tabs.
+### 🧠 Chat with M3
+1M-token context with native image and video input. The adaptive **thinking block** streams live alongside the answer. Per-turn model picker and thinking toggle, file attachments, `@`-ref autocomplete, and conversation search — all from one **Composer** shared with the Code panel.
 
-- **Tauri 2 shell** wrapping the existing FastAPI backend (bundled as a PyInstaller sidecar) — Rust + React + Vite, single 8 MB installer
-- **Auto-updater** wired through `tauri-plugin-updater` — Settings → About → Check for updates
-- **In-app Help** with `?` / `F1` shortcuts; the same markdown powers the README via `npm run docs`
-- **Skills system** — multi-source loader (User > Extra > Generic > Claude > Codex > Gemini > Built-in)
-- **Agent Context System** — SOUL/IDENTITY/USER/MEMORY/daily files mounted into the system prompt
-- **Subdirectory Hints** — `AGENTS.md` / `CLAUDE.md` / `.cursorrules` auto-discovered when the agent reads a file
-- **Composer** — single source-of-truth for chat input in both Chat and Code panels (slash menu, `@`-ref autocomplete, paperclip attachment, hard-limit guard)
-- **Task Board** with todo/plan tool wired into the agent — see live progress, in-progress lock, done-with-verification
-- **mmx CLI removed** — every MiniMax API call now goes through direct HTTP (`MiniMaxSyncClient` / `MiniMaxClient`)
+</td>
+<td width="50%" valign="top">
 
----
+### 💻 Code Agent
+A real workspace: file explorer, editor, and an integrated **xterm.js** terminal. Three execution modes — **Agent** (approve risky tools), **Plan** (edit the plan first), **YOLO** (hands-off). Live step-by-step activity stream.
 
-## 📸 Features
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
 
-### Chat with M3
+### 🎬 Media Studio
+**Image** (text-to-image + subject reference), **Video** (Hailuo text/image-to-video), **Music** (prompt or full lyrics, cover from reference), and **Speech** (30+ voices, voice clone, voice design). Each panel keeps a *Recent Generations* gallery.
 
-Real-time streaming of both the reasoning block and the final response. Per-turn model selector and thinking toggle. File attachments, image understanding, `@`-ref autocomplete (`@file:`, `@folder:`, `@diff`, `@staged`, `@git:N`, `@url:` — type the prefix and pick from the popover, the file content gets prepended to your message). Conversation search, session persistence, and per-turn context-attachment. Long-running workflows surface live steps in the activity panel.
+</td>
+<td width="50%" valign="top">
 
-<img src="desktop/docs/screenshots/chat.png" alt="Chat panel" width="900" />
+### 🧠 Agent Memory
+`SOUL / IDENTITY / USER / MEMORY` files persist the agent's personality and context across sessions, plus a daily session log. A `memory` tool lets long-running agents write back without losing the thread.
 
-### Media Studio
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
 
-Generate, iterate, and curate from one tab.
+### 🔌 Skills & MCP
+Built-in web search and image understanding. Bring-your-own MCP servers (stdio / SSE) from Settings. Reusable **skills** as slash-command templates, merged from a multi-source loader.
 
-- **Image** — T2I + I2I with subject reference for character-consistent variations. Aspect-ratio picker, batch generation, prompt optimizer, recent gallery.
-- **Video** — Hailuo-2.3 text-to-video and image-to-video with multiple durations, resolutions, frame interpolation, and subject reference. Per-generation progress polling.
-- **Music** — From prompts or full lyrics, instrumental mode, cover-from-reference-audio, and a built-in lyrics optimizer.
-- **Speech / TTS** — 30+ voices, streaming playback, async synthesis for long texts, voice clone from a 10s sample, voice design from a description, batch generation.
+</td>
+<td width="50%" valign="top">
 
-Every panel keeps a **Recent Generations** gallery that surfaces the last outputs plus any compatible file already in your workspace — so you never lose track of a generation between sessions.
+### 📋 Task Board
+When the agent plans multi-step work, todos appear in a board — **locked** while running, marked **done** only after the agent verifies. A live counter shows progress; tasks survive reloads.
 
-| Image | Music | Speech |
-|---|---|---|
-| ![Image](desktop/docs/screenshots/image.png) | ![Music](desktop/docs/screenshots/music.png) | ![Speech](desktop/docs/screenshots/speech.png) |
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
 
-### Code Workspace
+### 🔄 Self-updating
+`tauri-plugin-updater` pulls signed releases from GitHub. Settings → About → **Check for updates**, then click *Restart*. That's it.
 
-File explorer, Monaco-style editor, integrated xterm.js terminal, and a persistent code-chat session that knows which files you have open. The chat input is the same Composer used everywhere — single source-of-truth, same slash menu, same `@`-ref autocomplete.
+</td>
+<td width="50%" valign="top">
 
-**Three execution modes:**
-- **Agent** — asks for approval before risky tools (write/edit, shell, unknown, external MCP) via an inline Approve / Reject modal
-- **Plan** — agent drafts an editable plan first; you approve, then it runs end-to-end
-- **YOLO** — auto-approves everything for hands-off runs
+### 🌍 6 Languages
+English, Português (BR), Español, 日本語, 한국어, 中文 — UI **and** in-app help. Press `F1` or `?` anywhere for context-aware documentation.
 
-Live step-by-step activity stream, command-palette shortcuts, and a per-session coding workspace folder you pick on first launch.
+</td>
+</tr>
+</table>
 
-<img src="desktop/docs/screenshots/coding.png" alt="Code workspace" width="900" />
+## 📸 A look inside
 
-### Task Board
+<img src="desktop/docs/screenshots/chat.png" alt="Chat with M3 — thinking block streamed alongside the reply" width="100%" />
 
-When the agent plans multi-step work, todos appear in the workspace sidebar. Each task is **locked** while the agent runs it, then marked **done** only after the agent verifies the result. Live X/Y counter shows progress at a glance. Tasks survive session reloads.
+<table>
+<tr>
+<td><img src="desktop/docs/screenshots/coding.png" alt="Code Agent" /></td>
+<td><img src="desktop/docs/screenshots/image.png" alt="Media Studio — Image" /></td>
+</tr>
+<tr>
+<td align="center"><sub><b>Code Agent</b></sub></td>
+<td align="center"><sub><b>Media Studio</b></sub></td>
+</tr>
+</table>
 
-<img src="desktop/docs/screenshots/tasks.png" alt="Task board" width="900" />
-
-### Skills & MCP Tools
-
-**Skills** are reusable slash-command templates the agent invokes by name. Multi-source loader merges from user dir, extra configured dirs, generic skill hubs, and the bundled defaults — priority is `User > Extra > Generic > Claude > Codex > Gemini > Built-in`. Kimi/agentskills.io schema enforced server-side.
-
-**MCP (Model Context Protocol) tools** — built-in web search and image understanding are always available. Bring-your-own servers in **stdio** or **SSE** transport from Settings → MCP Servers: add, edit, enable/disable, delete, test connections, preview discovered tools. Tool names are namespaced as `mcp_{server_id}_{tool}` to avoid collisions.
-
-**Subdirectory Hints** — when the agent reads a file, it also picks up the nearest `AGENTS.md` / `CLAUDE.md` / `.cursorrules` walking up to 5 parent directories. Project context flows in automatically without you having to paste anything.
-
-### Agent Memory & Context
-
-**`.agent/*.md` files** persist the agent's identity and memory across sessions:
-- **SOUL** — agent personality preset
-- **IDENTITY** — name, role, communication style
-- **USER** — your profile, language preference, working context
-- **MEMORY** — long-term notes the agent can append to
-- **`daily/{YYYY-MM-DD}.md`** — automatic session log
-
-The first-run **Onboarding Wizard** walks you through filling them in. If files are missing or incomplete, an **IncompleteContextBanner** appears in the title bar with a one-click shortcut to fix it.
-
-The agent also has a **`memory` tool** to write back into these files during a run — long-running agents accumulate context without losing it between sessions.
-
-### Customization
-
-- **9 themes** including light/dark, matrix-rain, and accent variants — `Themes` in Settings
-- **6 languages** for the UI: English, Português (BR), Español, 日本語, 한국어, 中文
-- **Command Palette** (`Ctrl/Cmd+K`) — fuzzy-search every panel, action, and shortcut
-- **Keyboard shortcuts** — `?` and `F1` for Help, `Esc` to close modals, panel-specific shortcuts via Settings
-- **Onboarding** — first-launch wizard + the **QuickSettings** popover for in-flight tweaks
-- **Status Bar** at the bottom shows live model, plan tier, context usage, and a breakdown-by-source popover
-
-### Settings
-
-Index rail with all the knobs in one place: API key, default model, theme, language, **agent context** (edit SOUL/IDENTITY/USER/MEMORY in-app), **skills** (per-skill detail panel), **MCP Servers** (add/edit/test), **Generation Defaults** (audio format, image size), **Keyboard Shortcuts**, and **About** (with **Check for updates** button).
-
-<img src="desktop/docs/screenshots/settings.png" alt="Settings panel" width="900" />
-
-### Reliability
-
-- **Session Protection** — warns before navigating away, refreshing, or closing the tab when there's an active session with unsent content or pending approvals
-- **Auto-save** — every message persists to `workspace/conversations/` immediately; tab switch / refresh / restart picks up where you left off
-- **Conversation Search** — find past chats and code sessions by title, content, or attachment name
-- **Token attribution** — per-source breakdown (system prompt / skills / memory / MCP tools / default) in the StatusBar popover, so you can see what's eating your context window
-- **Compact events** — when context fills up, the backend summarizes automatically with a structured event log (force / auto / legacy compact_reason)
-
----
+> 📖 Full walkthroughs of every panel are in the **[User Guide](desktop/README.md)** — generated from the same markdown as the in-app Help, available in all six languages.
 
 ## ⚡ Quick Start
 
-### Prerequisites
+You install the app like any other desktop application — there's nothing to compile, no environment to set up, and no CLI to install.
 
-- **Python 3.10+**
-- **Node.js 18+**
-- **Rust toolchain** (stable) — install via [rustup](https://rustup.rs/)
-- **MiniMax API key** — get one at [platform.minimax.io](https://platform.minimax.io)
+### 1. Download
 
-### Run in dev mode
+Grab the installer for your platform from the [latest release](https://github.com/<owner>/minimax-agent-gui/releases/latest):
 
-```bash
-# 1. Clone
-git clone https://github.com/<owner>/minimax-agent-gui.git
-cd minimax-agent-gui
+| OS | File |
+|---|---|
+| **Windows** (x64) | `MiniMax-Agent_x.x.x_x64-setup.exe` |
+| **macOS** (Apple Silicon + Intel) | `MiniMax-Agent_x.x.x_universal.dmg` |
+| **Linux** (x64) | `MiniMax-Agent_x.x.x_amd64.AppImage` or `.deb` |
 
-# 2. Install Python deps
-pip install -e .
-pip install -r web/backend/requirements.txt
+### 2. Install
 
-# 3. Launch the Tauri shell
-cd desktop
-npm install
-npm run tauri:dev
-```
+- **Windows** — double-click the `.exe`, follow the wizard
+- **macOS** — open the `.dmg`, drag **MiniMax Agent** into **Applications**
+- **Linux** — `chmod +x MiniMax-Agent_*.AppImage && ./MiniMax-Agent_*.AppImage`, or `sudo dpkg -i MiniMax-Agent_*.deb`
 
-The first `tauri:dev` takes ~5 minutes (compiles Rust deps from scratch). Subsequent runs are fast — Vite hot-reloads the React frontend, and the Rust side rebuilds only on `src-tauri/` changes.
+### 3. Open & set up
 
-On launch, paste your API key into Settings → API. The key is stored locally in `config/config.yaml` (gitignored) and never leaves your machine.
+The first launch walks you through connecting your **MiniMax API key** (get one at [platform.minimax.io](https://platform.minimax.io)). The key is stored locally in `config/config.yaml` (gitignored) and never leaves your machine.
 
-> **Windows tip:** Use `py -3.10` instead of `python` if you have multiple Python versions on PATH. The PyInstaller sidecar is built against 3.10.
->
-> **Linux:** First build needs `libwebkit2gtk-4.1-dev`, `libappindicator3-dev`, `librsvg2-dev`, `patchelf`. See [Tauri Linux prerequisites](https://tauri.app/start/prerequisites/#linux).
+### 4. Stay up to date
 
-### Build a production installer
-
-```bash
-cd desktop
-npm run tauri:build
-```
-
-Generates platform-native installers in `desktop/src-tauri/target/release/bundle/`:
-- **Windows** — `.msi` + NSIS `.exe`
-- **macOS** — `.dmg` + `.app`
-- **Linux** — `.AppImage` + `.deb`
-
----
-
-## 🔄 Updates & Releases
-
-The app **updates itself** via `tauri-plugin-updater`. Settings → About → **Check for updates** polls GitHub Releases; if a newer version is signed with the matching key, it downloads in the background and prompts you to restart.
-
-Each release:
-
-1. **Tag** the commit: `git tag v0.4.1 && git push origin v0.4.1`
-2. **CI** (`.github/workflows/release.yml`) builds ubuntu/windows/macos in parallel
-3. **Tauri CLI** signs the bundles with `TAURI_SIGNING_PRIVATE_KEY` (GitHub Secret)
-4. **Per-target `*-updater.json`** is generated and uploaded alongside the installers
-5. **GitHub Release** is created with everything attached
-
-The app's updater polls those JSON files, verifies the signature against the pubkey baked into `tauri.conf.json > plugins.updater.pubkey`, and offers the update.
-
-### First-release setup (one-time)
-
-```bash
-# 1. Generate the signing key locally
-cargo install tauri-cli --version "^2.0"
-tauri signer generate -w ~/.tauri/minimax-agent.key.json
-
-# 2. Paste the PUBLIC key into desktop/src-tauri/tauri.conf.json:
-#      "plugins.updater.pubkey": "<base64 from the file>"
-# 3. Add the PRIVATE key contents (cat ~/.tauri/minimax-agent.key.json)
-#    as GitHub Secret: TAURI_SIGNING_PRIVATE_KEY
-#    Add a passphrase too if you set one: TAURI_SIGNING_PRIVATE_KEY_PASSWORD
-```
-
-> **macOS caveat:** `.dmg` won't install via the updater without an Apple Developer ID signing cert ($99/yr). Windows users get a SmartScreen warning without an EV cert ($300/yr). Linux has no such requirement.
-
----
-
-## 🌐 Cross-OS Builds
-
-GitHub Actions matrix builds all three platforms on every `v*` tag push. See `.github/workflows/release.yml`.
-
-```
-ubuntu-latest  ─┐
-windows-latest ─┼─► tauri build ─► sign ─► GitHub Release
-macos-latest   ─┘
-```
-
-Each runner rebuilds the Python backend sidecar (PyInstaller) for its native ABI before running `npm run tauri:build`. Build time: ~5–8 min on warm cache.
-
----
+Future versions roll out automatically — **Settings → About → Check for updates** pulls signed releases from GitHub and prompts a restart. No manual download required.
 
 ## 🏗️ Architecture
 
 ```
-┌──────────────────────────────────────────────────────────┐
-│                  Tauri shell (Rust)                       │
-│  ┌──────────────────────┐  ┌───────────────────────────┐ │
-│  │   React frontend     │  │   Bundled sidecar         │ │
-│  │   Vite + Tailwind     │◄─┤   FastAPI + Python        │ │
-│  │   (localhost:1420)    │  │   (localhost:8765)        │ │
-│  └──────────────────────┘  └───────────────────────────┘ │
-│         ▲                           ▲                   │
-│         │ tauri-plugin-updater      │ direct HTTP        │
-│         │ (GitHub Releases)         │ (no CLI)           │
-└──────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────┐
+│                      Tauri shell (Rust)                     │
+│  ┌──────────────────────┐   ┌───────────────────────────┐  │
+│  │   React frontend     │   │   Bundled sidecar         │  │
+│  │   Vite + Tailwind    │◄──┤   FastAPI + Python        │  │
+│  │   (localhost:1420)   │   │   (localhost:8765)        │  │
+│  └──────────────────────┘   └───────────────────────────┘  │
+│          ▲                            ▲                     │
+│          │ tauri-plugin-updater       │ direct HTTP         │
+│          │ (signed GitHub releases)   │ (no CLI)            │
+└────────────────────────────────────────────────────────────┘
 ```
 
-- **Frontend** (`desktop/src/`) — React 18 + Vite + Tailwind, single SPA with tab routing. Hot-reloads in dev, bundled into the Tauri shell for release.
-- **Backend** (`web/backend/`) — FastAPI + WebSocket for streaming chat. All MiniMax API calls go through `mini_max_mcp/client.py` (no subprocess, no `mmx` CLI).
-- **Agent** (`mini_agent/`) — Reusable async agent loop, LLM routing, tool execution, token summarization. Used by both the desktop app and the `mini-agent` CLI.
-- **Sidecar** (`desktop/src-tauri/binaries/backend`) — PyInstaller-bundled FastAPI for production. Built per-platform because the binaries aren't interchangeable.
+| Layer | Where | What |
+|---|---|---|
+| **Frontend** | `desktop/src/` | React 18 + Vite + Tailwind, single SPA with tab routing |
+| **Backend** | `web/backend/` | FastAPI + WebSocket streaming; all MiniMax calls via direct HTTP |
+| **Agent** | `mini_agent/` | Async agent loop, tool execution, token summarization |
+| **Sidecar** | `desktop/src-tauri/` | PyInstaller-bundled FastAPI, built per-platform |
 
-The Tauri shell auto-spawns the sidecar on launch; Vite proxy in dev forwards `/api` and `/ws` to the local backend.
-
----
+The shell auto-spawns the sidecar on launch; in dev, the Vite proxy forwards `/api` and `/ws` to the local backend.
 
 ## ⚙️ Configuration
 
 | File | Purpose |
 |---|---|
-| `config/config.yaml` | API key, region, default model, custom MCP servers, skills dir overrides (gitignored — secrets stay local) |
-| `desktop/src-tauri/tauri.conf.json` | Tauri shell config: window size, bundle targets, plugins.updater pubkey/endpoints, sidecar path |
-| `desktop/src/i18n/*.json` | 6 locale files (en, pt-BR, es, ja, ko, zh-CN) |
+| `config/config.yaml` | API key, region, default model, MCP servers, skills dirs (gitignored — secrets stay local) |
+| `desktop/src-tauri/tauri.conf.json` | Window, bundle targets, updater pubkey/endpoints, sidecar path |
+| `desktop/src/i18n/*.json` | The six locale files |
 
-Environment variables override `config/config.yaml`:
+Environment variables override the config: `MINIMAX_API_KEY` and `MINIMAX_API_BASE`.
 
-| Variable | Purpose |
-|---|---|
-| `MINIMAX_API_KEY` | Override API key |
-| `MINIMAX_API_BASE` | Override base URL (e.g. for proxies or alternative Anthropic-compatible endpoints) |
+## 🔄 Updates & Releases
 
----
+The app updates itself. **Settings → About → Check for updates** polls GitHub Releases; a newer version signed with the matching key downloads in the background and prompts a restart.
 
-## 💰 Pricing & Plans
+Releases are cut by pushing a `v*` tag — GitHub Actions builds ubuntu/windows/macos in parallel, signs the bundles with `TAURI_SIGNING_PRIVATE_KEY`, and attaches the per-target updater manifests. See [`.github/workflows/release.yml`](.github/workflows/release.yml).
 
-MiniMax Agent works with the new **MiniMax Token Plan** (credit-based, USD). The default chat model is **MiniMax M3** (with M2.7 and M2.7-highspeed as fallbacks). Prices are summarized from the official pricing page — always check [platform.minimax.io](https://platform.minimax.io) for the latest.
+> **Signing caveats:** macOS `.dmg` needs an Apple Developer ID ($99/yr) to install via the updater; Windows shows a SmartScreen warning without an EV cert. Linux has no such requirement.
 
-| Tier | Price | Includes |
-|---|---|---|
-| **Plus** | $20 / mo | M3 chat, image, speech, music. Multimodal input. **No** video generation, **no** MCP tool credit. |
-| **Max** | $50 / mo | Plus features + Hailuo video (3/day) + MCP tool credit. |
-| **Ultra** | $120 / mo | Max features with higher video limits (5/day) + priority credit refresh. |
+## 🛠️ For Developers
 
-> The Quota Dashboard and the plan badge in the sidebar call the Token Plan `remains` endpoint directly (`GET /v1/api/openplatform/coding_plan/remains`). If auto-detection fails, set `minimax.plan: plus|max|ultra` in `config/config.yaml` as a manual fallback.
+Want to hack on MiniMax Agent itself? See **[CONTRIBUTING.md](CONTRIBUTING.md)** for the full setup — prerequisites, dev-mode workflow, build pipeline, tests, and the release/signing setup.
 
----
+TL;DR: clone, `pip install -e .` + `pip install -r web/backend/requirements.txt` + `cd desktop && npm install` + `npm run tauri:dev`. Vite hot-reloads the React frontend; Rust only rebuilds on `src-tauri/` changes.
 
 ## 🗺️ Roadmap
 
-### Shipped (v0.4.0 — Tauri desktop-first)
-- [x] Tauri 2 shell (Rust) + Vite + React + Tailwind + shadcn-style components
-- [x] Speech (T2A) full stack — 30+ voices, async/sync, voice clone, voice design, streaming playback
-- [x] **Settings** index rail with all knobs in one panel
-- [x] **Status Bar** with live model + plan + context usage
-- [x] **Skills system** (multi-source, Kimi spec) — 175+ tests
-- [x] **Agent Context System** (`.agent/*.md`) — SOUL/IDENTITY/USER/MEMORY + daily logs
-- [x] **Composer** single source-of-truth (Chat + Code panels share the same input)
-- [x] **Task Board** with todo/plan tool — agent plans work, locks during execution, verifies on done
-- [x] **Subdirectory Hints** (PR D) — `AGENTS.md` / `CLAUDE.md` / `.cursorrules` auto-discovered on file reads
-- [x] **Auto-updater** via `tauri-plugin-updater` — signed releases, in-app download + restart
-- [x] **In-app Help** — markdown under `desktop/src/help/{locale}/` feeds both the Help panel and the README
-- [x] **mmx CLI removed** — app no longer depends on any external CLI
+**Shipped (v0.4.0 — desktop-first):**
+Tauri 2 shell · full Speech stack (clone + design) · Settings index rail · live Status Bar · multi-source Skills · Agent Context (`.agent/*.md`) · shared Composer · Task Board · subdirectory hints · auto-updater · bilingual in-app Help.
 
-### Next
-- [ ] **Personality presets** — 5 SOUL.md presets (concise / friendly / mentor / expert / creative)
-- [ ] **CLAUDE.md / .cursorrules startup loading** + cursor/rules/*.mdc support
-- [ ] **Quota Dashboard refinements** — per-tier model semantics polish
-- [ ] **GitHub Releases automation** — first signed release end-to-end
+**Next:**
+- [ ] Personality presets (concise / friendly / mentor / expert / creative)
+- [ ] `CLAUDE.md` / `.cursorrules` startup loading
+- [ ] Quota Dashboard refinements
+- [ ] First fully-signed GitHub Release, end to end
 
----
+## 📖 Documentation
 
-## ❓ In-app Help
+- **[User Guide](docs/USER_GUIDE.md)** — full walkthrough of every panel, generated from the in-app Help.
+- **In-app Help** — press `F1` or `?` anywhere (when not typing), in any of the six languages.
+- **[AGENTS.md](AGENTS.md)** — the canonical guide for AI agents working on this codebase.
 
-Press **`?`** from anywhere (when not typing into a field) or **`F1`** to open the in-app Help panel. The same keyboard shortcut works in Chat, Code, Media panels, and Settings.
-
-Help topics in `desktop/src/help/{locale}/{topic}.md` (en + pt-BR translated; other locales fall back to en). Generate the README from the same markdown:
+The Help, the User Guide, and the screenshots all come from one source. To refresh them:
 
 ```bash
 cd desktop
-npm run docs      # screenshots + readme in one go
-npm run readme    # regenerate desktop/README.md from current help content
-npm run shots     # capture fresh screenshots via Playwright
+npm run docs      # capture screenshots + regenerate docs/USER_GUIDE.md
 ```
-
----
 
 ## 🤝 Contributing
 
 Issues and PRs welcome at [github.com/<owner>/minimax-agent-gui/issues](https://github.com/<owner>/minimax-agent-gui/issues).
 
-For local development:
+For **development setup** (clone, dev mode, build, tests, project conventions), see **[CONTRIBUTING.md](CONTRIBUTING.md)**.
 
-```bash
-# Run frontend tests
-cd desktop && npm test
-
-# Run backend tests (pytest, requires py -3.10)
-py -3.10 -m pytest tests/
-
-# Lint / type-check the Rust side
-cd desktop/src-tauri && cargo clippy
-```
-
-`AGENTS.md` (in the repo root) is the canonical guide for AI agents working on this codebase. Read it before opening a PR.
-
----
+For **architecture decisions, gotchas, and the canonical guide for AI agents working on this codebase**, see **[AGENTS.md](AGENTS.md)**.
 
 ## 📜 License
 
@@ -354,7 +219,5 @@ MIT — see [LICENSE](LICENSE).
 ---
 
 <div align="center">
-
-<sub>Made with care for the MiniMax community · Powered by **MiniMax M3**</sub>
-
+<sub>Made with care for the MiniMax community · Powered by <b>MiniMax M3</b></sub>
 </div>
