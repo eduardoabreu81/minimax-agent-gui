@@ -456,6 +456,15 @@ pub fn run() {
         // Native folder picker used by the CodingPanel header to pick a
         // per-session coding workspace. See WorkspacePicker.jsx.
         .plugin(tauri_plugin_dialog::init())
+        // Auto-updater — checks GitHub Releases for newer versions and
+        // applies signed updates on relaunch. Configured via
+        // `plugins.updater` in tauri.conf.json. Frontend wires the
+        // "Check for updates" button in Settings → About to
+        // `@tauri-apps/plugin-updater`.
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        // Process plugin — used by the updater flow to relaunch the app
+        // after downloadAndInstall completes.
+        .plugin(tauri_plugin_process::init())
         .manage(BackendProcess(Mutex::new(None)))
         .manage(BackendJob(Mutex::new(None)))
         .invoke_handler(tauri::generate_handler![

@@ -335,6 +335,37 @@ feature back to the web SPA, do it in the fork.
   no longer appear. If you grep for them, you'll find nothing.
 - **Model is user-selectable in Settings** — system prompts use the `{model}` placeholder, do not hardcode M3 (or M2.7) in new code.
 
+## Auto-updater
+
+- **Plugin:** `@tauri-apps/plugin-updater` (Rust) + `@tauri-apps/plugin-updater` (npm).
+  Wired in `desktop/src-tauri/src/lib.rs` via `tauri_plugin_updater::Builder::new().build()`.
+- **Configuration:** `desktop/src-tauri/tauri.conf.json > plugins.updater`. Endpoints
+  point at `https://github.com/<owner>/minimax-agent-gui/releases/latest/download/...`.
+  The `pubkey` field MUST be replaced with the Ed25519 public key from `tauri signer generate`
+  before the first release — until then the updater rejects everything.
+- **Capabilities:** `desktop/src-tauri/capabilities/default.json` grants
+  `updater:default`, `process:default`, `process:allow-relaunch`.
+- **Frontend UI:** Settings → About → Update row (auto-update check, download,
+  relaunch). State machine in `SettingsPanel.jsx`: `idle | checking | upToDate | available | downloading | readyToRestart | error`.
+- **Release pipeline:** `.github/workflows/release.yml` runs on `v*` tag push.
+  Builds ubuntu/windows/macos in parallel, signs with `TAURI_SIGNING_PRIVATE_KEY`
+  (from GitHub Secrets), generates per-target `*-updater.json`, uploads to GitHub
+  Release. The updater plugin polls those JSONs to detect new versions.
+- **Required GitHub Secrets (set in repo Settings → Secrets):**
+  - `TAURI_SIGNING_PRIVATE_KEY` — output of `tauri signer generate`
+  - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` — passphrase (empty string if none)
+  - `APPLE_CERTIFICATE` / `APPLE_CERTIFICATE_PASSWORD` / `APPLE_SIGNING_IDENTITY` —
+    macOS only; optional for first releases, required before distributing `.dmg`
+- **Generating the signing key (one-time, locally):**
+  ```bash
+  cargo install tauri-cli --version "^2.0"
+  tauri signer generate -w ~/.tauri/minimax-agent.key.json
+  # Public key (safe to commit) → desktop/src-tauri/tauri.conf.json > plugins.updater.pubkey
+  # Private key contents → GitHub Secret TAURI_SIGNING_PRIVATE_KEY
+  ```
+- **macOS caveat:** `.dmg` won't install via the updater without Apple Developer ID
+  signing ($99/yr). Windows users get a SmartScreen warning without EV cert signing.
+
 ## Token Plan video limits (canonical)
 
 Backend `web/backend/main.py` (`_detect_plan_from_api` + the quota

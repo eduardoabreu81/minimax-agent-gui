@@ -1,0 +1,136 @@
+# Release workflow — runs on every `v*` tag push.
+#
+# Builds the desktop app for ubuntu/windows/macos, signs the bundles
+# with the Tauri signing key (Ed25519, EdDSA), and uploads everything
+# (binaries + per-target `*-updater.json`) to a GitHub Release.
+#
+# The `*-updater.json` files are what the in-app auto-updater polls
+# (see tauri.conf.json plugins.updater.endpoints). The updater plugin
+# verifies each release against the pubkey in tauri.conf.json before
+# applying — unsigned updates are rejected client-side.
+#
+# Required GitHub Secrets:
+#   TAURI_SIGNING_PRIVATE_KEY       — contents of `tauri signer generate` output
+#   TAURI_SIGNING_PRIVATE_KEY_PASSWORD — passphrase for the signing key (if any)
+#   APPLE_CERTIFICATE               — base64 .p12 (macOS only, optional)
+#   APPLE_CERTIFICATE_PASSWORD      — .p12 password (macOS only, optional)
+#   APPLE_SIGNING_IDENTITY          — "Developer ID Application: <Name> (<Team>)"
+
+name: Release desktop
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: desktop/package-lock.json
+
+      # Linux needs WebKitGTK + co deps for Tauri to build.
+      - name: Install Linux system deps
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri
+
+      - name: Install npm deps
+        working-directory: desktop
+        run: npm ci
+
+      # The backend sidecar (PyInstaller-bundled FastAPI) is built per-OS
+      # because Windows/Linux/macOS binaries aren't interchangeable.
+      # Runs before `tauri build` so the sidecar gets embedded.
+      - name: Build backend sidecar
+        working-directory: desktop
+        run: |
+          pip install pyinstaller
+          cd ../web/backend
+          pyinstaller --onefile --name backend main.py --distpath ../../desktop/src-tauri/binaries
+
+      - name: Build Tauri app
+        working-directory: desktop
+        run: npm run tauri:build
+        env:
+          # Tauri CLI picks these up automatically to sign all bundles +
+          # emit the per-target *-updater.json that the auto-updater polls.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # macOS-only (no-op on other runners).
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: minimax-agent-${{ matrix.os }}
+          if-no-files-found: ignore
+          path: |
+            desktop/src-tauri/target/release/bundle/dmg/*.dmg
+            desktop/src-tauri/target/release/bundle/macos/*.app
+            desktop/src-tauri/target/release/bundle/msi/*.msi
+            desktop/src-tauri/target/release/bundle/nsis/*.exe
+            desktop/src-tauri/target/release/bundle/appimage/*.AppImage
+            desktop/src-tauri/target/release/bundle/deb/*.deb
+            desktop/src-tauri/target/release/bundle/*-updater.json
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Flatten artifacts
+        run: |
+          mkdir -p release
+          find artifacts -type f \( -name "*.msi" -o -name "*.exe" -o -name "*.dmg" -o -name "*.AppImage" -o -name "*.deb" -o -name "*-updater.json" \) -exec mv {} release/ \;
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            release/*

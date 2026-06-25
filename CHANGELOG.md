@@ -7,28 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > **Note:** Pre-0.3.0 history lives in [docs/PROJECT_LOG.md](docs/PROJECT_LOG.md)
 > and [git history](https://github.com/<owner>/minimax-agent-gui/commits/main).
 
-## [Unreleased] — mmx CLI dependency removed
-
-The app is **fully independent of the `mmx` CLI**. Users no longer need to
-install any external CLI to run MiniMax Agent GUI — every MiniMax API call
-goes through direct HTTP via `mini_max_mcp/client.py`.
+## [Unreleased] — mmx CLI dependency removed + auto-updater
 
 ### Removed
-- **`POST /api/minimax/cli`** — generic endpoint that wrapped `mmx` CLI as a
-  subprocess. Dead code (zero callers since Music/Video/Image/Speech panels
-  migrated to direct REST endpoints). Also removed the `CLIRequest` Pydantic
-  class it was the sole consumer of.
+- **`POST /api/minimax/cli`** — generic endpoint that wrapped `mmx` as a subprocess.
+  Dead code (zero callers since Music/Video/Image/Speech panels migrated to direct
+  REST endpoints). Also removed the `CLIRequest` Pydantic class it was the sole
+  consumer of.
+
+### Added
+- **`tauri-plugin-updater` + `tauri-plugin-process`** — wired in
+  `desktop/src-tauri/src/lib.rs`. Frontend adds an "Update" row in
+  Settings → About with check / download / restart actions.
+  Capabilities granted: `updater:default`, `process:default`, `process:allow-relaunch`.
+- **`.github/workflows/release.yml`** — runs on `v*` tag push. Builds
+  ubuntu/windows/macos in parallel, signs bundles with `TAURI_SIGNING_PRIVATE_KEY`
+  (from Secrets), generates per-target `*-updater.json`, publishes GitHub Release.
+- **`desktop/src/i18n/{en,pt-BR}.json`** — `settings.update.*` keys (check,
+  checking, upToDate, available, download, downloading, restart, error).
+  Other 4 locales fall back to `en` per existing fallbackLng config.
 
 ### Changed
 - **`AGENTS.md`** — dropped the `mmx` subprocess note from Windows-Specific
   Notes; rewrote "No CLI dependency" section to enumerate the direct-HTTP
-  endpoints for every capability.
+  endpoints for every capability. Added new "Auto-updater" section documenting
+  plugin wiring, key generation, and release pipeline.
 - **`README.md`** — Plan auto-detection note no longer mentions the CLI
   fallback path.
-- **`web/backend/main.py`** — historical comments now say "legacy" instead
-  of "mmx-based" where they document what was replaced.
+- **`desktop/src/components/settings/SettingsPanel.jsx`** — historical comments now
+  say "legacy" instead of "mmx-based"; Settings → About gains an Update row.
 - **`desktop/src/components/Sidebar.jsx`** — quota-fetch comment no longer
   references the legacy `mmx` heuristic.
+
+### Requires setup before first release
+1. Generate signing key locally: `cargo install tauri-cli && tauri signer generate`
+2. Replace `REPLACE_WITH_TAURI_SIGNER_PUBLIC_KEY_BASE64` in
+   `desktop/src-tauri/tauri.conf.json > plugins.updater.pubkey` with the
+   public key.
+3. Add `TAURI_SIGNING_PRIVATE_KEY` (and `_PASSWORD` if set) to GitHub
+   repo Settings → Secrets.
 
 ## [0.4.0] — 2026-06-21 — Desktop-first migration (Tauri)
 

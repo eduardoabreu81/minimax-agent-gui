@@ -1,14 +1,16 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Globe, Moon, Sun, Key, Cpu, Shield, Keyboard,
   Info, Check, AlertCircle, Save, RotateCcw, Eye, EyeOff,
   MapPin, BarChart3, Lock, Unlock, Search, Monitor, Palette, User, Trash2, Pencil, Activity, Server,
-  Boxes, Sparkles, Github, Sliders, Loader2, Brain, ExternalLink
+  Boxes, Sparkles, Github, Sliders, Loader2, Brain, ExternalLink, RefreshCw, Download
 } from 'lucide-react'
 import { useTheme } from '../../context/ThemeContext'
 import { apiFetch } from '../../lib/api.js'
 import pkg from '../../../package.json'
+import { check } from '@tauri-apps/plugin-updater'
+import { relaunch } from '@tauri-apps/plugin-process'
 import SkillsTab from './SkillsTab.jsx'
 import { useContextModal } from '../agent-context/ContextProvider.jsx'
 
@@ -543,6 +545,55 @@ export default function SettingsPanel() {
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
     setActiveSection(section.id)
   }
+
+  // ─── Auto-updater state ───────────────────────────────────────────────
+  // 'idle' = no check yet; 'checking' = in-flight; 'upToDate' = latest;
+  // 'available' = update found, not downloaded; 'downloading' = in progress;
+  // 'readyToRestart' = downloaded + installed, app needs to relaunch to apply;
+  // 'error' = check or download failed (see updateError for details).
+  const [updateStatus, setUpdateStatus] = useState('idle')
+  const [updateVersion, setUpdateVersion] = useState(null)
+  const [updateError, setUpdateError] = useState(null)
+
+  const handleCheckUpdate = useCallback(async () => {
+    setUpdateStatus('checking')
+    setUpdateError(null)
+    try {
+      const update = await check()
+      if (update?.available) {
+        setUpdateVersion(update.version)
+        setUpdateStatus('available')
+      } else {
+        setUpdateStatus('upToDate')
+      }
+    } catch (e) {
+      setUpdateError(String(e?.message || e))
+      setUpdateStatus('error')
+    }
+  }, [])
+
+  const handleDownloadAndInstall = useCallback(async () => {
+    setUpdateStatus('downloading')
+    setUpdateError(null)
+    try {
+      // check() again to get a fresh handle, then download+install.
+      // The plugin handles signature verification against the pubkey
+      // configured in tauri.conf.json — unsigned/mismatched updates
+      // throw before any bytes hit disk.
+      const update = await check()
+      if (update?.available) {
+        await update.downloadAndInstall()
+        setUpdateStatus('readyToRestart')
+      }
+    } catch (e) {
+      setUpdateError(String(e?.message || e))
+      setUpdateStatus('error')
+    }
+  }, [])
+
+  const handleRestart = useCallback(async () => {
+    await relaunch()
+  }, [])
 
   return (
     <div className="flex-1 flex overflow-hidden">
@@ -1256,6 +1307,62 @@ export default function SettingsPanel() {
               <Github size={13} />
               {t('settings.github')}
             </button>
+          </div>
+
+          {/* Update row — auto-updater (tauri-plugin-updater). Status text
+              drives the button label and the disabled state. The actual
+              download+install is signed-verify-gated server-side via the
+              pubkey in tauri.conf.json; unsigned/mismatched updates throw
+              before any bytes hit disk. */}
+          <div className="border-t border-border px-5 py-4 flex items-center gap-3">
+            <div className="flex-1 min-w-0">
+              <div className="text-[12px] font-medium text-foreground">
+                {updateStatus === 'idle' && t('settings.update.check')}
+                {updateStatus === 'checking' && t('settings.update.checking')}
+                {updateStatus === 'upToDate' && t('settings.update.upToDate')}
+                {updateStatus === 'available' && t('settings.update.available', { version: updateVersion })}
+                {updateStatus === 'downloading' && t('settings.update.downloading')}
+                {updateStatus === 'readyToRestart' && t('settings.update.restart')}
+                {updateStatus === 'error' && t('settings.update.error')}
+              </div>
+              {updateStatus === 'error' && updateError && (
+                <div className="text-[10.5px] text-muted-foreground truncate" title={updateError}>
+                  {updateError}
+                </div>
+              )}
+            </div>
+
+            {updateStatus === 'idle' || updateStatus === 'upToDate' || updateStatus === 'error' ? (
+              <button
+                onClick={handleCheckUpdate}
+                disabled={updateStatus === 'checking'}
+                className="h-[32px] px-3 rounded-[8px] border border-border bg-transparent text-foreground text-[12px] font-medium hover:border-primary/50 transition-colors flex items-center gap-1.5 disabled:opacity-50"
+              >
+                <RefreshCw size={12} className={updateStatus === 'checking' ? 'animate-spin' : ''} />
+                {t('settings.update.check')}
+              </button>
+            ) : updateStatus === 'available' ? (
+              <button
+                onClick={handleDownloadAndInstall}
+                className="h-[32px] px-3 rounded-[8px] bg-primary hover:bg-primary-hover text-white text-[12px] font-medium transition-colors flex items-center gap-1.5"
+              >
+                <Download size={12} />
+                {t('settings.update.download')}
+              </button>
+            ) : updateStatus === 'downloading' ? (
+              <button disabled className="h-[32px] px-3 rounded-[8px] bg-primary/50 text-white text-[12px] font-medium flex items-center gap-1.5 cursor-wait">
+                <Loader2 size={12} className="animate-spin" />
+                {t('settings.update.downloading')}
+              </button>
+            ) : updateStatus === 'readyToRestart' ? (
+              <button
+                onClick={handleRestart}
+                className="h-[32px] px-3 rounded-[8px] bg-primary hover:bg-primary-hover text-white text-[12px] font-medium transition-colors flex items-center gap-1.5"
+              >
+                <RefreshCw size={12} />
+                {t('settings.update.restart')}
+              </button>
+            ) : null}
           </div>
         </Card>
 

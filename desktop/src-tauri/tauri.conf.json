@@ -48,5 +48,17 @@
     "longDescription": "Professional desktop app for the MiniMax Agent platform with multi-expert support, code workspace, and persistent memory.",
     "publisher": "MiniMax",
     "copyright": "Copyright (c) 2026 MiniMax"
+  },
+  "plugins": {
+    "updater": {
+      "active": true,
+      "endpoints": [
+        "https://github.com/<owner>/minimax-agent-gui/releases/latest/download/{{target}}-{{arch}}.json"
+      ],
+      "pubkey": "REPLACE_WITH_TAURI_SIGNER_PUBLIC_KEY_BASE64",
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

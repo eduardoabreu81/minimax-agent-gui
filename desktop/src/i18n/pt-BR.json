@@ -209,6 +209,16 @@
     "serverRemoved": "Servidor removido",
     "version": "Versão {version} · atualizado",
     "github": "GitHub",
+    "update": {
+      "check": "Verificar atualizações",
+      "checking": "Verificando…",
+      "upToDate": "Você está na versão mais recente",
+      "available": "Atualização disponível: v{version}",
+      "download": "Baixar e instalar",
+      "downloading": "Baixando…",
+      "restart": "Reiniciar para aplicar",
+      "error": "Não foi possível verificar atualizações"
+    },
     "savedSuccess": "Configurações salvas com sucesso!",
     "apiKeySaved": "Chave da API salva.",
     "agentSaved": "Configurações do agente salvas.",

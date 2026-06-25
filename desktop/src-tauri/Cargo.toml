@@ -1,6 +1,6 @@
 [package]
 name = "minimax-agent-desktop"
-version = "0.1.0"
+version = "0.4.0"
 description = "MiniMax Agent Desktop - Tauri shell"
 authors = ["Eduardo"]
 edition = "2021"
@@ -20,6 +20,13 @@ tauri-plugin-shell = "2.0"
 # Frontend calls `open({ directory: true })` from
 # `@tauri-apps/plugin-dialog` to pick a coding workspace folder.
 tauri-plugin-dialog = "2.0"
+# Auto-updater — app checks GitHub Releases on launch / on demand,
+# downloads signed update metadata + payload, and applies on relaunch.
+# See .github/workflows/release.yml for the signed-release pipeline.
+tauri-plugin-updater = "2.0"
+# Process plugin — required by the updater flow to relaunch the app
+# after a successful download+install.
+tauri-plugin-process = "2.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 

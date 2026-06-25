@@ -18,6 +18,9 @@
     "core:path:default",
     "shell:allow-open",
     "dialog:default",
-    "dialog:allow-open"
+    "dialog:allow-open",
+    "updater:default",
+    "process:default",
+    "process:allow-relaunch"
   ]
 }
