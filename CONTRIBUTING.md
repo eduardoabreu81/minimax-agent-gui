@@ -2,7 +2,7 @@
 
 Thanks for your interest in contributing. This document covers the **development workflow** — for the public-facing product documentation, see [README.md](README.md). For architecture decisions, conventions, and gotchas, see [AGENTS.md](AGENTS.md).
 
-> If you're **using** MiniMax Agent and want to install the app, you don't need this page — go to the [latest release](https://github.com/<owner>/minimax-agent-gui/releases/latest) and grab the installer.
+> If you're **using** MiniMax Agent and want to install the app, you don't need this page — go to the [latest release](https://github.com/eduardoabreu81/minimax-agent-gui/releases/latest) and grab the installer.
 
 ## Prerequisites
 
@@ -18,13 +18,13 @@ Thanks for your interest in contributing. This document covers the **development
 
 - **Linux** — `sudo apt install libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf build-essential`
 - **macOS** — Xcode Command Line Tools (`xcode-select --install`)
-- **Windows** — Microsoft Visual Studio Build Tools with the "Desktop development with C++" workload (MSVC toolchain is **already installed** on the project's reference machine — don't reinstall)
+- **Windows** — Microsoft Visual Studio Build Tools with the "Desktop development with C++" workload (provides the MSVC toolchain Rust links against)
 
 ## First-time setup
 
 ```bash
 # 1. Clone
-git clone https://github.com/<owner>/minimax-agent-gui.git
+git clone https://github.com/eduardoabreu81/minimax-agent-gui.git
 cd minimax-agent-gui
 
 # 2. Python deps (root: the reusable agent library)
@@ -80,7 +80,7 @@ cd desktop/src-tauri && cargo clippy
 
 The frontend test suite uses Vitest + jsdom + @testing-library. Tests live next to source as `*.test.{ts,tsx,jsx}`. Mocks go in `vitest.setup.js`.
 
-The backend suite is `pytest` + `pytest-asyncio`. Some tests require a live API key in `config/config.yaml`; unit tests for tools run without one. **Use `py -3.10` on Windows** — the hermes venv is on 3.10; calling plain `pytest` from a 3.11 venv produces ~16 spurious failures.
+The backend suite is `pytest` + `pytest-asyncio`. Some tests require a live API key in `config/config.yaml`; unit tests for tools run without one. **Use `py -3.10` on Windows** — the sidecar targets Python 3.10; running the suite from a 3.11 venv produces ~16 spurious failures.
 
 ## Build a production installer
 

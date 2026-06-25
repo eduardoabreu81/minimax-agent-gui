@@ -101,7 +101,7 @@ English, Português (BR), Español, 日本語, 한국어, 中文 — UI **and** 
 </tr>
 </table>
 
-> 📖 Full walkthroughs of every panel are in the **[User Guide](desktop/README.md)** — generated from the same markdown as the in-app Help, available in all six languages.
+> 📖 Full walkthroughs of every panel are in the **[User Guide](docs/USER_GUIDE.md)** — generated from the same markdown as the in-app Help, available in all six languages.
 
 ## ⚡ Quick Start
 
@@ -109,7 +109,7 @@ You install the app like any other desktop application — there's nothing to co
 
 ### 1. Download
 
-Grab the installer for your platform from the [latest release](https://github.com/<owner>/minimax-agent-gui/releases/latest):
+Grab the installer for your platform from the [latest release](https://github.com/eduardoabreu81/minimax-agent-gui/releases/latest):
 
 | OS | File |
 |---|---|
@@ -166,19 +166,9 @@ The shell auto-spawns the sidecar on launch; in dev, the Vite proxy forwards `/a
 
 Environment variables override the config: `MINIMAX_API_KEY` and `MINIMAX_API_BASE`.
 
-## 🔄 Updates & Releases
+## 🔄 Updates
 
-The app updates itself. **Settings → About → Check for updates** polls GitHub Releases; a newer version signed with the matching key downloads in the background and prompts a restart.
-
-Releases are cut by pushing a `v*` tag — GitHub Actions builds ubuntu/windows/macos in parallel, signs the bundles with `TAURI_SIGNING_PRIVATE_KEY`, and attaches the per-target updater manifests. See [`.github/workflows/release.yml`](.github/workflows/release.yml).
-
-> **Signing caveats:** macOS `.dmg` needs an Apple Developer ID ($99/yr) to install via the updater; Windows shows a SmartScreen warning without an EV cert. Linux has no such requirement.
-
-## 🛠️ For Developers
-
-Want to hack on MiniMax Agent itself? See **[CONTRIBUTING.md](CONTRIBUTING.md)** for the full setup — prerequisites, dev-mode workflow, build pipeline, tests, and the release/signing setup.
-
-TL;DR: clone, `pip install -e .` + `pip install -r web/backend/requirements.txt` + `cd desktop && npm install` + `npm run tauri:dev`. Vite hot-reloads the React frontend; Rust only rebuilds on `src-tauri/` changes.
+The app updates itself. **Settings → About → Check for updates** polls GitHub Releases; when a newer signed version is available it downloads in the background and prompts you to restart. No manual download required.
 
 ## 🗺️ Roadmap
 
@@ -197,20 +187,12 @@ Tauri 2 shell · full Speech stack (clone + design) · Settings index rail · li
 - **In-app Help** — press `F1` or `?` anywhere (when not typing), in any of the six languages.
 - **[AGENTS.md](AGENTS.md)** — the canonical guide for AI agents working on this codebase.
 
-The Help, the User Guide, and the screenshots all come from one source. To refresh them:
-
-```bash
-cd desktop
-npm run docs      # capture screenshots + regenerate docs/USER_GUIDE.md
-```
-
 ## 🤝 Contributing
 
-Issues and PRs welcome at [github.com/<owner>/minimax-agent-gui/issues](https://github.com/<owner>/minimax-agent-gui/issues).
+Issues and PRs are welcome at [github.com/eduardoabreu81/minimax-agent-gui/issues](https://github.com/eduardoabreu81/minimax-agent-gui/issues).
 
-For **development setup** (clone, dev mode, build, tests, project conventions), see **[CONTRIBUTING.md](CONTRIBUTING.md)**.
-
-For **architecture decisions, gotchas, and the canonical guide for AI agents working on this codebase**, see **[AGENTS.md](AGENTS.md)**.
+- **Want to hack on the app?** [CONTRIBUTING.md](CONTRIBUTING.md) has the full dev setup — prerequisites, dev workflow, build pipeline, tests, and conventions.
+- **Architecture, gotchas, and the canonical guide for AI agents** live in [AGENTS.md](AGENTS.md).
 
 ## 📜 License
 
