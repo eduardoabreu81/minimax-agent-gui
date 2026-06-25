@@ -1063,6 +1063,37 @@ feel like part of the same control surface as the slash menu.
   `api_base` override is intended for proxies or advanced routing
   only.
 
+### Added — Task planning discipline (system prompt + tool description)
+
+- **System prompt gains a "Task Planning & Tracking" section**
+  (`mini_agent/config/system_prompt.md`) — teaches the agent
+  the discipline to apply before creating tasks via the
+  `tasks_create` tool. Three quality filters: **certainty**
+  (every task must have a verifiable definition of done),
+  **coherence** (the task set must form a logical sequence
+  with no duplicates or overlap), and **action-orientation**
+  (titles start with a verb and name the outcome). The
+  section also covers lifecycle discipline: create the full
+  plan upfront, mark `in-progress` right before starting,
+  mark `done` only after the work is actually verified
+  (file saved and checked, test run and passed, output
+  inspected), and never mark `done` to "move on" — that
+  erodes the board's meaning.
+- **`tasks_create` tool description references the new section**
+  (`mini_agent/tools/tasks_tool.py`) — the inline description
+  now tells the agent to use the tool only for 3+ step /
+  multi-turn requests, requires a verifiable definition of
+  done, and points to the system prompt section for the
+  full discipline. Stops the agent from spamming the board
+  with single-action or vague tasks.
+- **Regression guard** — `tests/test_system_prompt.py`
+  (NEW, 5 tests) parses the system prompt and asserts the
+  section exists, references both `tasks_create` and
+  `tasks_update`, covers the three quality filters, covers
+  the lifecycle discipline, and explicitly warns against
+  marking done prematurely. Catches accidental removal of
+  the guidance.
+
 ## [0.3.1] — 2026-06-02 — Stub cleanup
 
 Follow-up to 0.3.0: removes the last batch of UI stubs that survived
