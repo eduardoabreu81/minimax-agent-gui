@@ -11,7 +11,8 @@
     "video": "비디오",
     "code": "코드",
     "tasks": "작업",
-    "settings": "설정"
+    "settings": "설정",
+    "help": "도움말"
   },
   "sidebar": {
     "allInOne": "올인원 플랫폼",

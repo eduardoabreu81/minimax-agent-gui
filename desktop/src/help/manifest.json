@@ -1,0 +1,96 @@
+{
+  "$comment": "Single source of truth for the in-app Help panel AND the generated README. Each topic maps to <lang>/<id>.md. Missing locales fall back to 'en' (mirrors i18next fallbackLng). 'icon' is a lucide-react component name. 'readme' controls whether the topic is included in the generated README and in what order (omit or false to keep a topic in-app only).",
+  "topics": [
+    {
+      "id": "getting-started",
+      "icon": "Rocket",
+      "readme": true,
+      "title": {
+        "en": "Getting Started",
+        "pt-BR": "Primeiros Passos",
+        "es": "Primeros Pasos",
+        "ja": "はじめに",
+        "ko": "시작하기",
+        "zh-CN": "快速开始"
+      }
+    },
+    {
+      "id": "chat",
+      "icon": "MessageSquare",
+      "readme": true,
+      "title": {
+        "en": "Chat",
+        "pt-BR": "Chat",
+        "es": "Chat",
+        "ja": "チャット",
+        "ko": "채팅",
+        "zh-CN": "聊天"
+      }
+    },
+    {
+      "id": "coding",
+      "icon": "Code2",
+      "readme": true,
+      "title": {
+        "en": "Code Agent",
+        "pt-BR": "Agente de Código",
+        "es": "Agente de Código",
+        "ja": "コードエージェント",
+        "ko": "코드 에이전트",
+        "zh-CN": "代码智能体"
+      }
+    },
+    {
+      "id": "media",
+      "icon": "Image",
+      "readme": true,
+      "title": {
+        "en": "Media Studio",
+        "pt-BR": "Estúdio de Mídia",
+        "es": "Estudio de Medios",
+        "ja": "メディアスタジオ",
+        "ko": "미디어 스튜디오",
+        "zh-CN": "媒体工作室"
+      }
+    },
+    {
+      "id": "tasks",
+      "icon": "Layout",
+      "readme": true,
+      "title": {
+        "en": "Task Board",
+        "pt-BR": "Quadro de Tarefas",
+        "es": "Tablero de Tareas",
+        "ja": "タスクボード",
+        "ko": "작업 보드",
+        "zh-CN": "任务面板"
+      }
+    },
+    {
+      "id": "settings",
+      "icon": "Settings",
+      "readme": true,
+      "title": {
+        "en": "Settings",
+        "pt-BR": "Configurações",
+        "es": "Configuración",
+        "ja": "設定",
+        "ko": "설정",
+        "zh-CN": "设置"
+      }
+    },
+    {
+      "id": "shortcuts",
+      "icon": "Keyboard",
+      "readme": true,
+      "title": {
+        "en": "Keyboard Shortcuts",
+        "pt-BR": "Atalhos de Teclado",
+        "es": "Atajos de Teclado",
+        "ja": "キーボードショートカット",
+        "ko": "키보드 단축키",
+        "zh-CN": "键盘快捷键"
+      }
+    }
+  ]
+}

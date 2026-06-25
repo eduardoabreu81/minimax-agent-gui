@@ -19,6 +19,7 @@ import VideoPanel from './components/media/VideoPanel'
 import CodingPanel from './components/coding/CodingPanel'
 import TaskBoard from './components/taskboard/TaskBoard'
 import SettingsPanel from './components/settings/SettingsPanel'
+import HelpPanel from './components/help/HelpPanel'
 import QuickSettings from './components/settings/QuickSettings'
 import Onboarding from './components/onboarding/Onboarding'
 import OnboardingWizard, { WIZARD_SEEN_KEY } from './components/agent-context/OnboardingWizard.jsx'
@@ -166,15 +167,30 @@ function AppShell() {
                       supportsThinking={supportsThinking} />,
     tasks: <TaskBoard />,
     settings: <SettingsPanel />,
+    help: <HelpPanel />,
   }
 
-  // Global Ctrl+K shortcut
+  // Global Ctrl+K (command palette) and F1 / "?" (help) shortcuts.
   useEffect(() => {
     const handleKeyDown = (e) => {
       const isCmdK = (e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'k'
       if (isCmdK) {
         e.preventDefault()
         setPaletteOpen(prev => !prev)
+        return
+      }
+      // Help: F1 always; "?" only when the user isn't typing into a field,
+      // otherwise it would hijack a literal question mark in the composer.
+      const target = e.target
+      const isEditable =
+        target?.isContentEditable ||
+        ['INPUT', 'TEXTAREA', 'SELECT'].includes(target?.tagName)
+      const isHelpKey =
+        e.key === 'F1' ||
+        (e.key === '?' && !isEditable && !e.metaKey && !e.ctrlKey && !e.altKey)
+      if (isHelpKey) {
+        e.preventDefault()
+        setActiveTab('help')
       }
     }
     document.addEventListener('keydown', handleKeyDown)
@@ -215,6 +231,9 @@ function AppShell() {
         break
       case 'open-task-board':
         setActiveTab('tasks')
+        break
+      case 'open-help':
+        setActiveTab('help')
         break
       case 'open-settings':
       case 'settings-api':

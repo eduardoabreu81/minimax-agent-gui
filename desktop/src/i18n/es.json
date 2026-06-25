@@ -11,7 +11,8 @@
     "video": "Video",
     "code": "Código",
     "tasks": "Tareas",
-    "settings": "Configuración"
+    "settings": "Configuración",
+    "help": "Ayuda"
   },
   "sidebar": {
     "allInOne": "Plataforma Todo-en-Uno",
