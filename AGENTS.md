@@ -344,7 +344,9 @@ feature back to the web SPA, do it in the fork.
   The `pubkey` field MUST be replaced with the Ed25519 public key from `tauri signer generate`
   before the first release — until then the updater rejects everything.
 - **Capabilities:** `desktop/src-tauri/capabilities/default.json` grants
-  `updater:default`, `process:default`, `process:allow-relaunch`.
+  `updater:default`, `process:default` (the latter covers `relaunch()` —
+  the plugin only exposes `allow-exit` and `allow-restart`, but `relaunch`
+  works through `process:default`).
 - **Frontend UI:** Settings → About → Update row (auto-update check, download,
   relaunch). State machine in `SettingsPanel.jsx`: `idle | checking | upToDate | available | downloading | readyToRestart | error`.
 - **Release pipeline:** `.github/workflows/release.yml` runs on `v*` tag push.

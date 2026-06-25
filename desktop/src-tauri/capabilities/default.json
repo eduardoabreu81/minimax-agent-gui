@@ -20,7 +20,6 @@
     "dialog:default",
     "dialog:allow-open",
     "updater:default",
-    "process:default",
-    "process:allow-relaunch"
+    "process:default"
   ]
 }

@@ -19,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`tauri-plugin-updater` + `tauri-plugin-process`** — wired in
   `desktop/src-tauri/src/lib.rs`. Frontend adds an "Update" row in
   Settings → About with check / download / restart actions.
-  Capabilities granted: `updater:default`, `process:default`, `process:allow-relaunch`.
+  Capabilities granted: `updater:default`, `process:default`.
 - **`.github/workflows/release.yml`** — runs on `v*` tag push. Builds
   ubuntu/windows/macos in parallel, signs bundles with `TAURI_SIGNING_PRIVATE_KEY`
   (from Secrets), generates per-target `*-updater.json`, publishes GitHub Release.
