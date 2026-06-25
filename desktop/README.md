@@ -170,6 +170,8 @@ disabled for models that don't support it.
 
 ## Chat
 
+![Chat](docs/screenshots/chat.png)
+
 The Chat panel is a conversation with MiniMax expert models. Use it for
 questions, drafting, analysis, and anything that doesn't need to touch your
 filesystem.
@@ -199,6 +201,8 @@ Use the command palette (`Ctrl/Cmd + K`) and choose **New chat** to clear the
 conversation and start over.
 
 ## Code Agent
+
+![Code Agent](docs/screenshots/coding.png)
 
 The Code Agent (the **Code** panel) is an autonomous coding workspace. Unlike
 Chat, it can read and write files and run commands in a real workspace to
@@ -230,6 +234,8 @@ for complex tasks.
 
 ## Media Studio
 
+![Media Studio](docs/screenshots/image.png)
+
 The media panels turn prompts into images, video, music, and speech using
 MiniMax generation models. Each lives in its own sidebar entry.
 
@@ -259,6 +265,8 @@ current balance and refreshes after each generation completes.
 
 ## Task Board
 
+![Task Board](docs/screenshots/tasks.png)
+
 The Task Board (the **Tasks** panel) tracks work items in a simple board so
 you can see what's planned, in progress, and done.
 
@@ -274,6 +282,8 @@ the steps are visible. The board gives you a persistent place to capture
 that, separate from any single conversation.
 
 ## Settings
+
+![Settings](docs/screenshots/settings.png)
 
 The Settings panel (sidebar footer) is where you configure your account,
 models, and appearance.

@@ -29,7 +29,7 @@
 | 🔌 **MCP & Skills** — Built-in web search and image understanding. Bring-your-own MCP servers. Slash-commands for reusable skill templates. |
 | 🧠 **Agent Context** — SOUL/IDENTITY/USER/MEMORY files persist across sessions. The agent picks up where it left off. |
 | 🔄 **Self-updating** — `tauri-plugin-updater` pulls signed releases from GitHub. You click "Restart", that's it. |
-| 🌍 **6 languages** — English, Português (BR), Español, 日本語, 한국어, 中文. Help docs co-generated in the same locales. |
+| 🌍 **6 languages** — English, Português (BR), Español, 日本語, 한국어, 中文. |
 
 ---
 
@@ -53,13 +53,20 @@
 
 ### Chat with M3
 
-Real-time streaming of both the reasoning block and the final response. Per-turn model selector and thinking toggle. File attachments, image understanding, `@`-ref autocomplete (paste a file path with `@file:`, it expands inline).
+Real-time streaming of both the reasoning block and the final response. Per-turn model selector and thinking toggle. File attachments, image understanding, `@`-ref autocomplete (`@file:`, `@folder:`, `@diff`, `@staged`, `@git:N`, `@url:` — type the prefix and pick from the popover, the file content gets prepended to your message). Conversation search, session persistence, and per-turn context-attachment. Long-running workflows surface live steps in the activity panel.
 
 <img src="desktop/docs/screenshots/chat.png" alt="Chat panel" width="900" />
 
 ### Media Studio
 
-Image (T2I + I2I with subject reference), video (Hailuo-2.3, text/image-to-video, multiple durations), music (prompts or lyrics, instrumental mode, cover from reference audio), and speech (30+ voices, voice clone, voice design, streaming playback). Recent generations gallery in every panel.
+Generate, iterate, and curate from one tab.
+
+- **Image** — T2I + I2I with subject reference for character-consistent variations. Aspect-ratio picker, batch generation, prompt optimizer, recent gallery.
+- **Video** — Hailuo-2.3 text-to-video and image-to-video with multiple durations, resolutions, frame interpolation, and subject reference. Per-generation progress polling.
+- **Music** — From prompts or full lyrics, instrumental mode, cover-from-reference-audio, and a built-in lyrics optimizer.
+- **Speech / TTS** — 30+ voices, streaming playback, async synthesis for long texts, voice clone from a 10s sample, voice design from a description, batch generation.
+
+Every panel keeps a **Recent Generations** gallery that surfaces the last outputs plus any compatible file already in your workspace — so you never lose track of a generation between sessions.
 
 | Image | Music | Speech |
 |---|---|---|
@@ -67,27 +74,66 @@ Image (T2I + I2I with subject reference), video (Hailuo-2.3, text/image-to-video
 
 ### Code Workspace
 
-File explorer, editor, integrated terminal, and a persistent code-chat session that knows your open files. Three modes: **Agent** (asks for risky-tool approval), **Plan** (editable draft → approve → run), **YOLO** (auto-approve everything).
+File explorer, Monaco-style editor, integrated xterm.js terminal, and a persistent code-chat session that knows which files you have open. The chat input is the same Composer used everywhere — single source-of-truth, same slash menu, same `@`-ref autocomplete.
+
+**Three execution modes:**
+- **Agent** — asks for approval before risky tools (write/edit, shell, unknown, external MCP) via an inline Approve / Reject modal
+- **Plan** — agent drafts an editable plan first; you approve, then it runs end-to-end
+- **YOLO** — auto-approves everything for hands-off runs
+
+Live step-by-step activity stream, command-palette shortcuts, and a per-session coding workspace folder you pick on first launch.
 
 <img src="desktop/docs/screenshots/coding.png" alt="Code workspace" width="900" />
 
 ### Task Board
 
-The agent plans multi-step work into todos, locks them while running, and marks them done only after verification. Live X/Y counter in the workspace sidebar.
+When the agent plans multi-step work, todos appear in the workspace sidebar. Each task is **locked** while the agent runs it, then marked **done** only after the agent verifies the result. Live X/Y counter shows progress at a glance. Tasks survive session reloads.
 
 <img src="desktop/docs/screenshots/tasks.png" alt="Task board" width="900" />
 
-### In-app Help
+### Skills & MCP Tools
 
-`?` from anywhere opens the Help panel. Topics in 6 languages, single source at `desktop/src/help/`. The same markdown generates `desktop/README.md` via `npm run docs`.
+**Skills** are reusable slash-command templates the agent invokes by name. Multi-source loader merges from user dir, extra configured dirs, generic skill hubs, and the bundled defaults — priority is `User > Extra > Generic > Claude > Codex > Gemini > Built-in`. Kimi/agentskills.io schema enforced server-side.
 
-<img src="desktop/docs/screenshots/help.png" alt="Help panel" width="900" />
+**MCP (Model Context Protocol) tools** — built-in web search and image understanding are always available. Bring-your-own servers in **stdio** or **SSE** transport from Settings → MCP Servers: add, edit, enable/disable, delete, test connections, preview discovered tools. Tool names are namespaced as `mcp_{server_id}_{tool}` to avoid collisions.
+
+**Subdirectory Hints** — when the agent reads a file, it also picks up the nearest `AGENTS.md` / `CLAUDE.md` / `.cursorrules` walking up to 5 parent directories. Project context flows in automatically without you having to paste anything.
+
+### Agent Memory & Context
+
+**`.agent/*.md` files** persist the agent's identity and memory across sessions:
+- **SOUL** — agent personality preset
+- **IDENTITY** — name, role, communication style
+- **USER** — your profile, language preference, working context
+- **MEMORY** — long-term notes the agent can append to
+- **`daily/{YYYY-MM-DD}.md`** — automatic session log
+
+The first-run **Onboarding Wizard** walks you through filling them in. If files are missing or incomplete, an **IncompleteContextBanner** appears in the title bar with a one-click shortcut to fix it.
+
+The agent also has a **`memory` tool** to write back into these files during a run — long-running agents accumulate context without losing it between sessions.
+
+### Customization
+
+- **9 themes** including light/dark, matrix-rain, and accent variants — `Themes` in Settings
+- **6 languages** for the UI: English, Português (BR), Español, 日本語, 한국어, 中文
+- **Command Palette** (`Ctrl/Cmd+K`) — fuzzy-search every panel, action, and shortcut
+- **Keyboard shortcuts** — `?` and `F1` for Help, `Esc` to close modals, panel-specific shortcuts via Settings
+- **Onboarding** — first-launch wizard + the **QuickSettings** popover for in-flight tweaks
+- **Status Bar** at the bottom shows live model, plan tier, context usage, and a breakdown-by-source popover
 
 ### Settings
 
-Index rail with all the knobs: API key, default model, theme, language, agent context, skills, MCP servers, shortcuts, About (with **Check for updates** button).
+Index rail with all the knobs in one place: API key, default model, theme, language, **agent context** (edit SOUL/IDENTITY/USER/MEMORY in-app), **skills** (per-skill detail panel), **MCP Servers** (add/edit/test), **Generation Defaults** (audio format, image size), **Keyboard Shortcuts**, and **About** (with **Check for updates** button).
 
 <img src="desktop/docs/screenshots/settings.png" alt="Settings panel" width="900" />
+
+### Reliability
+
+- **Session Protection** — warns before navigating away, refreshing, or closing the tab when there's an active session with unsent content or pending approvals
+- **Auto-save** — every message persists to `workspace/conversations/` immediately; tab switch / refresh / restart picks up where you left off
+- **Conversation Search** — find past chats and code sessions by title, content, or attachment name
+- **Token attribution** — per-source breakdown (system prompt / skills / memory / MCP tools / default) in the StatusBar popover, so you can see what's eating your context window
+- **Compact events** — when context fills up, the backend summarizes automatically with a structured event log (force / auto / legacy compact_reason)
 
 ---
 
