@@ -1094,6 +1094,67 @@ feel like part of the same control surface as the slash menu.
   marking done prematurely. Catches accidental removal of
   the guidance.
 
+### Added — Progressive subdirectory discovery (Hermes PR D)
+
+Hermes-spec progressive subdirectory discovery of project
+context files (`AGENTS.md` / `CLAUDE.md` / `.cursorrules`).
+As the agent navigates into subdirectories during a session,
+the relevant project context file is discovered and appended
+to the tool result so the model sees the project conventions
+naturally — without bloating the system prompt at startup.
+
+- **Helper** — `web/backend/subdirectory_hints.py`
+  - `_load_project_context_file(directory)`: first-match-wins
+    priority (`AGENTS.md` > `CLAUDE.md` > `.cursorrules`),
+    applies the security scan (9 prompt-injection patterns
+    + invisible Unicode blocklist), and head/tail truncates
+    to 8,000 chars (Hermes 70% head / 20% tail / 10% marker
+    with marker padded to exact size). Returns a
+    `ProjectContextFile` (frozen dataclass) with `blocked=True`
+    placeholder content when the security scan refuses the
+    bytes — the raw malicious content never reaches the prompt.
+  - `format_hints_for_model(hints)`: renders the discovered
+    files as a single string block ready to append to a tool
+    result.
+- **Tracker** — `SubdirectoryHintTracker(workspace_dir)`
+  - Watches tool call arguments for file paths
+    (`path` arg, `workdir` arg, shell command tokens) and
+    walks up to 5 parent directories (stops at the workspace
+    root).
+  - Per-session `visited_dirs` cache so each directory is
+    checked at most once.
+  - Returns hints in walk-up order (most specific first).
+  - Extracted path detection handles `read_file` / `write_file`
+    / `edit_file` / `bash` / `search_files` / `glob` and falls
+    back to scanning string values for path-like tokens.
+- **Agent loop hook** — `mini_agent/agent.py` gains a
+  `tool_result_post_processor: Optional[callable]` parameter
+  on `Agent.run()`. Invoked AFTER tool execution and BEFORE
+  the result is appended to the message history. Sync or
+  async callables both supported. Failures (exceptions) are
+  logged and swallowed — progressive hinting is best-effort
+  UX, not a correctness requirement.
+- **Backend wiring** — `web/backend/main.py`
+  - `get_or_create_agent` attaches `agent._subdir_tracker`
+    per session with `workspace_dir = str(workspace_path)`.
+  - New helper `_build_subdir_post_processor(agent)` returns
+    a closure that invokes `hint_for_tool_call` and appends
+    the formatted hint(s) to the tool result (append, not
+    replace — the tool's actual output stays intact).
+  - `chat_websocket` passes the closure as
+    `tool_result_post_processor=...` to `agent.run()`.
+- **Tests** — `tests/test_subdirectory_hints.py` (NEW, 52
+  tests, 407 LOC): covers the security scan (12), truncation
+  (4), helper file loading (10), hint formatting (3), tracker
+  walk-up + cache (8), path extraction from various tool
+  types (11), `hint_for_tool_call` aggregation (1), and
+  spec constants sanity (3). All green; zero regression on
+  the existing 18 tests in the related domain.
+
+Per Hermes spec:
+https://hermes-agent.nousresearch.com/docs/user-guide/features/context-files
+(section "Progressive Subdirectory Discovery").
+
 ## [0.3.1] — 2026-06-02 — Stub cleanup
 
 Follow-up to 0.3.0: removes the last batch of UI stubs that survived
