@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > **Note:** Pre-0.3.0 history lives in [docs/PROJECT_LOG.md](docs/PROJECT_LOG.md)
 > and [git history](https://github.com/<owner>/minimax-agent-gui/commits/main).
 
+## [Unreleased] — mmx CLI dependency removed
+
+The app is **fully independent of the `mmx` CLI**. Users no longer need to
+install any external CLI to run MiniMax Agent GUI — every MiniMax API call
+goes through direct HTTP via `mini_max_mcp/client.py`.
+
+### Removed
+- **`POST /api/minimax/cli`** — generic endpoint that wrapped `mmx` CLI as a
+  subprocess. Dead code (zero callers since Music/Video/Image/Speech panels
+  migrated to direct REST endpoints). Also removed the `CLIRequest` Pydantic
+  class it was the sole consumer of.
+
+### Changed
+- **`AGENTS.md`** — dropped the `mmx` subprocess note from Windows-Specific
+  Notes; rewrote "No CLI dependency" section to enumerate the direct-HTTP
+  endpoints for every capability.
+- **`README.md`** — Plan auto-detection note no longer mentions the CLI
+  fallback path.
+- **`web/backend/main.py`** — historical comments now say "legacy" instead
+  of "mmx-based" where they document what was replaced.
+- **`desktop/src/components/Sidebar.jsx`** — quota-fetch comment no longer
+  references the legacy `mmx` heuristic.
+
 ## [0.4.0] — 2026-06-21 — Desktop-first migration (Tauri)
 
 **Major milestone.** The desktop app (`desktop/`, Tauri 2 + Vite + React 18) is now the **only installable interface**. The legacy web frontend has been removed from this repo (the FastAPI backend under `web/backend/` is bundled by Tauri as a sidecar). Three major feature sprints landed on the backend that power the new desktop panels.

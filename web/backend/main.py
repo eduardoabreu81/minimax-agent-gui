@@ -75,7 +75,6 @@ from mcp_runtime import test_mcp_server
 logging.basicConfig(level=logging.INFO)
 _logger = logging.getLogger(__name__)
 
-
 def _log_compact_event(payload: dict) -> None:
     """Emit a structured compact-event log line (JSON, one line).
 
@@ -89,7 +88,6 @@ def _log_compact_event(payload: dict) -> None:
     ``pct_before`` / ``delta_tokens``).
     """
     _logger.info(json.dumps(payload))
-
 
 def _build_mcp_section(mcp_tools) -> str:
     """Build the unified ``## MCP Servers`` block for the system prompt.
@@ -213,11 +211,9 @@ except Exception:
     else:
         config = {}
 
-
 class ChatRequest(BaseModel):
     message: str
     session_id: str = "default"
-
 
 class GenerateRequest(BaseModel):
     prompt: str = ""
@@ -237,7 +233,6 @@ class ImageRequest(BaseModel):
     model: str = "image-01"
     subject_reference: list = None
     reference_image: str = ""  # legacy I2I: local file path (image_variations)
-
 
 # --- Music Generation ---------------------------------------------------------
 #
@@ -269,13 +264,11 @@ COVER_PROMPT_MAX_CHARS = 300
 COVER_LYRICS_WITH_FEATURE_MIN = 10
 COVER_LYRICS_WITH_FEATURE_MAX = 1000
 
-
 class AudioSetting(BaseModel):
     """Audio output configuration — mirrors the music generation API."""
     sample_rate: Literal[16000, 24000, 32000, 44100] = 44100
     bitrate: Literal[32000, 64000, 128000, 256000] = 256000
     format: Literal["mp3", "wav", "pcm"] = "mp3"
-
 
 class MusicRequest(BaseModel):
     """Music generation / cover request.
@@ -411,15 +404,6 @@ class MusicRequest(BaseModel):
                         f"limit for music-cover."
                     )
 
-        return self
-
-
-class CLIRequest(BaseModel):
-    command: str
-    args: list = []
-    env: dict = {}
-
-
 class MCPServerCreate(BaseModel):
     name: str
     transport: str
@@ -428,7 +412,6 @@ class MCPServerCreate(BaseModel):
     env: dict[str, str] = {}
     url: Optional[str] = None
     enabled: bool = True
-
 
 class MCPServerUpdate(BaseModel):
     name: Optional[str] = None
@@ -439,13 +422,11 @@ class MCPServerUpdate(BaseModel):
     url: Optional[str] = None
     enabled: Optional[bool] = None
 
-
 def _generate_server_id(name: str) -> str:
     import re
     safe = re.sub(r'[^a-zA-Z0-9_-]', '-', name.strip().lower())
     safe = re.sub(r'-+', '-', safe).strip('-')
     return safe or 'mcp-server'
-
 
 def _load_config_dict() -> dict:
     global config
@@ -456,14 +437,12 @@ def _load_config_dict() -> dict:
         cfg = {}
     return cfg
 
-
 def _save_config_dict(cfg: dict):
     global config
     import yaml
     with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
         yaml.dump(cfg, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
     config = cfg
-
 
 def get_minimax_config():
     """Get MiniMax config with region-based api_base."""
@@ -495,15 +474,12 @@ def get_minimax_config():
         "plan": minimax_config.get("plan", ""),
     }
 
-
 # --- Conversation persistence ---
 CONVERSATIONS_DIR = PROJECT_ROOT / "workspace" / "conversations"
 CONVERSATIONS_DIR.mkdir(parents=True, exist_ok=True)
 
-
 def _conv_path(conv_id: str) -> Path:
     return CONVERSATIONS_DIR / f"{conv_id}.json"
-
 
 # --- Conversation persistence layer ---
 #
@@ -525,7 +501,6 @@ from subdirectory_hints import (  # noqa: E402  (PR D — progressive subdir dis
     SubdirectoryHintTracker,
     format_hints_for_model,
 )
-
 
 # --- App workspace + coding workspace management (v0.5 redesign) ---
 #
@@ -550,7 +525,6 @@ from subdirectory_hints import (  # noqa: E402  (PR D — progressive subdir dis
 # config.yaml under ``recent_coding_workspaces`` so the next session can
 # pre-fill the picker with the last few projects (VSCode-style).
 
-
 def _media_output_dir(session_id: str, media_kind: str) -> Path:
     """Where generated media of ``media_kind`` (one of "images",
     "videos", "music", "tts") should land for this session.
@@ -569,7 +543,6 @@ def _media_output_dir(session_id: str, media_kind: str) -> Path:
     d.mkdir(parents=True, exist_ok=True)
     return d
 
-
 def get_app_workspace_dir() -> Path:
     """The fixed app workspace — `PROJECT_ROOT/workspace`.
 
@@ -580,7 +553,6 @@ def get_app_workspace_dir() -> Path:
     p = PROJECT_ROOT / "workspace"
     p.mkdir(parents=True, exist_ok=True)
     return p
-
 
 def get_session_workspace_dir(session_id: str) -> Path:
     """Resolve the effective workspace dir for a given session.
@@ -602,10 +574,8 @@ def get_session_workspace_dir(session_id: str) -> Path:
             return Path(cw)
     return get_app_workspace_dir()
 
-
 # Top-N cap for the recent-workspaces list (VSCode uses 10).
 RECENT_WORKSPACES_LIMIT = 10
-
 
 def _load_config_dict() -> dict:
     """Read the current config as a plain dict (the in-memory ``config``
@@ -619,7 +589,6 @@ def _load_config_dict() -> dict:
         return config
     return {}
 
-
 def _save_config_dict(cfg: dict) -> None:
     """Persist a dict-form config to ``CONFIG_PATH`` and update the
     in-memory ``config`` global."""
@@ -629,7 +598,6 @@ def _save_config_dict(cfg: dict) -> None:
     with open(CONFIG_PATH, "w", encoding="utf-8") as f:
         yaml.dump(cfg, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
     config = cfg
-
 
 def _load_recent_coding_workspaces() -> list[dict]:
     """Return the recent-coding-workspaces list (newest first).
@@ -650,7 +618,6 @@ def _load_recent_coding_workspaces() -> list[dict]:
                 "label": entry.get("label") or Path(entry["path"]).name or entry["path"],
             })
     return out
-
 
 def _add_recent_coding_workspace(path: str) -> list[dict]:
     """Push a workspace path onto the recent list (MRU + dedupe + cap).
@@ -681,13 +648,11 @@ def _add_recent_coding_workspace(path: str) -> list[dict]:
     _save_config_dict(cfg)
     return _load_recent_coding_workspaces()
 
-
 # Map of session_id -> {workspace_dir: str|None, locked: bool}.
 # Held in-process only (sessions are not persisted across restarts by
 # design — the per-session workspace is re-attached when the frontend
 # opens an existing conversation).
 _coding_sessions: dict[str, dict] = {}
-
 
 def _load_coding_workspace_for_session(session_id: str) -> str | None:
     """Return the workspace_dir attached to this session, if any.
@@ -702,7 +667,6 @@ def _load_coding_workspace_for_session(session_id: str) -> str | None:
     conv = load_conversation(session_id)
     ws = conv.get("workspace_dir") if isinstance(conv, dict) else None
     return ws if isinstance(ws, str) and ws else None
-
 
 def _attach_coding_workspace(session_id: str, workspace_dir: str) -> None:
     """Persist the coding workspace for a session in both the in-process
@@ -720,7 +684,6 @@ def _attach_coding_workspace(session_id: str, workspace_dir: str) -> None:
         conv["workspace_dir"] = sess["workspace_dir"]
         save_conversation_raw(conv)
 
-
 def _lock_coding_session(session_id: str) -> None:
     """Lock a coding session — no more workspace changes allowed.
 
@@ -729,7 +692,6 @@ def _lock_coding_session(session_id: str) -> None:
     """
     sess = _coding_sessions.setdefault(session_id, {"locked": False, "workspace_dir": None})
     sess["locked"] = True
-
 
 def save_conversation_raw(conv: dict) -> None:
     """Save a fully-built conversation dict (no timestamp juggling).
@@ -747,7 +709,6 @@ def save_conversation_raw(conv: dict) -> None:
     with open(path, "w", encoding="utf-8") as f:
         json.dump(conv, f, ensure_ascii=False, indent=2)
 
-
 # --- Task board persistence ---
 # Single JSON file holds all tasks. Pattern matches conversation storage:
 # one file = one atomic write per mutation, easy to inspect with cat/jq,
@@ -756,7 +717,6 @@ TASKS_FILE = PROJECT_ROOT / "workspace" / "tasks.json"
 
 VALID_TASK_STATUSES = {"pending", "in-progress", "review", "done"}
 VALID_TASK_PRIORITIES = {"high", "medium", "low"}
-
 
 # --- WebSocket registry for cross-session broadcasts (PR C: Live Todo) ---
 # Maps session_id -> set of currently-connected WebSockets. Used by
@@ -772,11 +732,9 @@ VALID_TASK_PRIORITIES = {"high", "medium", "low"}
 # broadcast to other sessions.
 _ws_registry: dict[str, set] = {}
 
-
 def register_ws(session_id: str, ws) -> None:
     """Add a WebSocket to the per-session registry."""
     _ws_registry.setdefault(session_id, set()).add(ws)
-
 
 def unregister_ws(session_id: str, ws) -> None:
     """Remove a WebSocket from the per-session registry. Safe
@@ -787,7 +745,6 @@ def unregister_ws(session_id: str, ws) -> None:
     bucket.discard(ws)
     if not bucket:
         _ws_registry.pop(session_id, None)
-
 
 async def broadcast_task_event(task: dict, action: str) -> None:
     """Send a ``task_updated`` event to every WebSocket subscribed
@@ -828,7 +785,6 @@ async def broadcast_task_event(task: dict, action: str) -> None:
             # WS will be unregistered on disconnect anyway.
             _logger.debug(f"broadcast_task_event: WS send failed: {e}")
 
-
 def _load_tasks() -> list:
     """Load all tasks from disk. Returns [] if file missing/corrupt."""
     if not TASKS_FILE.exists():
@@ -840,7 +796,6 @@ def _load_tasks() -> list:
     except Exception:
         return []
 
-
 def _save_tasks(tasks: list):
     """Atomic write — tmp file + rename so concurrent reads never see partial JSON."""
     TASKS_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -849,17 +804,14 @@ def _save_tasks(tasks: list):
         json.dump(tasks, f, ensure_ascii=False, indent=2)
     tmp.replace(TASKS_FILE)
 
-
 def _next_task_order(tasks: list) -> int:
     """Next order value for drag&drop placement (appended to end)."""
     if not tasks:
         return 0
     return max((t.get("order", 0) for t in tasks), default=-1) + 1
 
-
 def _generate_task_id() -> str:
     return f"task-{int(time.time() * 1000)}-{uuid.uuid4().hex[:6]}"
-
 
 def _serialize_task(task: dict) -> dict:
     """Return a stable shape for API responses. Adds server-derived fields
@@ -878,7 +830,6 @@ def _serialize_task(task: dict) -> dict:
         "source_session_id": task.get("source_session_id"),
     }
 
-
 def list_conversations() -> list:
     """List all saved conversations, newest first.
 
@@ -887,11 +838,9 @@ def list_conversations() -> list:
     """
     return conversation_store.list_all("")
 
-
 def load_conversation(conv_id: str) -> dict:
     """Load a conversation by ID. Thin wrapper around the store."""
     return conversation_store.load(conv_id)
-
 
 def _hydrate_agent_messages(agent, session_id: str) -> int:
     """Populate ``agent.messages`` from the persisted conversation JSON.
@@ -938,7 +887,6 @@ def _hydrate_agent_messages(agent, session_id: str) -> int:
         )
     return hydrated
 
-
 def save_conversation(conv_id: str, title: str, messages: list):
     """Save a conversation to disk.
 
@@ -949,11 +897,9 @@ def save_conversation(conv_id: str, title: str, messages: list):
     """
     conversation_store.save(conv_id, title, messages)
 
-
 def delete_conversation(conv_id: str) -> bool:
     """Delete a conversation by ID. Thin wrapper around the store."""
     return conversation_store.delete(conv_id)
-
 
 def get_conversation_title(messages: list) -> str:
     """Generate a title from the first user message."""
@@ -964,14 +910,12 @@ def get_conversation_title(messages: list) -> str:
                 return text[:40] + ("..." if len(text) > 40 else "")
     return "New Chat"
 
-
 def search_conversations(query: str, type_filter: str = "") -> list:
     """Search conversations by title, message content, or attachment.
 
     Thin wrapper around ``conversation_store.search``.
     """
     return conversation_store.search(query, type_filter=type_filter)
-
 
 class SessionManager:
     """Manages agent sessions in memory.
@@ -1330,9 +1274,7 @@ Be concise, friendly, and helpful."""
         self.sessions[session_id] = agent
         return agent
 
-
 session_manager = SessionManager()
-
 
 # --- Lifespan (defined before ``app`` so the FastAPI() call below can
 # capture the reference). Wraps the lifespan for the v0.5 redesign:
@@ -1348,7 +1290,6 @@ async def lifespan(app: FastAPI):
     yield
     _logger.info("Shutting down...")
 
-
 # --- FastAPI app instance ---
 # Declared BEFORE any ``@app.*`` decorator below (the new coding
 # workspace endpoints and the older REST/WebSocket handlers all hang
@@ -1360,7 +1301,6 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-
 # CORS for development
 app.add_middleware(
     CORSMiddleware,
@@ -1369,7 +1309,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 
 # --- Coding workspace endpoints (v0.5 redesign) ---
 #
@@ -1408,7 +1347,6 @@ app.add_middleware(
 # All of these are REST + JSON; no streaming. Errors follow the existing
 # HTTPException pattern (400 invalid path, 404 not found, 409 locked).
 
-
 def _validate_workspace_path(path: str) -> Path:
     """Sanity-check a user-supplied workspace path.
 
@@ -1429,7 +1367,6 @@ def _validate_workspace_path(path: str) -> Path:
         raise HTTPException(status_code=400, detail=f"Path is not a directory: {resolved}")
     return resolved
 
-
 @app.get("/api/coding/workspace")
 async def get_coding_workspace(session_id: str = ""):
     """Return the workspace attached to a coding session (if any)."""
@@ -1445,11 +1382,9 @@ async def get_coding_workspace(session_id: str = ""):
         "effective_dir": str(get_session_workspace_dir(session_id)),
     }
 
-
 class CodingWorkspaceUpdate(BaseModel):
     session_id: str
     workspace_dir: str
-
 
 @app.put("/api/coding/workspace")
 async def set_coding_workspace(req: CodingWorkspaceUpdate):
@@ -1480,12 +1415,10 @@ async def set_coding_workspace(req: CodingWorkspaceUpdate):
         "locked": False,
     }
 
-
 @app.get("/api/coding/recent-workspaces")
 async def list_recent_workspaces():
     """VSCode-style recent-workspaces list (newest first)."""
     return {"success": True, "workspaces": _load_recent_coding_workspaces()}
-
 
 @app.delete("/api/coding/recent-workspaces")
 async def remove_recent_workspace(path: str):
@@ -1508,7 +1441,6 @@ async def remove_recent_workspace(path: str):
     _save_config_dict(cfg)
     return {"success": True, "workspaces": _load_recent_coding_workspaces()}
 
-
 @app.post("/api/coding/session/{session_id}/lock")
 async def lock_coding_session(session_id: str):
     """Lock a coding session's workspace — no more changes allowed.
@@ -1527,7 +1459,6 @@ async def lock_coding_session(session_id: str):
         "workspace_dir": _load_coding_workspace_for_session(session_id),
     }
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Context references — @file:, @folder:, @diff, @staged, @git:N, @url:
 # See web/backend/context_refs.py for the expansion logic. This
@@ -1536,13 +1467,11 @@ async def lock_coding_session(session_id: str):
 # and returns the report (results + total_bytes + soft/hard flags).
 # ─────────────────────────────────────────────────────────────────────────────
 
-
 class ContextRefsExpandRequest(BaseModel):
     """Request body for ``POST /api/context-refs/expand``."""
 
     session_id: str = Field(..., description="Session ID — determines the workspace_dir")
     message: str = Field(..., description="Raw message text with @-refs to expand")
-
 
 class ContextRefsExpandResponse(BaseModel):
     """Response body — the parsed refs + their expansion results."""
@@ -1555,7 +1484,6 @@ class ContextRefsExpandResponse(BaseModel):
     refusal_reason: str = ""
     # Echoed back so the frontend can render chips without re-parsing
     parsed_refs: list[dict]
-
 
 @app.post("/api/context-refs/expand")
 async def context_refs_expand(req: ContextRefsExpandRequest):
@@ -1617,14 +1545,12 @@ async def context_refs_expand(req: ContextRefsExpandRequest):
         ],
     }
 
-
 class ContextRefsListRequest(BaseModel):
     """Request body for ``POST /api/context-refs/list`` (path autocomplete)."""
 
     session_id: str = Field(..., description="Session ID — determines the workspace_dir")
     prefix: str = Field("", description="Optional path prefix to filter by (relative to workspace)")
     max_entries: int = Field(200, description="Cap on returned entries")
-
 
 @app.post("/api/context-refs/list")
 async def context_refs_list(req: ContextRefsListRequest):
@@ -1699,11 +1625,9 @@ async def context_refs_list(req: ContextRefsListRequest):
         "truncated": truncated,
     }
 
-
 @app.get("/api/health")
 async def health():
     return {"status": "ok", "version": "0.3.0"}
-
 
 @app.get("/api/config")
 async def get_config():
@@ -1782,7 +1706,6 @@ async def get_config():
     }
     return safe_config
 
-
 def _agent_context_status() -> dict:
     """Load the four .agent files and return the incomplete-context flag.
 
@@ -1806,7 +1729,6 @@ def _agent_context_status() -> dict:
         _logger.warning(f"Failed to compute agent_context status: {exc}")
         return {"missing": [], "corrupt": [], "banner_visible": False, "char_usage": {}}
 
-
 @app.get("/api/profile")
 async def get_profile():
     """Load user profile."""
@@ -1818,7 +1740,6 @@ async def get_profile():
             pass
     return {"bio": ""}
 
-
 @app.post("/api/profile")
 async def save_profile(req: dict):
     """Save user profile."""
@@ -1826,7 +1747,6 @@ async def save_profile(req: dict):
     profile_path.parent.mkdir(parents=True, exist_ok=True)
     profile_path.write_text(json.dumps(req, ensure_ascii=False, indent=2), encoding="utf-8")
     return {"success": True}
-
 
 # ─── Skills (multi-source: User > Extra > External > Built-in) ────────────
 #
@@ -1838,7 +1758,6 @@ async def save_profile(req: dict):
 
 _skills_loader_cache: dict | None = None
 _skills_sources_signature: tuple | None = None
-
 
 def _skills_config_block() -> dict:
     """Return the ``skills:`` sub-dict from config.yaml (defaults applied)."""
@@ -1854,7 +1773,6 @@ def _skills_config_block() -> dict:
         "extra_skill_dirs": list(block.get("extra_skill_dirs") or []),
     }
 
-
 def _skills_signature() -> tuple:
     """A hashable key that changes when any source config changes."""
     block = _skills_config_block()
@@ -1863,7 +1781,6 @@ def _skills_signature() -> tuple:
         block["user_dir"] or "",
         tuple(block["extra_skill_dirs"]),
     )
-
 
 def _build_skills_loader():
     """Construct a SkillLoader from config + env. Does not cache."""
@@ -1898,7 +1815,6 @@ def _build_skills_loader():
 
     return SkillLoader(sources=sources), user_dir
 
-
 def _get_skills_loader():
     """Return the cached loader, rebuilding if config changed."""
     global _skills_loader_cache, _skills_sources_signature
@@ -1909,18 +1825,15 @@ def _get_skills_loader():
     _skills_loader_cache.discover_skills()
     return _skills_loader_cache
 
-
 def _invalidate_skills_loader() -> None:
     global _skills_loader_cache, _skills_sources_signature
     _skills_loader_cache = None
     _skills_sources_signature = None
 
-
 def _skills_user_dir() -> Path:
     """The user-writable skills dir (created on first call)."""
     _, user_dir = _build_skills_loader()
     return user_dir
-
 
 def _serialize_skill(skill, include_raw: bool = False) -> dict:
     """Skill → API dict. ``include_raw`` adds the full markdown source."""
@@ -1933,7 +1846,6 @@ def _serialize_skill(skill, include_raw: bool = False) -> dict:
         except OSError:
             out["raw_markdown"] = ""
     return out
-
 
 @app.get("/api/skills")
 async def list_skills():
@@ -1955,7 +1867,6 @@ async def list_skills():
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @app.get("/api/skills/sources")
 async def list_skill_sources():
@@ -1985,7 +1896,6 @@ async def list_skill_sources():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @app.post("/api/skills/discover")
 async def rediscover_skills():
     """Force a rescan of all configured sources (cache invalidation)."""
@@ -1999,7 +1909,6 @@ async def rediscover_skills():
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @app.get("/api/skills/{name}")
 async def get_skill(name: str):
@@ -2015,7 +1924,6 @@ async def get_skill(name: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
 class SkillCreate(BaseModel):
     name: str
     description: str
@@ -2025,7 +1933,6 @@ class SkillCreate(BaseModel):
     allowed_tools: Optional[list] = None
     metadata: Optional[dict] = None
     skill_type: Optional[str] = None
-
 
 @app.post("/api/skills")
 async def create_skill(req: SkillCreate):
@@ -2054,7 +1961,6 @@ async def create_skill(req: SkillCreate):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
 class SkillUpdate(BaseModel):
     description: Optional[str] = None
     body: Optional[str] = None
@@ -2062,7 +1968,6 @@ class SkillUpdate(BaseModel):
     compatibility: Optional[str] = None
     allowed_tools: Optional[list] = None
     metadata: Optional[dict] = None
-
 
 @app.put("/api/skills/{name}")
 async def update_skill(name: str, req: SkillUpdate):
@@ -2105,7 +2010,6 @@ async def update_skill(name: str, req: SkillUpdate):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @app.delete("/api/skills/{name}")
 async def delete_skill(name: str):
     """Delete a user-dir skill. Refuses non-user sources."""
@@ -2139,10 +2043,8 @@ async def delete_skill(name: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
 class SkillImportRequest(BaseModel):
     url: str
-
 
 @app.post("/api/skills/import")
 async def import_skill_preview(req: SkillImportRequest):
@@ -2207,12 +2109,10 @@ async def import_skill_preview(req: SkillImportRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
 class SkillsConfigUpdate(BaseModel):
     merge_all_available_skills: Optional[bool] = None
     extra_skill_dirs: Optional[list[str]] = None
     user_dir: Optional[str] = None
-
 
 @app.put("/api/config/skills")
 async def update_skills_config(req: SkillsConfigUpdate):
@@ -2233,11 +2133,9 @@ async def update_skills_config(req: SkillsConfigUpdate):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
 class ToolsConfigRequest(BaseModel):
     web_search: bool = True
     understand_image: bool = True
-
 
 # ---------------------------------------------------------------------------
 # Agent Context — Daily log listing + read
@@ -2278,7 +2176,6 @@ async def list_presets(lang: str | None = None):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @app.get("/api/agent-context/roles")
 async def list_roles(lang: str | None = None):
     """Return the 4 role templates (id + i18n name/desc/body).
@@ -2304,7 +2201,6 @@ async def list_roles(lang: str | None = None):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
 def _resolve_lang(lang: str | None) -> str:
     """Resolve a `lang` query param to a supported language code.
 
@@ -2327,7 +2223,6 @@ def _resolve_lang(lang: str | None) -> str:
         pass
     from i18n import DEFAULT_LANG
     return DEFAULT_LANG
-
 
 @app.get("/api/agent-context/dailies")
 async def list_dailies(n: int = 7):
@@ -2353,7 +2248,6 @@ async def list_dailies(n: int = 7):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @app.get("/api/agent-context/daily/{date_str}")
 async def read_daily(date_str: str):
@@ -2391,7 +2285,6 @@ async def read_daily(date_str: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
 # ---------------------------------------------------------------------------
 # Agent Context — CRUD on workspace/.agent/*.md (SOUL, IDENTITY, USER, MEMORY)
 # ---------------------------------------------------------------------------
@@ -2406,7 +2299,6 @@ async def read_daily(date_str: str):
 class AgentContextFileUpdate(BaseModel):
     content: str
 
-
 _VALID_AGENT_FILES = {"soul", "identity", "user", "memory"}
 
 # Maps the URL-safe ``file_id`` (lowercase, no extension) to the actual
@@ -2417,7 +2309,6 @@ _AGENT_FILE_NAMES = {
     "user":     "USER.md",
     "memory":   "MEMORY.md",
 }
-
 
 @app.get("/api/agent-context/{file_id}")
 async def get_agent_context_file(file_id: str):
@@ -2455,7 +2346,6 @@ async def get_agent_context_file(file_id: str):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @app.put("/api/agent-context/{file_id}")
 async def put_agent_context_file(file_id: str, req: AgentContextFileUpdate):
@@ -2524,7 +2414,6 @@ async def put_agent_context_file(file_id: str, req: AgentContextFileUpdate):
         "status": _agent_context_status(),
     }
 
-
 @app.post("/api/config/tools")
 async def update_tools_config(req: ToolsConfigRequest):
     """Update tools configuration in config.yaml."""
@@ -2551,10 +2440,8 @@ async def update_tools_config(req: ToolsConfigRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
 class ApiKeyUpdate(BaseModel):
     api_key: str
-
 
 @app.put("/api/config/api-key")
 async def set_api_key(req: ApiKeyUpdate):
@@ -2605,7 +2492,6 @@ async def set_api_key(req: ApiKeyUpdate):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
 class AgentConfigUpdate(BaseModel):
     model: Optional[str] = None
     max_steps: Optional[int] = None
@@ -2616,7 +2502,6 @@ class AgentConfigUpdate(BaseModel):
     region: Optional[str] = None  # "global" or "cn"
     api_base: Optional[str] = None  # full URL, e.g. https://api.minimax.io/anthropic or a proxy
     auto_compact: Optional[bool] = None  # whether to auto-compact at the 80% threshold; 90% safety net is NEVER overridable
-
 
 @app.put("/api/config/agent")
 async def update_agent_config(req: AgentConfigUpdate):
@@ -2701,7 +2586,6 @@ async def update_agent_config(req: AgentConfigUpdate):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
 # --- MCP Servers endpoints ---
 
 @app.get("/api/mcp/servers")
@@ -2725,7 +2609,6 @@ async def get_mcp_servers():
                 "enabled": sdata.get("enabled", True),
             })
     return {"success": True, "servers": result}
-
 
 @app.post("/api/mcp/servers")
 async def create_mcp_server(req: MCPServerCreate):
@@ -2761,7 +2644,6 @@ async def create_mcp_server(req: MCPServerCreate):
     }
     _save_config_dict(cfg)
     return {"success": True, "server": {**cfg["mcp_servers"][server_id], "id": server_id}}
-
 
 @app.put("/api/mcp/servers/{server_id}")
 async def update_mcp_server(server_id: str, req: MCPServerUpdate):
@@ -2801,7 +2683,6 @@ async def update_mcp_server(server_id: str, req: MCPServerUpdate):
     _save_config_dict(cfg)
     return {"success": True, "server": {**sdata, "id": server_id}}
 
-
 @app.delete("/api/mcp/servers/{server_id}")
 async def delete_mcp_server(server_id: str):
     """Delete an MCP server configuration."""
@@ -2812,7 +2693,6 @@ async def delete_mcp_server(server_id: str):
     del servers[server_id]
     _save_config_dict(cfg)
     return {"success": True}
-
 
 @app.post("/api/mcp/servers/{server_id}/toggle")
 async def toggle_mcp_server(server_id: str):
@@ -2825,7 +2705,6 @@ async def toggle_mcp_server(server_id: str):
     sdata["enabled"] = not sdata.get("enabled", True)
     _save_config_dict(cfg)
     return {"success": True, "enabled": sdata["enabled"]}
-
 
 @app.post("/api/mcp/servers/{server_id}/test")
 async def test_mcp_server_endpoint(server_id: str):
@@ -2841,7 +2720,6 @@ async def test_mcp_server_endpoint(server_id: str):
         result["warning"] = "Server is disabled, but connection test was run."
     return result
 
-
 # --- Conversation REST endpoints ---
 
 @app.get("/api/conversations")
@@ -2853,7 +2731,6 @@ async def get_conversations(type: str = ""):
     elif type == "chat":
         all_convos = [c for c in all_convos if not c["id"].startswith("coding-")]
     return {"success": True, "conversations": all_convos}
-
 
 @app.get("/api/conversations/search")
 async def search_conversations_endpoint(q: str = "", type: str = ""):
@@ -2868,19 +2745,16 @@ async def search_conversations_endpoint(q: str = "", type: str = ""):
     results = search_conversations(q, type_filter=type)
     return {"success": True, "query": q.strip(), "results": results}
 
-
 @app.get("/api/conversations/{conv_id}")
 async def get_conversation(conv_id: str):
     """Load a specific conversation."""
     return {"success": True, "data": load_conversation(conv_id)}
-
 
 @app.delete("/api/conversations/{conv_id}")
 async def delete_conversation_endpoint(conv_id: str):
     """Delete a conversation."""
     deleted = delete_conversation(conv_id)
     return {"success": deleted}
-
 
 @app.post("/api/conversations/{conv_id}/rename")
 async def rename_conversation(conv_id: str, req: dict):
@@ -2889,7 +2763,6 @@ async def rename_conversation(conv_id: str, req: dict):
     conv["title"] = req.get("title", conv.get("title", "Untitled"))
     save_conversation(conv_id, conv["title"], conv.get("messages", []))
     return {"success": True}
-
 
 # --- Task board REST endpoints ---
 
@@ -2902,14 +2775,12 @@ class TaskCreate(BaseModel):
     created_by: str = "user"
     source_session_id: str | None = None
 
-
 class TaskUpdate(BaseModel):
     title: str | None = None
     description: str | None = None
     status: str | None = None
     priority: str | None = None
     subtasks: list | None = None
-
 
 class TaskReorder(BaseModel):
     """Batch update of `order` for drag&drop reordering within a column.
@@ -2920,7 +2791,6 @@ class TaskReorder(BaseModel):
     """
     ids: list[str]
 
-
 def _validate_status(status: str):
     if status not in VALID_TASK_STATUSES:
         raise HTTPException(
@@ -2928,14 +2798,12 @@ def _validate_status(status: str):
             detail=f"Invalid status '{status}'. Must be one of {sorted(VALID_TASK_STATUSES)}.",
         )
 
-
 def _validate_priority(priority: str):
     if priority not in VALID_TASK_PRIORITIES:
         raise HTTPException(
             status_code=400,
             detail=f"Invalid priority '{priority}'. Must be one of {sorted(VALID_TASK_PRIORITIES)}.",
         )
-
 
 @app.get("/api/tasks")
 async def get_tasks():
@@ -2946,7 +2814,6 @@ async def get_tasks():
     # (this happens when all tasks have order=0 on first migration).
     tasks.sort(key=lambda t: t.get("updated_at", ""), reverse=True)
     return {"success": True, "tasks": [_serialize_task(t) for t in tasks]}
-
 
 @app.post("/api/tasks")
 async def create_task(req: TaskCreate):
@@ -2983,7 +2850,6 @@ async def create_task(req: TaskCreate):
     )
     return {"success": True, "task": _serialize_task(new_task)}
 
-
 # IMPORTANT: reorder MUST be declared BEFORE the {task_id} handlers below.
 # FastAPI matches routes in declaration order, so PATCH /api/tasks/reorder
 # would otherwise be swallowed by /api/tasks/{task_id} (with task_id="reorder")
@@ -3010,7 +2876,6 @@ async def reorder_tasks(req: TaskReorder):
             t["updated_at"] = datetime.now().isoformat()
     _save_tasks(tasks)
     return {"success": True}
-
 
 @app.patch("/api/tasks/{task_id}")
 async def update_task(task_id: str, req: TaskUpdate):
@@ -3040,7 +2905,6 @@ async def update_task(task_id: str, req: TaskUpdate):
     _save_tasks(tasks)
     return {"success": True, "task": _serialize_task(target)}
 
-
 @app.delete("/api/tasks/{task_id}")
 async def delete_task(task_id: str):
     """Delete a task by ID. Returns success=false if not found."""
@@ -3052,7 +2916,6 @@ async def delete_task(task_id: str):
     _save_tasks(tasks)
     _logger.info(f"Task deleted: id={task_id}")
     return {"success": True}
-
 
 def _build_subdir_post_processor(agent):
     """Build a tool_result_post_processor that appends progressive
@@ -3095,7 +2958,6 @@ def _build_subdir_post_processor(agent):
         )
 
     return _post_process
-
 
 @app.websocket("/ws/chat/{session_id}")
 async def chat_websocket(websocket: WebSocket, session_id: str):
@@ -3603,7 +3465,6 @@ async def chat_websocket(websocket: WebSocket, session_id: str):
         # registry from accumulating dead WebSocket refs.
         unregister_ws(session_id, websocket)
 
-
 @app.post("/api/tts")
 async def tts_generate(req: GenerateRequest, background_tasks: BackgroundTasks, session_id: str = ""):
     """Generate TTS audio (legacy /api/tts endpoint).
@@ -3646,7 +3507,6 @@ async def tts_generate(req: GenerateRequest, background_tasks: BackgroundTasks, 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @app.post("/api/upload")
 async def upload_file(file: UploadFile = File(...), session_id: str = ""):
     """Upload a file. Coding sessions drop it in their workspace
@@ -3681,7 +3541,6 @@ async def upload_file(file: UploadFile = File(...), session_id: str = ""):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @app.post("/api/image")
 async def image_generate(req: ImageRequest, session_id: str = ""):
@@ -3754,7 +3613,6 @@ async def image_generate(req: ImageRequest, session_id: str = ""):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @app.post("/api/image/i2i")
 async def image_i2i_generate(req: ImageRequest, session_id: str = ""):
     """Generate image-to-image variation."""
@@ -3808,7 +3666,6 @@ async def image_i2i_generate(req: ImageRequest, session_id: str = ""):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
 class MusicCoverPreprocessRequest(BaseModel):
     """Body for the cover preprocess endpoint.
 
@@ -3822,7 +3679,6 @@ class MusicCoverPreprocessRequest(BaseModel):
     """
     audio_url: str = ""
     audio_base64: str = ""
-
 
 def _resolve_local_audio_url(url: str) -> Optional[Path]:
     """Map a workspace-relative ``/api/files/download?path=...`` URL back
@@ -3849,7 +3705,6 @@ def _resolve_local_audio_url(url: str) -> Optional[Path]:
         return candidate
     except Exception:
         return None
-
 
 @app.post("/api/minimax/music/preprocess")
 async def music_cover_preprocess(req: MusicCoverPreprocessRequest):
@@ -3959,7 +3814,6 @@ async def music_cover_preprocess(req: MusicCoverPreprocessRequest):
         _logger.exception("Music cover preprocess failed")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 class LyricsRequest(BaseModel):
     """Body for the lyrics generation endpoint.
 
@@ -3972,7 +3826,6 @@ class LyricsRequest(BaseModel):
     prompt: str = ""
     lyrics: str = ""
     title: str = ""
-
 
 @app.post("/api/minimax/music/lyrics")
 async def music_lyrics_generate(req: LyricsRequest):
@@ -4065,9 +3918,8 @@ async def music_lyrics_generate(req: LyricsRequest):
         _logger.exception("Lyrics generation failed")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 # ============================================================================
-# Speech endpoints — replaces the legacy /api/tts (mmx-based) and adds the
+# Speech endpoints — replaces the legacy /api/tts endpoint and adds the
 # four MiniMax speech APIs from TAURI_SPEC.md §6b:
 #   Synthesize (sync + async) / Clone / Design / Voices (list + delete).
 # ============================================================================
@@ -4089,7 +3941,6 @@ class SpeechSynthesizeRequest(BaseModel):
     audio_setting: Optional[AudioSetting] = None
     filename: str = ""
 
-
 class SpeechAsyncCreateRequest(BaseModel):
     """Body for /api/minimax/speech/synthesize-async — kick off long-text T2A."""
     text: str
@@ -4105,7 +3956,6 @@ class SpeechAsyncCreateRequest(BaseModel):
     voice_modify_sound_effects: str = ""
     audio_setting: Optional[AudioSetting] = None
 
-
 class SpeechVoiceCloneRequest(BaseModel):
     """Body for /api/minimax/speech/clone — file_id from /clone/upload."""
     file_id: int
@@ -4120,13 +3970,11 @@ class SpeechVoiceCloneRequest(BaseModel):
     text_validation: str = ""
     accuracy: float = 0.0
 
-
 class SpeechVoiceDesignRequest(BaseModel):
     """Body for /api/minimax/speech/design — voice from text description."""
     prompt: str = Field(..., min_length=1)
     preview_text: str = Field(..., min_length=1, max_length=500)
     voice_id: str = ""
-
 
 # Resolve the audio_setting the user wants for a Speech call. Order:
 #   1) Request body
@@ -4142,7 +3990,6 @@ def _resolve_speech_audio_setting(cfg: dict) -> dict:
         "format": str(default.get("format", "mp3")),
         "channel": int(default.get("channel", 1)),
     }
-
 
 def _save_audio_hex(hex_str: str, audio_setting: dict, filename: str = "", session_id: str = "") -> str:
     """Decode a hex-encoded audio payload and save it.
@@ -4173,7 +4020,6 @@ def _save_audio_hex(hex_str: str, audio_setting: dict, filename: str = "", sessi
     # Relative path is to the root the caller will use to fetch it back
     # (the app workspace by default; a coding workspace when attached).
     return str(out_path.relative_to(out_dir.parent.parent)).replace("\\", "/")
-
 
 @app.post("/api/minimax/speech/synthesize")
 async def speech_synthesize(req: SpeechSynthesizeRequest, session_id: str = ""):
@@ -4252,7 +4098,6 @@ async def speech_synthesize(req: SpeechSynthesizeRequest, session_id: str = ""):
         _logger.exception("T2A synthesize failed")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 def _raise_speech_http_error(result: dict, default_msg: str):
     """Map MiniMax status_code → HTTP status, matching the music endpoints."""
     sc = result.get("status_code") if isinstance(result, dict) else None
@@ -4270,7 +4115,6 @@ def _raise_speech_http_error(result: dict, default_msg: str):
     if sc == 1026:
         raise HTTPException(status_code=422, detail=err)
     raise HTTPException(status_code=502, detail=err)
-
 
 @app.post("/api/minimax/speech/synthesize-async")
 async def speech_synthesize_async_create(req: SpeechAsyncCreateRequest):
@@ -4337,7 +4181,6 @@ async def speech_synthesize_async_create(req: SpeechAsyncCreateRequest):
         _logger.exception("Async T2A create failed")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @app.get("/api/minimax/speech/synthesize-async/{task_id}")
 async def speech_synthesize_async_query(task_id: int):
     """Poll an async T2A task. Returns status (processing|success|failed|expired)
@@ -4367,7 +4210,6 @@ async def speech_synthesize_async_query(task_id: int):
         _logger.exception("Async T2A query failed")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @app.get("/api/minimax/speech/voices")
 async def speech_voices(voice_type: str = "all"):
     """List available voices (system + cloned + generated)."""
@@ -4395,7 +4237,6 @@ async def speech_voices(voice_type: str = "all"):
     except Exception as e:
         _logger.exception("List voices failed")
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @app.post("/api/minimax/speech/clone/upload")
 async def speech_clone_upload(file: UploadFile = File(...)):
@@ -4441,7 +4282,6 @@ async def speech_clone_upload(file: UploadFile = File(...)):
     except Exception as e:
         _logger.exception("Voice clone upload failed")
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @app.post("/api/minimax/speech/clone")
 async def speech_clone(req: SpeechVoiceCloneRequest):
@@ -4502,7 +4342,6 @@ async def speech_clone(req: SpeechVoiceCloneRequest):
         _logger.exception("Voice clone failed")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @app.post("/api/minimax/speech/design")
 async def speech_design(req: SpeechVoiceDesignRequest, session_id: str = ""):
     """Design a custom voice from a text description. Returns ``voice_id`` +
@@ -4546,7 +4385,6 @@ async def speech_design(req: SpeechVoiceDesignRequest, session_id: str = ""):
         _logger.exception("Voice design failed")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @app.delete("/api/minimax/speech/voices/{voice_type}/{voice_id}")
 async def speech_voice_delete(voice_type: str, voice_id: str):
     """Delete a cloned or generated voice. System voices are rejected by the API."""
@@ -4579,7 +4417,6 @@ async def speech_voice_delete(voice_type: str, voice_id: str):
         _logger.exception("Voice delete failed")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 # ============================================================================
 # Generation defaults (audio_setting shared by Music + Speech)
 # TAURI_SPEC.md §7 — read/write the ``defaults.audio`` block in config.yaml.
@@ -4591,7 +4428,6 @@ class GenerationDefaultsAudio(BaseModel):
     bitrate: int = 128000
     format: str = "mp3"  # mp3 | pcm | flac | wav
     channel: int = 1
-
 
 @app.get("/api/config/defaults/audio")
 async def get_generation_defaults_audio():
@@ -4605,7 +4441,6 @@ async def get_generation_defaults_audio():
         "format": str(block.get("format", "mp3")),
         "channel": int(block.get("channel", 1)),
     }
-
 
 @app.put("/api/config/defaults/audio")
 async def put_generation_defaults_audio(req: GenerationDefaultsAudio):
@@ -4654,7 +4489,6 @@ async def put_generation_defaults_audio(req: GenerationDefaultsAudio):
     except Exception as e:
         _logger.exception("Failed to persist audio defaults")
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @app.post("/api/music")
 async def music_generate(req: MusicRequest):
@@ -4811,7 +4645,6 @@ async def music_generate(req: MusicRequest):
         _logger.exception("Music generation failed")
         raise HTTPException(status_code=500, detail=str(e))
 
-
 class MusicConfigUpdate(BaseModel):
     """Update the ``music`` section of config.yaml.
 
@@ -4820,7 +4653,6 @@ class MusicConfigUpdate(BaseModel):
     storing unknown keys.
     """
     audio_setting: Optional[AudioSetting] = None
-
 
 @app.put("/api/config/music")
 async def update_music_config(req: MusicConfigUpdate):
@@ -4854,7 +4686,6 @@ async def update_music_config(req: MusicConfigUpdate):
         return {"success": True, "music": music_block}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @app.post("/api/video")
 async def video_generate(req: GenerateRequest):
@@ -4919,7 +4750,6 @@ async def video_generate(req: GenerateRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @app.get("/api/video/{task_id}")
 async def video_status(task_id: str):
     """Check video generation status.
@@ -4939,7 +4769,6 @@ async def video_status(task_id: str):
         return {"success": success, "data": result}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @app.post("/api/video/download")
 async def video_download(req: dict):
@@ -4978,7 +4807,6 @@ async def video_download(req: dict):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
 # --- Files / Shell / Git endpoints (v0.5 workspace redesign) ---
 #
 # These endpoints all take an optional ``session_id`` query param. When
@@ -5001,7 +4829,6 @@ def _resolve_session_root(session_id: str | None) -> Path:
         return get_session_workspace_dir(session_id)
     return get_app_workspace_dir()
 
-
 def _safe_join(root: Path, rel_path: str) -> Path:
     """Join ``rel_path`` under ``root`` and reject anything that
     escapes via ``..`` / absolute paths. Returns the resolved target."""
@@ -5022,7 +4849,6 @@ def _safe_join(root: Path, rel_path: str) -> Path:
     except ValueError:
         raise HTTPException(status_code=403, detail="Access denied (path escapes workspace root)")
     return target
-
 
 @app.get("/api/files")
 async def list_files(path: str = "workspace", session_id: str = ""):
@@ -5058,7 +4884,6 @@ async def list_files(path: str = "workspace", session_id: str = ""):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @app.get("/api/files/content")
 async def get_file_content(path: str, session_id: str = ""):
     """Read a UTF-8 text file. Resolves against the session workspace
@@ -5076,7 +4901,6 @@ async def get_file_content(path: str, session_id: str = ""):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @app.get("/api/files/download")
 async def download_file(path: str, session_id: str = ""):
     """Serve a file as an attachment (download)."""
@@ -5093,7 +4917,6 @@ async def download_file(path: str, session_id: str = ""):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @app.get("/api/files/raw")
 async def get_file_raw(path: str, session_id: str = ""):
     """Serve a file inline (image/audio/video previews)."""
@@ -5109,7 +4932,6 @@ async def get_file_raw(path: str, session_id: str = ""):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @app.get("/api/generations")
 async def list_generations():
@@ -5138,7 +4960,6 @@ async def list_generations():
 
     return {"success": True, "data": result}
 
-
 @app.post("/api/files/save")
 async def save_file(data: dict):
     """Save file content into the workspace that owns this session."""
@@ -5156,7 +4977,6 @@ async def save_file(data: dict):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @app.post("/api/shell")
 async def shell_command(data: dict):
@@ -5187,7 +5007,6 @@ async def shell_command(data: dict):
     except Exception as e:
         return {"output": "", "error": str(e)}
 
-
 @app.get("/api/git/status")
 async def git_status(session_id: str = ""):
     """Git status of the session's workspace (defaults to app workspace)."""
@@ -5215,7 +5034,6 @@ async def git_status(session_id: str = ""):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
 @app.get("/api/git/branches")
 async def git_branches(session_id: str = ""):
     """List git branches in the session's workspace."""
@@ -5240,7 +5058,6 @@ async def git_branches(session_id: str = ""):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
 # Shell WebSocket for persistent terminal
 import threading
 import subprocess
@@ -5248,13 +5065,11 @@ import platform
 
 shell_sessions = {}
 
-
 def get_shell_command():
     """Get the appropriate shell command for the current OS."""
     if platform.system() == "Windows":
         return ["cmd.exe", "/Q"]
     return ["/bin/bash", "-l"]
-
 
 def read_stream(proc, stream, session_id, websocket):
     """Read from a stream and send to websocket."""
@@ -5273,7 +5088,6 @@ def read_stream(proc, stream, session_id, websocket):
                     pass
     except Exception:
         pass
-
 
 @app.websocket("/ws/shell")
 async def shell_websocket(websocket: WebSocket):
@@ -5344,7 +5158,6 @@ async def shell_websocket(websocket: WebSocket):
                     proc.kill()
             del shell_sessions[session_id]
 
-
 # ============ MiniMax Token Plan (quota + plan tier detection) ============
 
 # Canonical plan identifiers for the current MiniMax Token Plan.
@@ -5362,7 +5175,6 @@ _PLAN_ALIASES: list = [
     ("max", "max"),
 ]
 _PLAN_LOOKUP: dict = {alias: canonical for alias, canonical in _PLAN_ALIASES}
-
 
 def _normalise_plan(raw: object) -> str:
     """Map a free-form plan name to a canonical identifier.
@@ -5387,7 +5199,6 @@ def _normalise_plan(raw: object) -> str:
                 return canonical
     return "unknown"
 
-
 def _get_user_configured_plan() -> str:
     """Fallback plan source: read ``minimax.plan`` from config.yaml.
 
@@ -5411,7 +5222,6 @@ def _get_user_configured_plan() -> str:
     except Exception:
         pass
     return "unknown"
-
 
 def _detect_plan_from_api(model_remains: list) -> str:
     """Auto-detect the user's plan from the Token Plan API ``model_remains[]``
@@ -5464,7 +5274,6 @@ def _detect_plan_from_api(model_remains: list) -> str:
         return "plus"
     return "unknown"
 
-
 def _coerce_number(value: object) -> Optional[float]:
     """Coerce a numeric-looking value into ``float`` (or ``None``).
 
@@ -5481,7 +5290,6 @@ def _coerce_number(value: object) -> Optional[float]:
         return float(str(value).strip())
     except (TypeError, ValueError):
         return None
-
 
 def _enrich_quota(data: object) -> dict:
     """Build the enriched quota payload from the raw Token Plan API response.
@@ -5625,7 +5433,6 @@ def _enrich_quota(data: object) -> dict:
         "video_daily_used": video_daily_used,
     }
 
-
 @app.get("/api/minimax/quota")
 async def get_quota():
     """Get Token Plan quota and auto-detect the user's plan tier.
@@ -5662,7 +5469,6 @@ async def get_quota():
         return {"success": True, "data": data, **enriched}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
 
 async def _fetch_quota_via_api(api_key: str, region: str) -> Optional[dict]:
     """Direct HTTP call to the Token Plan ``remains`` endpoint.
@@ -5705,66 +5511,7 @@ async def _fetch_quota_via_api(api_key: str, region: str) -> Optional[dict]:
         _logger.debug(f"Direct quota fetch failed: {e}")
         return None
 
-
-@app.post("/api/minimax/cli")
-async def run_cli_command(req: CLIRequest):
-    """Run a MiniMax CLI command securely."""
-    try:
-        minimax_config = get_minimax_config()
-        api_key = minimax_config["api_key"]
-        region = minimax_config["region"]
-
-        if not api_key:
-            raise HTTPException(status_code=400, detail="API key not configured")
-
-        import subprocess
-        # Build command: mmx <command> [args] --api-key <key> --region <region>
-        # ``speech`` was removed when we migrated T2A to direct HTTP (the
-        # /api/minimax/speech/* endpoints replace it). ``video`` and ``music``
-        # are still allowed because their direct-HTTP migrations are pending
-        # (covered in the mmx → API migration roadmap).
-        allowed_commands = {
-            "text", "image", "video", "music",
-            "vision", "search", "quota", "config"
-        }
-
-        cmd_parts = req.command.strip().split()
-        if not cmd_parts or cmd_parts[0] not in allowed_commands:
-            raise HTTPException(status_code=400, detail=f"Command '{cmd_parts[0] if cmd_parts else ''}' not allowed")
-
-        import shutil
-        mmx_cmd = shutil.which("mmx") or "mmx"
-        cmd_list = [f'"{mmx_cmd}"'] + cmd_parts + ["--api-key", api_key, "--region", region, "--output", "json"]
-        if req.args:
-            cmd_list.extend(req.args)
-        cmd_str = " ".join(cmd_list)
-
-        env = os.environ.copy()
-        env.update(req.env)
-
-        result = subprocess.run(
-            cmd_str,
-            capture_output=True,
-            text=True,
-            cwd=str(PROJECT_ROOT),
-            timeout=300,
-            env=env,
-            shell=True
-        )
-
-        return {
-            "success": result.returncode == 0,
-            "stdout": result.stdout,
-            "stderr": result.stderr,
-            "returncode": result.returncode
-        }
-    except subprocess.TimeoutExpired:
-        raise HTTPException(status_code=504, detail="Command timed out")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-# NOTE: ``/api/minimax/voices`` (mmx-based, deleted 2026-06-21) was replaced by
+# NOTE: ``/api/minimax/voices`` (legacy, deleted 2026-06-21) was replaced by
 # ``/api/minimax/speech/voices`` (direct HTTP, see speech section above).
 
 # Serve frontend static files (for production)
@@ -5778,7 +5525,6 @@ if FRONTEND_BUILD.exists():
         if index_file.exists():
             return FileResponse(str(index_file))
         raise HTTPException(status_code=404)
-
 
 if __name__ == "__main__":
     import uvicorn

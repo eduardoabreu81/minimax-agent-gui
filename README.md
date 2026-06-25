@@ -208,11 +208,9 @@ are summarized from the official pricing page — always check
 > **Plan auto-detection:** The Quota Dashboard and the plan badge in
 > the sidebar are populated by calling the Token Plan `remains`
 > endpoint directly (`GET /v1/api/openplatform/coding_plan/remains`).
-> This works out of the box — no extra CLI is required. If you happen
-> to have the official `mmx` CLI installed, the backend will fall back
-> to it if the direct call fails. If auto-detection can't reach the
-> API for any reason, set `minimax.plan: plus|max|ultra` in
-> `config/config.yaml` as a manual fallback.
+> This works out of the box — no extra CLI is required. If auto-detection
+> can't reach the API for any reason, set `minimax.plan: plus|max|ultra`
+> in `config/config.yaml` as a manual fallback.
 
 ## Roadmap
 

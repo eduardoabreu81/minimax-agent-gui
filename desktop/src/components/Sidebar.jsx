@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   MessageSquare, Volume2, Image, Music, Video, Code2,
-  Layout, Settings, ChevronsLeft, ChevronsRight
+  Layout, Settings, HelpCircle, ChevronsLeft, ChevronsRight
 } from 'lucide-react'
 import QuotaDashboard from './QuotaDashboard'
 import CreditBalanceWidget from './CreditBalanceWidget'
@@ -42,9 +42,9 @@ export default function Sidebar({ activeTab, onTabChange }) {
   useEffect(() => {
     // The /api/minimax/quota endpoint returns the user's plan at the top
     // level (enriched server-side from config.yaml + Token Plan API). The legacy
-    // ``model_remains.includes('minimax-m')`` heuristic no longer matches
-    // Token Plan API 1.0.16+ responses (which use short bucket names like 'general'),
-    // so we read the enriched ``plan`` field directly.
+    // heuristic of guessing the plan from model bucket names no longer matches
+    // Token Plan API 1.0.16+ responses (which use short bucket names like
+    // 'general'), so we read the enriched ``plan`` field directly.
     apiFetch('/api/minimax/quota')
       .then(r => r.json())
       .then(data => {
@@ -172,10 +172,31 @@ export default function Sidebar({ activeTab, onTabChange }) {
         </div>
       )}
 
-      {/* Footer — Settings is a routed panel like the others, so we just
-          call onTabChange('settings'). The active highlight matches the
-          nav items (primary tint + inset left bar). */}
-      <div className="p-2 border-t border-border shrink-0">
+      {/* Footer — Help and Settings are routed panels like the others, so we
+          just call onTabChange(id). The active highlight matches the nav
+          items (primary tint + inset left bar). */}
+      <div className="p-2 border-t border-border shrink-0 space-y-0.5">
+        <button
+          onClick={() => onTabChange('help')}
+          title={collapsed ? t('nav.help', 'Help') : undefined}
+          className={`
+            relative w-full flex items-center rounded-lg transition-all duration-150
+            ${collapsed ? 'justify-center px-2 py-2.5' : 'gap-3 px-3 py-2.5'}
+            ${activeTab === 'help'
+              ? 'bg-primary/[0.13] text-primary'
+              : 'text-muted-foreground hover:bg-surface hover:text-foreground'
+            }
+            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50
+          `}
+          aria-current={activeTab === 'help' ? 'page' : undefined}
+          aria-label={collapsed ? t('nav.help', 'Help') : undefined}
+        >
+          {activeTab === 'help' && !collapsed && (
+            <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-r bg-primary" aria-hidden="true" />
+          )}
+          <HelpCircle size={18} aria-hidden="true" />
+          {!collapsed && <span className="flex-1 text-left text-[13px] font-medium truncate">{t('nav.help', 'Help')}</span>}
+        </button>
         <button
           onClick={() => onTabChange('settings')}
           title={collapsed ? t('nav.settings') : undefined}

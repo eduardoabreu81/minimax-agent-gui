@@ -310,7 +310,6 @@ feature back to the web SPA, do it in the fork.
 
 ## Windows-Specific Notes
 
-- **Subprocess**: `subprocess.run("mmx ...", shell=True)` required because `mmx` is a `.cmd`
 - **Paths**: Backend uses `Path` objects; frontend receives paths with `/` separators
 
 ## Common Pitfalls for Agents
@@ -355,14 +354,20 @@ must not redefine them**:
 QuotaDashboard `OFFICIAL_MODELS[video]` is gated by `plan: 'max'` and
 reads `data.video_daily_limit/used` directly (no percentage math).
 
-## No CLI dependency for Token Plan operations
+## No CLI dependency
 
-As of the mmx→API migration, the backend **only** uses direct HTTP
-calls to the Token Plan API (`/v1/api/openplatform/coding_plan/remains`)
-for plan detection and quota enrichment. The mmx CLI subprocess and
-the `_fetch_quota_via_mmx` helper were removed. Subsequent PRs migrate
-the remaining `/api/minimax/cli` and `/api/minimax/voices` endpoints
-to direct API calls (see migration roadmap).
+The app is **fully independent of the `mmx` CLI**. Every MiniMax API
+call goes through direct HTTP (`mini_max_mcp/client.py`,
+`MiniMaxSyncClient._post_json` / `MiniMaxClient` async helpers). The
+backend never shells out to `mmx`; users do **not** need the `mmx` CLI
+installed to run the app.
+
+- Token Plan: direct HTTP to `/v1/api/openplatform/coding_plan/remains`
+- Speech: `/api/minimax/speech/*` (T2A sync/async, voices, clone, design)
+- Music: `/api/music` (uses `MiniMaxSyncClient.music_generate`)
+- Video: `/api/video` (uses `MiniMaxSyncClient.video_generate` + poll)
+- Image: `/api/image` (uses `MiniMaxSyncClient.image_generate`)
+- Web search / VLM: direct HTTP via `MiniMaxMCPClient`
 
 ## Roadmap references (Hermes upstream docs)
 
