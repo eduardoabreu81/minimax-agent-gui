@@ -6,37 +6,37 @@
 ## Project Overview
 
 **MiniMax Agent GUI** is a personal AI agent application powered by the MiniMax M3 model (with M2.7 and M2.7-highspeed as selectable options). It provides:
-1. A **desktop app** (`desktop/`, Tauri 2 + Vite + React 18 + Tailwind) — primary and recommended interface
-2. A **web app** (`web/`, FastAPI + React 18 + Vite + Tailwind) — legacy, slated for a separate fork
-3. A **CLI framework** (`mini_agent/cli.py`) — terminal-based interactive agent
+1. A **desktop app** (`desktop/`, Tauri 2 + Vite + React 18 + Tailwind) — primary and only installable interface
+2. A **CLI framework** (`mini_agent/cli.py`) — terminal-based interactive agent
 
-> Note: The PyQt6 desktop GUI exists in `gui/` but is no longer actively maintained.
-
-The project wraps MiniMax MCP tools (`web_search`, `understand_image`) as standard agent tools and provides media generation (TTS, Image, Music, Video) via MiniMax APIs.
+The project wraps MiniMax MCP tools (`web_search`, `understand_image`) as standard agent tools and provides media generation (TTS, Image, Music, Video) via MiniMax APIs. The FastAPI backend (`web/backend/`) is bundled by the Tauri shell as a sidecar — there is no separate web app in this repo.
 
 - **Name**: `minimax-agent-gui`
 - **Version**: `0.4.0`
 - **License**: MIT
 - **Python**: `>=3.10`
 - **Node**: `>=18`
-- **Status**: Active development — desktop-first migration complete (Tauri scaffold + speech 4 sub-modes + settings index rail)
+- **Status**: Active development — desktop-first migration complete (Tauri scaffold + speech 4 sub-modes + settings index rail + skills system + agent context system)
 
 ## Technology Stack
 
-### Web App
-- **Backend**: FastAPI, Uvicorn, WebSocket
-- **Frontend**: React 18, Vite, Tailwind CSS
-- **HTTP Client**: `httpx` (backend), `fetch` (frontend)
+### Desktop App
+- **Shell**: Tauri 2 (Rust) + Vite + React 18 + Tailwind CSS
+- **Component library**: shadcn-style components (`lucide-react`, `radix-ui`, `class-variance-authority`)
 - **Markdown**: `react-markdown` + `remark-gfm`
 - **i18n**: `react-i18next` (6 languages)
 - **Icons**: `lucide-react`
+- **Bundled backend**: PyInstaller-bundled FastAPI sidecar on `:8765`
+
+### Backend (`web/backend/`)
+- **Framework**: FastAPI, Uvicorn, WebSocket
+- **HTTP Client**: `httpx` (sync and async)
+- **Data Validation**: Pydantic v2
+- **Configuration**: YAML (`pyyaml`)
 
 ### Core Framework
 - **LLM Providers**: Anthropic (Claude) and OpenAI-compatible APIs via `mini_agent.llm`
 - **API Backend**: MiniMax API (`api.minimax.io` / `api.minimaxi.com`)
-- **HTTP Client**: `httpx` (sync and async)
-- **Data Validation**: Pydantic v2
-- **Configuration**: YAML (`pyyaml`)
 - **Token Counting**: `tiktoken` (cl100k_base encoder)
 - **CLI Framework**: `prompt-toolkit`
 - **Build System**: `hatchling`
@@ -45,24 +45,28 @@ The project wraps MiniMax MCP tools (`web_search`, `understand_image`) as standa
 
 ```
 minimax-agent-gui/
-├── web/                        # Web app (FastAPI + React 18)
-│   ├── backend/
-│   │   └── main.py             # FastAPI: REST API + WebSocket chat
-│   ├── frontend/
-│   │   ├── src/
-│   │   │   ├── components/
-│   │   │   │   ├── chat/       # ChatPanel.jsx — persistent conversations
-│   │   │   │   ├── coding/     # CodingPanel.jsx — IDE workspace
-│   │   │   │   ├── media/      # ImagePanel, MusicPanel, VideoPanel, TTSPanel
-│   │   │   │   ├── settings/   # SettingsPanel — tools toggles, theme, lang
-│   │   │   │   └── MarkdownRenderer.jsx
-│   │   │   ├── i18n/           # 6-language i18n config
-│   │   │   └── App.jsx
-│   │   └── vite.config.js      # Vite + proxy (/api → :8000, /ws → :8000)
-│   └── package.json            # npm run dev = concurrently backend + frontend
-├── gui/                        # PyQt6 desktop application
-│   ├── main.py                 # MainWindow, entry point
-│   └── panels/                 # Chat, TTS, Image, Code, Music, Video panels
+├── desktop/                    # Tauri 2 desktop app (only installable interface)
+│   ├── src/                    # React 18 + Vite + Tailwind frontend
+│   │   ├── components/         # Chat, Coding, media, settings, agent-context, shared
+│   │   ├── hooks/              # useSessionProtection, AgentActivityContext, useAgentContext
+│   │   ├── i18n/               # 6-language i18n config
+│   │   ├── App.jsx             # Top-level shell + tab routing
+│   │   ├── themes.css          # 9 color themes
+│   │   └── main.jsx
+│   ├── src-tauri/              # Rust backend (tauri 2.1 + tauri-plugin-shell 2.0)
+│   │   └── src/lib.rs          # start_backend() spawns the FastAPI sidecar
+│   ├── vite.config.js          # Vite + proxy (/api, /ws → :8765)
+│   ├── tauri.conf.json         # productName "MiniMax Agent", identifier com.minimax.agent.desktop
+│   └── package.json
+├── web/                        # Backend only (bundled by Tauri sidecar)
+│   └── backend/
+│       ├── main.py             # FastAPI: REST API + WebSocket chat
+│       ├── agent_context.py    # .agent/*.md loader (SOUL/IDENTITY/USER/MEMORY)
+│       ├── conv_store.py       # Conversation persistence (JSON)
+│       ├── i18n.py             # Backend i18n (89 keys × en-US/pt-BR)
+│       ├── mcp_agent_tools.py  # MCP runtime
+│       ├── mcp_runtime.py      # MCP server lifecycle
+│       └── subdirectory_hints.py  # Progressive subdirectory discovery (AGENTS.md, CLAUDE.md)
 ├── mini_agent/                 # Core agent framework (reusable library)
 │   ├── agent.py                # Async agent loop, tool execution, token summarization
 │   ├── cli.py                  # Interactive CLI entry point
@@ -86,10 +90,10 @@ minimax-agent-gui/
 
 ## Entry Points
 
-### Web App
+### Desktop App
 ```bash
-cd web
-npm run dev          # Starts FastAPI (:8000) + Vite (:3000) concurrently
+cd desktop
+npm run tauri:dev          # Launches Tauri shell + auto-spawns backend sidecar
 ```
 
 ### CLI
@@ -103,14 +107,11 @@ mini-agent
 # Python dependencies
 pip install -e .
 
-# Web dependencies
-cd web && npm install
+# Desktop app dependencies
+cd desktop && npm install
 
-# Run web app
-cd web && npm run dev
-
-# Run desktop GUI
-python -m gui.main
+# Run desktop app (Tauri dev mode)
+cd desktop && npm run tauri:dev
 
 # Run tests
 pytest -v
@@ -134,12 +135,10 @@ tools:
 
 The backend exposes `/api/config` (returns `api_key_configured: boolean`, never the key string) and `/api/config/tools` (POST to toggle tools).
 
-## Web App Architecture
-
-### Backend (`web/backend/main.py`)
+## Backend Architecture (`web/backend/`)
 
 FastAPI server with:
-- **REST endpoints** — `/api/image`, `/api/tts`, `/api/music`, `/api/video`, `/api/upload`, `/api/files/*`, `/api/conversations/*`, `/api/config`
+- **REST endpoints** — `/api/image`, `/api/tts`, `/api/music`, `/api/video`, `/api/upload`, `/api/files/*`, `/api/conversations/*`, `/api/config`, `/api/skills/*`, `/api/agent-context/*`
 - **WebSocket** — `/ws/chat/{session_id}` for real-time streaming chat
 - **SessionManager** — Creates agent per session with ReadTool, WriteTool, BashTool, and optional WebSearchTool/UnderstandImageTool
 - **Conversation Persistence** — Auto-saves every message to `workspace/conversations/{id}.json`
@@ -147,26 +146,9 @@ FastAPI server with:
   - Backend filters via `?type=coding` query param
 - **File Upload** — `POST /api/upload` saves to `workspace/uploads/`, returns path
 - **File Download** — `GET /api/files/download?path=` serves files (images, audio, etc.)
-
-### Frontend (`web/frontend/src/`)
-
-React 18 with Vite and Tailwind CSS:
-- **ChatPanel** — Persistent conversations, file attachment, markdown rendering, Enter-to-send
-- **CodingPanel** — File explorer, editor, terminal, git, persistent code-chat with context injection
-- **ImagePanel** — T2I + I2I tabs, aspect ratio picker, gallery, batch generation
-- **TTSPanel** — Voice selection with language filter, speed control, batch generation
-- **MusicPanel** — Prompt/lyrics generation with optimizer
-- **VideoPanel** — Text/image-to-video with duration/resolution selection
-- **SettingsPanel** — Tools toggles, theme, language, model settings
-
-### Vite Proxy Config
-
-```js
-proxy: {
-  '/api': { target: 'http://localhost:8000' },
-  '/ws': { target: 'ws://localhost:8000', ws: true }
-}
-```
+- **Agent Context** — `.agent/*.md` (SOUL/IDENTITY/USER/MEMORY/dailies) loaded at session start, snapshotted into system prompt
+- **Skills** — multi-source loader (`User > Extra > Generic > Claude > Codex > Gemini > Built-in`)
+- **Subdirectory Hints** — `AGENTS.md`/`CLAUDE.md`/`.cursorrules` progressively discovered on file reads
 
 ## Key Frontend Patterns
 
@@ -232,7 +214,7 @@ Response format uses `base_resp` for error codes and `content` for VLM text / `o
 > params). Match the working `minimax-coding-plan-mcp` server's
 > request shape: `{"q": "<query>"}`.
 
-## Key Features (as of 0.3.0)
+## Key Features (as of 0.4.0)
 
 ### Per-turn Model + Thinking Controls
 
@@ -264,7 +246,7 @@ message (no duplication) and attaches the model tag + any metadata.
 
 ### Thinking Block
 
-`ThinkingBlock` (in `web/frontend/src/components/shared/`) renders the
+`ThinkingBlock` (in `desktop/src/components/shared/`) renders the
 model's reasoning as its own message in the chat timeline (above the
 assistant's response). Always visible (per user preference). Shows a
 streaming spinner while chunks are still arriving. A separate
@@ -295,22 +277,21 @@ in `_detect_plan_from_api()` (`web/backend/main.py`):
 - Some tests require live API key in `config/config.yaml`
 - Unit tests for tools can run without API key
 
-## Repository layout (post v0.4.0)
+## Repository layout (v0.4.0)
 
 Starting with v0.4.0, this repo ships **only the Tauri desktop app** as
-the installable interface. The legacy web frontend is being moved to a
-separate fork (`eduardoabreu81/minimax-agent-gui-web`).
+the installable interface. The legacy web frontend has been removed from
+this repo (the React SPA exists in a separate fork under
+`eduardoabreu81/minimax-agent-gui-web` if you need it).
 
 | Path | Repo | Notes |
 |---|---|---|
-| `desktop/` | this | Tauri 2 desktop app (primary, installable) |
-| `web/backend/` | this | FastAPI — also bundled by Tauri sidecar, shared |
+| `desktop/` | this | Tauri 2 desktop app (only installable interface) |
+| `web/backend/` | this | FastAPI — bundled by Tauri sidecar, shared |
 | `mini_agent/`, `mini_max_mcp/`, `tests/` | this | Core + tests |
-| `web/frontend/` | fork `minimax-agent-gui-web` | Legacy React web app — preserved on a `web-archive` branch before the split, then moved to the fork |
 
-When working in this repo, **do not edit `web/frontend/*`** — it's
-frozen and the active development target is `desktop/`. If you need to
-mirror a feature back to the web app, do it in the fork.
+The active development target is `desktop/`. If you need to mirror a
+feature back to the web SPA, do it in the fork.
 
 ## Code Style Guidelines
 
@@ -335,11 +316,9 @@ mirror a feature back to the web app, do it in the fork.
 ## Common Pitfalls for Agents
 
 - **Do not** assume `config/config.yaml` exists in a fresh clone — it is gitignored.
-- **Do not** modify the `web/` directory's `node_modules` — use `npm install` in `web/`.
 - When editing `main.py`, the server may need manual restart (Uvicorn StatReload can hang).
 - The `MiniMaxSyncClient` and `MiniMaxClient` have **separate** method signatures — sync uses `requests`, async uses `httpx`.
 - The `image_variations` (I2I) method uses `subject_reference` with `image_file` (data URL), not `image_base64`.
-- Frontend WebSocket connects directamente to `ws://localhost:8000` (not through Vite proxy for `/ws/chat/`).
 - Conversation IDs starting with `coding-` are filtered by backend as coding sessions.
 - **Skill sources priority is `User > Extra > Generic > Claude > Codex > Gemini > Built-in`** — Edit/Delete via `PUT/DELETE /api/skills/{name}` refuse non-User sources with HTTP 403 and a hint to "Import to user first". Use `POST /api/skills/import` to promote an external skill to the user dir.
 - **Skill name schema (Kimi / agentskills.io)** — `^[a-z0-9][a-z0-9-]{0,63}$`. Description 1-1024 chars. Validation lives in `mini_agent/tools/skill_loader.py` (`_validate_name`, `_validate_description`) and raises `SkillValidationError` → HTTP 400.

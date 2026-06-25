@@ -13,19 +13,24 @@ need a real API key. A separate test exercises the tiktoken
 fallback path (no encoding available) by patching tiktoken.
 """
 
+import os
 import sys
 import unittest.mock as mock
 from pathlib import Path
 
 # Same path setup as test_compact_logging — keep imports stable
 # for the hermes venv.
-sys.path.insert(0, r"C:\Users\Eduardo\OneDrive\Documentos\GitHub\minimax-agent-gui")
-
 import pytest
 
 from mini_agent.agent import Agent
 from mini_agent.schema import Message
 
+# Resolve PROJECT_ROOT from this test file's location so paths work
+# cross-platform without hardcoding any developer-specific path.
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+os.environ.setdefault("MINIMAX_PROJECT_ROOT", str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT / "web" / "backend"))
 
 class _StubLLM:
     """Minimal LLM stub. MODEL_CONTEXT_LIMITS exposes the M3
@@ -40,7 +45,6 @@ class _StubLLM:
 
     async def aclose(self):  # pragma: no cover
         pass
-
 
 class _StubMcpTool:
     """Minimal ExternalMCPTool stub. Has server_id + server_config
@@ -60,7 +64,6 @@ class _StubMcpTool:
             "input_schema": {"type": "object", "properties": {}},
         }
 
-
 @pytest.fixture
 def agent():
     """Build an Agent with no messages yet; tests can set messages directly."""
@@ -72,11 +75,9 @@ def agent():
         workspace_dir=Path.cwd().as_posix(),
     )
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Shape and basic invariants
 # ─────────────────────────────────────────────────────────────────────────────
-
 
 def test_estimate_by_source_returns_known_keys(agent):
     result = agent.estimate_by_source()
@@ -94,7 +95,6 @@ def test_estimate_by_source_returns_known_keys(agent):
     }
     assert set(result.keys()) == expected
 
-
 def test_details_has_three_lists(agent):
     result = agent.estimate_by_source()
     assert set(result["details"].keys()) == {
@@ -104,7 +104,6 @@ def test_details_has_three_lists(agent):
     assert result["details"]["mcp_tools_list"] == []
     assert result["details"]["memory_files_list"] == []
     assert result["details"]["custom_agents_list"] == []
-
 
 def test_estimate_by_source_empty_messages_returns_zero(agent):
     # Agent.__init__ auto-injects a system message with the workspace
@@ -123,7 +122,6 @@ def test_estimate_by_source_empty_messages_returns_zero(agent):
     # free_space key no longer exists — see comment in
     # test_estimate_by_source_returns_known_keys.
 
-
 def test_total_equals_sum_of_parts(agent):
     """total = sum of all categorized tokens (no free_space, no
     subtraction — total IS the consumed tokens)."""
@@ -140,7 +138,6 @@ def test_total_equals_sum_of_parts(agent):
     )
     assert result["total"] == consumed
 
-
 def test_free_space_key_removed(agent):
     """free_space was removed from the breakdown in v0.4.x. Verify
     it's gone so any old frontend code falls back gracefully (no
@@ -150,11 +147,9 @@ def test_free_space_key_removed(agent):
     result = agent.estimate_by_source()
     assert "free_space" not in result
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Categorization by section header
 # ─────────────────────────────────────────────────────────────────────────────
-
 
 def test_base_prompt_is_categorized_as_system_prompt(agent):
     """The preamble (before any ## header) goes to `system_prompt`."""
@@ -163,7 +158,6 @@ def test_base_prompt_is_categorized_as_system_prompt(agent):
     assert result["system_prompt"] > 0
     assert result["skills"] == 0
     assert result["memory_files"] == 0
-
 
 def test_skills_section_categorized_via_header(agent):
     """A section whose header mentions 'skill' goes to `skills`."""
@@ -179,7 +173,6 @@ def test_skills_section_categorized_via_header(agent):
     # Base preamble should still be `system_prompt`
     assert result["system_prompt"] > 0
 
-
 def test_mcp_servers_section_categorized_as_mcp_tools(agent):
     """The `## MCP Servers` section header goes to `mcp_tools`."""
     prompt = (
@@ -190,7 +183,6 @@ def test_mcp_servers_section_categorized_as_mcp_tools(agent):
     agent.messages = [Message(role="system", content=prompt)]
     result = agent.estimate_by_source()
     assert result["mcp_tools"] > 0
-
 
 def test_identity_section_goes_to_custom_agents(agent):
     """`## Current Role (IDENTITY.md)` → custom_agents bucket."""
@@ -204,7 +196,6 @@ def test_identity_section_goes_to_custom_agents(agent):
     # And the details list has an entry
     assert len(result["details"]["custom_agents_list"]) == 1
 
-
 def test_user_md_section_goes_to_memory_files(agent):
     """`## About the User (USER.md)` → memory_files bucket."""
     prompt = (
@@ -215,7 +206,6 @@ def test_user_md_section_goes_to_memory_files(agent):
     result = agent.estimate_by_source()
     assert result["memory_files"] > 0
     assert len(result["details"]["memory_files_list"]) == 1
-
 
 def test_memory_md_section_goes_to_memory_files(agent):
     """Hermes `MEMORY (agent notes)` header (no `##` prefix) is
@@ -230,7 +220,6 @@ def test_memory_md_section_goes_to_memory_files(agent):
     result = agent.estimate_by_source()
     assert result["memory_files"] > 0
 
-
 def test_today_session_log_falls_into_system_prompt(agent):
     """The daily log section doesn't have a special keyword — it
     falls into system_prompt (the default bucket)."""
@@ -242,7 +231,6 @@ def test_today_session_log_falls_into_system_prompt(agent):
     result = agent.estimate_by_source()
     assert result["system_prompt"] > 0
 
-
 def test_messages_contribute_to_messages_bucket(agent):
     """messages[1:] (history) goes to `messages`."""
     agent.messages = [
@@ -253,11 +241,9 @@ def test_messages_contribute_to_messages_bucket(agent):
     result = agent.estimate_by_source()
     assert result["messages"] > 0
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # MCP tool details (per-server breakdown)
 # ─────────────────────────────────────────────────────────────────────────────
-
 
 def test_mcp_tools_in_self_tools_are_grouped_by_server(agent):
     """Tools with `server_id` are bucketed into mcp_tools_list,
@@ -284,7 +270,6 @@ def test_mcp_tools_in_self_tools_are_grouped_by_server(agent):
     # mcp_tools bucket also gets the schema tokens
     assert result["mcp_tools"] > 0
 
-
 def test_builtin_tools_not_counted_in_mcp_tools(agent):
     """Built-in tools (no server_id) shouldn't appear in
     mcp_tools_list or mcp_tools bucket."""
@@ -308,11 +293,9 @@ def test_builtin_tools_not_counted_in_mcp_tools(agent):
     assert result["details"]["mcp_tools_list"] == []
     assert result["mcp_tools"] == 0
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Future feature: mcp_deferred + system_tools_deferred (currently always 0)
 # ─────────────────────────────────────────────────────────────────────────────
-
 
 def test_mcp_deferred_is_zero_today(agent):
     """mcp_deferred is a TODO — heuristic not implemented yet.
@@ -325,7 +308,6 @@ def test_mcp_deferred_is_zero_today(agent):
     result = agent.estimate_by_source()
     assert result["mcp_deferred"] == 0
 
-
 def test_system_tools_deferred_is_zero_today(agent):
     """system_tools_deferred is a TODO placeholder. Same as
     mcp_deferred — always 0 today."""
@@ -333,11 +315,9 @@ def test_system_tools_deferred_is_zero_today(agent):
     result = agent.estimate_by_source()
     assert result["system_tools_deferred"] == 0
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Fallback when tiktoken is unavailable
 # ─────────────────────────────────────────────────────────────────────────────
-
 
 def test_fallback_estimation_works_when_tiktoken_init_fails(agent):
     """If tiktoken.get_encoding raises, the estimator should still
@@ -353,11 +333,9 @@ def test_fallback_estimation_works_when_tiktoken_init_fails(agent):
     assert result["messages"] > 0
     assert result["total"] > 0
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Backwards-compat: old shape keys are gone
 # ─────────────────────────────────────────────────────────────────────────────
-
 
 def test_old_keys_not_present_in_new_shape(agent):
     """Bumped shape in 0.4.x — old keys `system` and `tools` were

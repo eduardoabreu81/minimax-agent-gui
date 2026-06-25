@@ -13,17 +13,18 @@ Covers:
 
 import os
 import sys
+from pathlib import Path
 import unittest.mock as mock
 
-os.environ.setdefault(
-    "MINIMAX_PROJECT_ROOT",
-    r"C:\Users\Eduardo\OneDrive\Documentos\GitHub\minimax-agent-gui",
-)
-
-sys.path.insert(0, r"C:\Users\Eduardo\OneDrive\Documentos\GitHub\minimax-agent-gui")
-sys.path.insert(0, r"C:\Users\Eduardo\OneDrive\Documentos\GitHub\minimax-agent-gui\web\backend")
-
 import mini_max_mcp.client as mc  # noqa: E402
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+CFG_PATH = PROJECT_ROOT / 'config' / 'config.yaml'
+# Resolve PROJECT_ROOT from this test file's location so paths work
+# cross-platform without hardcoding any developer-specific path.
+os.environ.setdefault("MINIMAX_PROJECT_ROOT", str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT / "web" / "backend"))
 
 FAKE_HEX = "00" * 24
 FAKE_SYNTH_PAYLOAD = {
@@ -114,25 +115,20 @@ ROUTES = {
     "/v1/files/upload": FAKE_UPLOAD_PAYLOAD,
 }
 
-
 def fake_post_json(self, endpoint, data, timeout=120.0):
     if endpoint in ROUTES:
         return True, ROUTES[endpoint]
     return False, {"status_msg": f"Unexpected endpoint: {endpoint}"}
-
 
 def fake_get_json(self, endpoint, params=None, timeout=60.0):
     if endpoint == "/v1/query/t2a_async_query_v2":
         return True, FAKE_ASYNC_QUERY_DONE
     return False, {"status_msg": f"Unexpected GET endpoint: {endpoint}"}
 
-
-CFG_PATH = r"C:\Users\Eduardo\OneDrive\Documentos\GitHub\minimax-agent-gui\config\config.yaml"
 os.makedirs(os.path.dirname(CFG_PATH), exist_ok=True)
 if not os.path.exists(CFG_PATH):
     with open(CFG_PATH, "w", encoding="utf-8") as f:
         f.write("minimax:\n  api_key: sk-test-fake\n  api_base: https://api.minimax.io\n  region: global\n")
-
 
 with mock.patch.object(mc.MiniMaxSyncClient, "_post_json", fake_post_json), \
      mock.patch.object(mc.MiniMaxSyncClient, "_get_json", fake_get_json):

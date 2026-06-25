@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.4.0] — 2026-06-21 — Desktop-first migration (Tauri)
 
-**Major milestone.** The desktop app (`desktop/`, Tauri 2 + Vite + React 18) is now the **primary interface**. The legacy web app (`web/`) is preserved but slated for a separate fork. Three major feature sprints landed on the backend that power the new desktop panels.
+**Major milestone.** The desktop app (`desktop/`, Tauri 2 + Vite + React 18) is now the **only installable interface**. The legacy web frontend has been removed from this repo (the FastAPI backend under `web/backend/` is bundled by Tauri as a sidecar). Three major feature sprints landed on the backend that power the new desktop panels.
 
 ### Added — Backend
 
@@ -45,7 +45,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Deprecated
 
-- **`web/`** — Legacy web app preserved but slated for a separate fork. The desktop app (`desktop/`) is now the primary interface. The web frontend will keep working but is no longer the focus of new development.
+- **`web/frontend/`** — Removed from this repo. The desktop app (`desktop/`) is the only installable interface; the FastAPI backend under `web/backend/` is bundled as a Tauri sidecar. The legacy React SPA is preserved in a separate fork if needed.
 
 ### Known follow-ups
 
@@ -588,10 +588,9 @@ controls and fixed a number of Token Plan API quirks.
   of this block only documented the two MiniMax servers
   (`web_search`, `understand_image`) and added a separate
   generic "## Custom MCP Tools" block that just said
-  "additional tools are available". Eduardo caught that the
-  two should be unified and the Custom block should list
-  the actual configured servers, not a generic stub. New
-  shape:
+  "additional tools are available". The two sections were
+  unified and the Custom block now lists the actual
+  configured servers, not a generic stub. New shape:
   ```
   ## MCP Servers
   ### MiniMax (built-in)

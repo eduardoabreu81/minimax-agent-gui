@@ -3,19 +3,19 @@ Music + Speech panels (TAURI_SPEC.md §7)."""
 
 import os
 import sys
+from pathlib import Path
 import unittest.mock as mock
-
-os.environ.setdefault(
-    "MINIMAX_PROJECT_ROOT",
-    r"C:\Users\Eduardo\OneDrive\Documentos\GitHub\minimax-agent-gui",
-)
-
-sys.path.insert(0, r"C:\Users\Eduardo\OneDrive\Documentos\GitHub\minimax-agent-gui")
-sys.path.insert(0, r"C:\Users\Eduardo\OneDrive\Documentos\GitHub\minimax-agent-gui\web\backend")
 
 import mini_max_mcp.client as mc  # noqa: E402
 
-CFG_PATH = r"C:\Users\Eduardo\OneDrive\Documentos\GitHub\minimax-agent-gui\config\config.yaml"
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+CFG_PATH = PROJECT_ROOT / 'config' / 'config.yaml'
+# Resolve PROJECT_ROOT from this test file's location so paths work
+# cross-platform without hardcoding any developer-specific path.
+os.environ.setdefault("MINIMAX_PROJECT_ROOT", str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT / "web" / "backend"))
+
 os.makedirs(os.path.dirname(CFG_PATH), exist_ok=True)
 # Reset the config so each test starts with the hardcoded fallback.
 # This avoids pollution from earlier suites that persist their own
@@ -23,7 +23,6 @@ os.makedirs(os.path.dirname(CFG_PATH), exist_ok=True)
 INITIAL_CFG = "minimax:\n  api_key: sk-test-fake\n  api_base: https://api.minimax.io\n  region: global\n"
 with open(CFG_PATH, "w", encoding="utf-8") as f:
     f.write(INITIAL_CFG)
-
 
 with mock.patch.object(mc.MiniMaxSyncClient, "_post_json", lambda *a, **kw: (True, {})):
     from fastapi.testclient import TestClient  # noqa: E402

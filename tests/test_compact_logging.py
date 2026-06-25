@@ -29,18 +29,17 @@ import unittest.mock as mock
 from io import StringIO
 from pathlib import Path
 
-os.environ.setdefault(
-    "MINIMAX_PROJECT_ROOT",
-    r"C:\Users\Eduardo\OneDrive\Documentos\GitHub\minimax-agent-gui",
-)
-sys.path.insert(0, r"C:\Users\Eduardo\OneDrive\Documentos\GitHub\minimax-agent-gui")
-sys.path.insert(0, r"C:\Users\Eduardo\OneDrive\Documentos\GitHub\minimax-agent-gui\web\backend")
-
 import pytest
 
 from mini_agent.agent import Agent
 from mini_agent.schema import Message
 
+# Resolve PROJECT_ROOT from this test file's location so paths work
+# cross-platform without hardcoding any developer-specific path.
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+os.environ.setdefault("MINIMAX_PROJECT_ROOT", str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT / "web" / "backend"))
 
 class _StubLLM:
     """Minimal LLM stub — exposes only what Agent.__init__ / _summarize_messages
@@ -57,7 +56,6 @@ class _StubLLM:
 
     async def aclose(self):  # pragma: no cover
         pass
-
 
 def _make_agent(**overrides):
     """Build an Agent with a stub LLM and a temp workspace."""
@@ -76,7 +74,6 @@ def _make_agent(**overrides):
     defaults.update(overrides)
     return Agent(**defaults)
 
-
 def _attach_capture():
     """Return (handler, buffer) and attach the handler to the agent logger."""
     buf = StringIO()
@@ -88,11 +85,9 @@ def _attach_capture():
     root.setLevel(logging.INFO)
     return handler, buf
 
-
 def _detach_capture(handler):
     root = logging.getLogger("mini_agent.agent")
     root.removeHandler(handler)
-
 
 def _parse_events(buf: StringIO) -> list[dict]:
     """Return the JSON event lines captured by the agent logger."""
@@ -107,11 +102,9 @@ def _parse_events(buf: StringIO) -> list[dict]:
             pass
     return events
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Agent._summarize_messages — backend-triggered paths
 # ─────────────────────────────────────────────────────────────────────────────
-
 
 @pytest.mark.asyncio
 async def test_force_compact_emits_started_with_force_reason():
@@ -137,7 +130,6 @@ async def test_force_compact_emits_started_with_force_reason():
     finally:
         _detach_capture(handler)
 
-
 @pytest.mark.asyncio
 async def test_auto_compact_emits_started_with_auto_reason():
     handler, buf = _attach_capture()
@@ -156,7 +148,6 @@ async def test_auto_compact_emits_started_with_auto_reason():
     finally:
         _detach_capture(handler)
 
-
 @pytest.mark.asyncio
 async def test_legacy_floor_emits_started_with_legacy_reason():
     handler, buf = _attach_capture()
@@ -173,7 +164,6 @@ async def test_legacy_floor_emits_started_with_legacy_reason():
         assert started[0]["compact_reason"] == "legacy"
     finally:
         _detach_capture(handler)
-
 
 @pytest.mark.asyncio
 async def test_force_wins_over_auto_when_both_apply():
@@ -192,7 +182,6 @@ async def test_force_wins_over_auto_when_both_apply():
     finally:
         _detach_capture(handler)
 
-
 @pytest.mark.asyncio
 async def test_no_trigger_emits_no_started_event():
     handler, buf = _attach_capture()
@@ -206,7 +195,6 @@ async def test_no_trigger_emits_no_started_event():
         assert started == []
     finally:
         _detach_capture(handler)
-
 
 @pytest.mark.asyncio
 async def test_completed_event_has_delta_fields():
@@ -247,7 +235,6 @@ async def test_completed_event_has_delta_fields():
     finally:
         _detach_capture(handler)
 
-
 @pytest.mark.asyncio
 async def test_failed_event_emitted_on_exception():
     """When the summarization loop raises, `failed` event is emitted
@@ -284,7 +271,6 @@ async def test_failed_event_emitted_on_exception():
     finally:
         _detach_capture(handler)
 
-
 @pytest.mark.asyncio
 async def test_session_id_propagated_when_set():
     """When Agent.session_id is set, it appears in every emitted event."""
@@ -307,11 +293,9 @@ async def test_session_id_propagated_when_set():
     finally:
         _detach_capture(handler)
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # _log_compact_event helper
 # ─────────────────────────────────────────────────────────────────────────────
-
 
 def test_log_compact_event_helper_emits_valid_json():
     """_log_compact_event echoes payload as a single JSON line on _logger.info."""
@@ -334,7 +318,6 @@ def test_log_compact_event_helper_emits_valid_json():
         assert payload["session_id"] == "test-session-123"
         assert payload["model"] == "MiniMax-M3"
         assert payload["delta_tokens"] == 50
-
 
 def test_log_compact_event_main_py_helper():
     """The companion helper in web/backend/main.py emits a single JSON line.
