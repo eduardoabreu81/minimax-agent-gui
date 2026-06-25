@@ -3,9 +3,9 @@ import { apiFetch, apiWebSocketUrl } from '../../lib/api.js'
 import { useTranslation } from 'react-i18next'
 import {
   Code2, FileCode, Folder, GitBranch, Terminal, Save, RefreshCw,
-  X, Send, Bot, User, Loader2, Sparkles,
+  X, Bot, User, Loader2, Sparkles,
   ChevronRight, Play, Square,
-  MessageSquarePlus, Trash2, Paperclip, Image as ImageIcon, FileText, ChevronDown, Search,
+  MessageSquarePlus, Trash2, FileText, ChevronDown, Search,
   Zap, Pencil, ArrowUp, Home, AlertTriangle
 } from 'lucide-react'
 import XTermTerminal from './XTermTerminal'
@@ -18,7 +18,7 @@ import { useAgentActivity } from '../../context/AgentActivityContext'
 import { useSessionProtection } from '../../hooks/useSessionProtection'
 import { useSessionTokens } from '../../context/SessionTokensContext'
 import ThinkingBlock from '../shared/ThinkingBlock'
-import SlashMenu from '../shared/SlashMenu.jsx'
+import { Composer } from '@/components/chat/Composer.tsx'
 import CopyButton from '../shared/CopyButton'
 
 /**
@@ -103,24 +103,18 @@ export default function CodingPanel({
 
   // Coding Agent Chat state
   const [codingMessages, setCodingMessages] = useState([])
-  const [codingInput, setCodingInput] = useState('')
   const [codingWs, setCodingWs] = useState(null)
   const [codingThinking, setCodingThinking] = useState(false)
   const [codingConnected, setCodingConnected] = useState(false)
-  const [codingAttachment, setCodingAttachment] = useState(null)
   const [codingSessionId, setCodingSessionId] = useState(() => `coding-${Math.random().toString(36).substring(2, 10)}`)
   const [codingConversations, setCodingConversations] = useState([])
   const [showCodingConvList, setShowCodingConvList] = useState(false)
   const [codingSearchQuery, setCodingSearchQuery] = useState('')
   const [codingSearchResults, setCodingSearchResults] = useState(null)
   const [codingSearchLoading, setCodingSearchLoading] = useState(false)
-  const [skills, setSkills] = useState([])
-  const [showSkills, setShowSkills] = useState(false)
-  const [skillIndex, setSkillIndex] = useState(0)
   const [thinkingDuration, setThinkingDuration] = useState(0)
   const codingSearchTimeoutRef = useRef(null)
   const codingChatRef = useRef(null)
-  const codingFileInputRef = useRef(null)
   const codingConvListRef = useRef(null)
   // Accumulates the model's reasoning chunks streamed during the
   // current run, so we can attach the full block to the final
@@ -148,10 +142,6 @@ export default function CodingPanel({
       register('tool-permission', false, '')
     }
   }, [permissionRequest, register])
-
-  useEffect(() => {
-    register('code-input', codingInput.trim().length > 0, 'Unsent code message')
-  }, [codingInput, register])
 
   useEffect(() => {
     register('code-unsaved', hasUnsavedChanges, 'Unsaved file changes')
@@ -340,14 +330,6 @@ export default function CodingPanel({
       })
       const data = await res.json()
       if (data.success) setRecentWorkspaces(data.workspaces || [])
-    } catch (e) { /* ignore */ }
-  }
-
-  const fetchSkills = async () => {
-    try {
-      const res = await apiFetch('/api/skills')
-      const data = await res.json()
-      setSkills(data.skills || [])
     } catch (e) { /* ignore */ }
   }
 
@@ -658,8 +640,17 @@ export default function CodingPanel({
     return () => window.removeEventListener('approvePlan', handleApprove)
   }, [approveAndRunPlan])
 
-const sendCodingMessage = useCallback(() => {
-    if ((!codingInput.trim() && !codingAttachment) || !codingWs || codingWs.readyState !== WebSocket.OPEN) return
+// Composer is responsible for the "unsent content" / "pending
+  // attachment" session protection registration. It fires
+  // onDirtyChange on every text/attachment state change; we
+  // re-register the code-input slot here.
+  const handleComposerDirtyChange = useCallback((dirty) => {
+    register('code-input', dirty, 'Unsent code message')
+  }, [register])
+
+const sendCodingMessage = useCallback((text, attachment) => {
+    const trimmed = (text || '').trim()
+    if ((!trimmed && !attachment) || !codingWs || codingWs.readyState !== WebSocket.OPEN) return
 
     if (permissionRequest) {
       setCodingMessages(prev => [...prev, {
@@ -683,20 +674,18 @@ const sendCodingMessage = useCallback(() => {
 
     // Plan mode: create a draft plan instead of sending immediately
     if (agentMode === 'plan') {
-      const userMessage = codingInput.trim() || '📎 Attachment sent'
+      const userMessage = trimmed || '📎 Attachment sent'
       const planItems = buildPlanItems(userMessage)
-      activity.createPlan(planItems, userMessage, codingAttachment)
+      activity.createPlan(planItems, userMessage, attachment)
       setCodingMessages(prev => [...prev, {
         type: 'user',
         content: userMessage,
-        attachment: codingAttachment?.path
+        attachment: attachment?.path
       }])
       setCodingMessages(prev => [...prev, {
         type: 'system',
         content: 'Plan draft created. Review and approve it in the Workspace sidebar before the agent starts working.'
       }])
-      setCodingInput('')
-      setCodingAttachment(null)
       // Open workspace sidebar and switch to Plan tab
       if (!workspaceSidebarVisible) {
         setWorkspaceSidebarVisible(true)
@@ -709,7 +698,7 @@ const sendCodingMessage = useCallback(() => {
     }
 
     // Build context from current file
-    let contextMessage = codingInput.trim()
+    let contextMessage = trimmed
     if (activeFile && fileContents[activeFile]) {
       const fileName = activeFile.split('/').pop()
       const codeSnippet = fileContents[activeFile].slice(0, 3000)
@@ -724,12 +713,12 @@ const sendCodingMessage = useCallback(() => {
       model: activeModel,
       thinking: supportsThinking ? thinkingEnabled : false,
     }
-    if (codingAttachment) payload.attachment = codingAttachment.path
+    if (attachment) payload.attachment = attachment.path
     // Show user message immediately before sending
     setCodingMessages(prev => [...prev, {
       type: 'user',
-      content: codingInput.trim() || '📎 Attachment sent',
-      attachment: codingAttachment?.path
+      content: trimmed || '📎 Attachment sent',
+      attachment: attachment?.path
     }])
     codingStreamingThinkingRef.current = ''
     codingWs.send(JSON.stringify(payload))
@@ -742,35 +731,14 @@ const sendCodingMessage = useCallback(() => {
     }).then(() => {
       setCodingWorkspace((w) => ({ ...w, locked: true }))
     }).catch(() => { /* server will lock on first message */ })
-    setCodingInput('')
-    setCodingAttachment(null)
     setCodingThinking(true)
-  }, [codingInput, codingWs, activeFile, fileContents, codingAttachment, agentMode, activity, gitStatus, activeModel, supportsThinking, thinkingEnabled, codingWorkspace.dir, codingSessionId])
+  }, [codingWs, activeFile, fileContents, agentMode, activity, gitStatus, activeModel, supportsThinking, thinkingEnabled, codingWorkspace.dir, codingSessionId])
 
   const activateSkill = (skillName) => {
     if (codingWs && codingWs.readyState === WebSocket.OPEN) {
       codingWs.send(JSON.stringify({ type: 'activate_skill', skill: skillName }))
     }
     setCodingMessages(prev => [...prev, { type: 'system', content: `Skill '${skillName}' activated` }])
-    setCodingInput('')
-    setShowSkills(false)
-  }
-
-  const handleCodingFileSelect = async (e) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    const formData = new FormData()
-    formData.append('file', file)
-    try {
-      const res = await apiFetch('/api/upload', { method: 'POST', body: formData })
-      const data = await res.json()
-      if (data.success) {
-        setCodingAttachment({ name: file.name, path: data.path, type: file.type })
-      }
-    } catch (err) {
-      console.error('Upload failed:', err)
-    }
-    e.target.value = ''
   }
 
   // Quick actions removed — agent works directly from chat context
@@ -847,13 +815,6 @@ const sendCodingMessage = useCallback(() => {
     if (['mp4','webm','mov'].includes(ext)) return 'video'
     return 'unsupported'
   }
-
-  const filteredSkills = codingInput.startsWith('/')
-    ? skills.filter(s =>
-        s.name.toLowerCase().includes(codingInput.slice(1).toLowerCase()) ||
-        s.description?.toLowerCase().includes(codingInput.slice(1).toLowerCase())
-      )
-    : []
 
   const renderChat = (isAgent) => {
     return (
@@ -1119,105 +1080,19 @@ const sendCodingMessage = useCallback(() => {
           )}
         </div>
 
-        {/* Chat Input */}
-        <div className={isAgent ? 'p-4 border-t border-border bg-surface/50 shrink-0' : 'p-3 border-t border-border bg-surface/50 shrink-0'}>
-          {codingAttachment && (
-            <div className={isAgent ? 'flex items-center gap-2 mb-3 px-4 py-2 bg-primary/10 border border-primary/20 rounded-lg w-fit' : 'flex items-center gap-2 mb-2 px-3 py-1 bg-primary/10 border border-primary/20 rounded-lg w-fit'}>
-              {codingAttachment.type?.startsWith('image/') ? <ImageIcon size={isAgent ? 14 : 12} className="text-primary" /> : <FileText size={isAgent ? 14 : 12} className="text-primary" />}
-              <span className={isAgent ? 'text-sm text-primary' : 'text-xs text-primary'}>{codingAttachment.name}</span>
-              <button onClick={() => setCodingAttachment(null)} className="text-primary hover:text-primary/70">
-                <X size={isAgent ? 14 : 12} />
-              </button>
-            </div>
-          )}
-          <div className={isAgent ? 'max-w-4xl mx-auto flex gap-2' : 'flex gap-2'}>
-            <div className="flex-1">
-              <div className="relative">
-                <textarea
-                  value={codingInput}
-                  disabled={!!permissionRequest}
-                  onChange={(e) => {
-                    const value = e.target.value
-                    setCodingInput(value)
-                    if (value.startsWith('/')) {
-                      if (!showSkills) fetchSkills()
-                      setShowSkills(true)
-                      setSkillIndex(0)
-                    } else {
-                      setShowSkills(false)
-                    }
-                  }}
-                  onKeyDown={(e) => {
-                    if (showSkills && filteredSkills.length > 0) {
-                      if (e.key === 'ArrowDown') {
-                        e.preventDefault()
-                        setSkillIndex(i => (i + 1) % filteredSkills.length)
-                        return
-                      }
-                      if (e.key === 'ArrowUp') {
-                        e.preventDefault()
-                        setSkillIndex(i => (i - 1 + filteredSkills.length) % filteredSkills.length)
-                        return
-                      }
-                      if (e.key === 'Enter') {
-                        e.preventDefault()
-                        activateSkill(filteredSkills[skillIndex].name)
-                        return
-                      }
-                      if (e.key === 'Escape') {
-                        setShowSkills(false)
-                        return
-                      }
-                    }
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault()
-                      sendCodingMessage()
-                    }
-                  }}
-                  placeholder="Ask about your code..."
-                  rows={isAgent ? 3 : 2}
-                  className={isAgent ? 'w-full bg-card border border-border rounded-xl px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:border-primary' : 'w-full bg-card border border-border rounded-lg px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:border-primary'}
-                />
-                {showSkills && filteredSkills.length > 0 && (
-                  <SlashMenu
-                    skills={filteredSkills}
-                    activeIndex={skillIndex}
-                    onSelect={(s) => activateSkill(s.name)}
-                    onHoverIndex={setSkillIndex}
-                    size={isAgent ? 'md' : 'sm'}
-                  />
-                )}
-              </div>
-              <div className="flex justify-between items-center mt-1.5 gap-2">
-                <p className={isAgent ? 'text-xs text-muted-foreground' : 'text-[9px] text-muted-foreground'}>Enter to send · Shift+Enter for new line</p>
-              </div>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <input
-                type="file"
-                ref={codingFileInputRef}
-                onChange={handleCodingFileSelect}
-                accept="image/*,.txt,.md,.json,.js,.jsx,.ts,.tsx,.py,.html,.css"
-                className="hidden"
-              />
-              <button
-                onClick={() => codingFileInputRef.current?.click()}
-                disabled={!codingConnected}
-                className={isAgent ? 'px-3 py-3 bg-surface hover:bg-surface-hover border border-border disabled:opacity-40 text-foreground rounded-lg transition-colors flex items-center justify-center' : 'px-2.5 py-2 bg-surface hover:bg-surface-hover border border-border disabled:opacity-40 text-foreground rounded-lg transition-colors flex items-center justify-center'}
-                title="Attach file or image"
-              >
-                <Paperclip size={isAgent ? 16 : 14} />
-              </button>
-              <button
-                onClick={sendCodingMessage}
-                disabled={(!codingInput.trim() && !codingAttachment) || !codingConnected || codingThinking || permissionRequest}
-                className={isAgent ? 'px-4 py-3 bg-primary hover:bg-primary-hover disabled:opacity-40 text-white rounded-lg transition-colors flex items-center gap-1' : 'px-3 py-2 bg-primary hover:bg-primary-hover disabled:opacity-40 text-white rounded-lg transition-colors flex items-center gap-1'}
-              >
-                <Send size={isAgent ? 16 : 14} />
-              </button>
-            </div>
-          </div>
-        </div>
+        {/* Composer — owns the chat input + attachment + slash menu +
+            paperclip + send button. Same single-source-of-truth
+            component used by ChatPanel; status is derived from
+            WS state so the spinner reflects the agent's activity. */}
+        <Composer
+          sessionId={codingSessionId}
+          onSend={sendCodingMessage}
+          onActivateSkill={activateSkill}
+          onDirtyChange={handleComposerDirtyChange}
+          status={!codingConnected ? 'error' : codingThinking ? 'thinking' : 'idle'}
+          expertLabel="Agent"
+          disabled={!codingConnected || !!permissionRequest}
+        />
 
         {/* Agent Mode: Editor Drawer */}
         {isAgent && showEditorDrawer && (

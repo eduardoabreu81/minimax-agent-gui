@@ -41,11 +41,15 @@ The Code Workspace is part of the app, but it is not the whole product.
 
 ## Quick Start
 
+> **Note:** All `<owner>` placeholders in this README refer to the upstream
+> maintainer — `eduardoabreu81`. If you fork the repo, replace `<owner>`
+> with your GitHub username in the URLs below.
+
 Prerequisites: **Python 3.10+**, **Node.js 18+**, a [MiniMax API key](https://platform.minimax.io).
 
 ```bash
 # 1. Clone
-git clone https://github.com/eduardoabreu81/minimax-agent-gui.git
+git clone https://github.com/<owner>/minimax-agent-gui.git
 cd minimax-agent-gui
 
 # 2. Install Python + Node dependencies
@@ -267,6 +271,6 @@ MIT — see [LICENSE](LICENSE)
 
 Made with ❤️ powered by MiniMax
 
-**[Report Bug](https://github.com/eduardoabreu81/minimax-agent-gui/issues)** • **[Request Feature](https://github.com/eduardoabreu81/minimax-agent-gui/issues)**
+**[Report Bug](https://github.com/<owner>/minimax-agent-gui/issues)** • **[Request Feature](https://github.com/<owner>/minimax-agent-gui/issues)**
 
 </div>
