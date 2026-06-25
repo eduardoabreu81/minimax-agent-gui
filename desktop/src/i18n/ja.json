@@ -199,7 +199,7 @@
     "serverAdded": "サーバーを追加しました",
     "serverUpdated": "サーバーを更新しました",
     "serverRemoved": "サーバーを削除しました",
-    "version": "バージョン 0.3.0 · 最新",
+    "version": "バージョン {version} · 最新",
     "github": "GitHub",
     "savedSuccess": "設定を保存しました！",
     "apiKeySaved": "API キーを保存しました。",

@@ -199,7 +199,7 @@
     "serverAdded": "服务器已添加",
     "serverUpdated": "服务器已更新",
     "serverRemoved": "服务器已移除",
-    "version": "版本 0.3.0 · 已是最新",
+    "version": "版本 {version} · 已是最新",
     "github": "GitHub",
     "savedSuccess": "设置保存成功！",
     "apiKeySaved": "API 密钥已保存。",

@@ -199,7 +199,7 @@
     "serverAdded": "서버가 추가됨",
     "serverUpdated": "서버가 업데이트됨",
     "serverRemoved": "서버가 제거됨",
-    "version": "버전 0.3.0 · 최신",
+    "version": "버전 {version} · 최신",
     "github": "GitHub",
     "savedSuccess": "설정이 저장되었습니다!",
     "apiKeySaved": "API 키가 저장되었습니다.",

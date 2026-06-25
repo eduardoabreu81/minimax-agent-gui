@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { useTheme } from '../../context/ThemeContext'
 import { apiFetch } from '../../lib/api.js'
+import pkg from '../../../package.json'
 import SkillsTab from './SkillsTab.jsx'
 import { useContextModal } from '../agent-context/ContextProvider.jsx'
 
@@ -1249,7 +1250,7 @@ export default function SettingsPanel() {
             </div>
             <div className="flex-1 min-w-0">
               <div className="text-[13px] font-semibold">MiniMax Studio</div>
-              <div className="text-[11.5px] text-muted-foreground">{t('settings.version')}</div>
+              <div className="text-[11.5px] text-muted-foreground">{t('settings.version', { version: pkg.version })}</div>
             </div>
             <button className="h-[34px] px-4 rounded-[8px] border border-border bg-transparent text-foreground text-[12px] font-medium hover:border-primary/50 transition-colors flex items-center gap-1.5">
               <Github size={13} />

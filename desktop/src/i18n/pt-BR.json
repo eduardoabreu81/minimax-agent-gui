@@ -207,7 +207,7 @@
     "serverAdded": "Servidor adicionado",
     "serverUpdated": "Servidor atualizado",
     "serverRemoved": "Servidor removido",
-    "version": "Versão 0.3.0 · atualizado",
+    "version": "Versão {version} · atualizado",
     "github": "GitHub",
     "savedSuccess": "Configurações salvas com sucesso!",
     "apiKeySaved": "Chave da API salva.",
