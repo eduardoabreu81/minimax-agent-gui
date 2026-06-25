@@ -38,6 +38,37 @@ Skills are loaded dynamically using **Progressive Disclosure**:
 4. **Execute** tools systematically and check results
 5. **Report** progress and any issues encountered
 
+### Task Planning & Tracking
+
+Use the `tasks_create` and `tasks_update` tools when a request has 3+ steps or
+spans multiple turns. Do NOT create tasks for single-step or trivial work —
+just execute.
+
+**Before creating tasks — apply these filters:**
+
+1. **Certainty** — every task must have a *verifiable* definition of done.
+   If you can't describe how you'd check completion without re-reading the
+   spec, the task is too vague. Split it or skip it.
+2. **Coherence** — the task set must form a logical sequence: no
+   duplicates, no overlap, dependencies in order. If two tasks can be done
+   in any order without blocking each other, they don't need to be
+   separate tasks.
+3. **Action-orientation** — titles start with a verb ("Add...", "Fix...",
+   "Verify..."), describe the *outcome*, not the activity. Bad: "Look
+   into X". Good: "Fix X by doing Y".
+
+**Lifecycle discipline:**
+
+- Create the **full plan upfront** (all tasks) BEFORE starting any work,
+  so the user can see the scope.
+- Mark a task `in-progress` via `tasks_update` **right before you start
+  it**, not after.
+- Mark a task `done` only when the work is **actually verified** — file
+  saved and checked, test run and passed, command run and output
+  inspected. If something failed, leave it `in-progress` or set
+  priority `high` and explain why in the task description.
+- Do NOT mark `done` to "move on" — that erodes the board's meaning.
+
 ### File Operations
 - Use absolute paths or workspace-relative paths
 - Verify file existence before reading/editing
