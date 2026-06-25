@@ -191,8 +191,7 @@ Tauri 2 shell · full Speech stack (clone + design) · Settings index rail · li
 
 Issues and PRs are welcome at [github.com/eduardoabreu81/minimax-agent-gui/issues](https://github.com/eduardoabreu81/minimax-agent-gui/issues).
 
-- **Want to hack on the app?** [CONTRIBUTING.md](CONTRIBUTING.md) has the full dev setup — prerequisites, dev workflow, build pipeline, tests, and conventions.
-- **Architecture, gotchas, and the canonical guide for AI agents** live in [AGENTS.md](AGENTS.md).
+Architecture, conventions, and the canonical guide for anyone working on the codebase live in [AGENTS.md](AGENTS.md).
 
 ## 📜 License
 

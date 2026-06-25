@@ -84,3 +84,11 @@ web/backend/visitors.json
 .mavis/
 .specstory/
 .opencode/
+
+# Public documentation assets — re-include despite the broad *.png and
+# docs/*.md ignores above. These are referenced by the public README and
+# MUST be committed. (CONTRIBUTING.md stays ignored on purpose — it's a
+# local dev note, not a published doc.)
+!docs/assets/*.png
+!docs/USER_GUIDE.md
+!desktop/docs/screenshots/*.png
