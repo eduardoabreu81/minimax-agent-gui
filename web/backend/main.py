@@ -521,6 +521,11 @@ from context_refs import (  # noqa: E402  (import after conv_store by convention
     expand_refs,
 )
 
+from subdirectory_hints import (  # noqa: E402  (PR D — progressive subdir discovery)
+    SubdirectoryHintTracker,
+    format_hints_for_model,
+)
+
 
 # --- App workspace + coding workspace management (v0.5 redesign) ---
 #
@@ -1307,6 +1312,20 @@ Be concise, friendly, and helpful."""
         # (started / completed / failed) emitted from inside the agent
         # carry the WS session id for correlation.
         agent.session_id = session_id
+
+        # PR D — progressive subdirectory discovery (Hermes spec).
+        # Tracker watches the agent's tool calls and appends relevant
+        # project context files (AGENTS.md / CLAUDE.md / .cursorrules)
+        # to the tool result so the model sees conventions as it
+        # navigates into subdirectories. Cached per directory for the
+        # lifetime of the agent (session), so the walk-up is at most
+        # once per dir. The tracker is read by the WS handler via
+        # agent._subdir_tracker; a closure built there invokes
+        # hint_for_tool_call() and appends the formatted hint to the
+        # ToolResult before it becomes part of the message history.
+        agent._subdir_tracker = SubdirectoryHintTracker(
+            workspace_dir=str(workspace_path)
+        )
 
         self.sessions[session_id] = agent
         return agent
@@ -3035,6 +3054,49 @@ async def delete_task(task_id: str):
     return {"success": True}
 
 
+def _build_subdir_post_processor(agent):
+    """Build a tool_result_post_processor that appends progressive
+    subdirectory hints to each tool result.
+
+    PR D (Hermes spec): as the agent navigates into subdirectories
+    during a session, the relevant project context file
+    (AGENTS.md / CLAUDE.md / .cursorrules) is discovered and appended
+    to the tool result so the model sees the project conventions
+    naturally.
+
+    The closure captures ``agent._subdir_tracker`` (set up in
+    ``SessionManager.get_or_create_agent``). On each tool call it
+    invokes ``hint_for_tool_call`` to discover any new directories
+    the tool touched, formats the resulting hints, and appends them
+    to the ToolResult's content. The ``Agent.run`` loop's
+    ``tool_result_post_processor`` hook guarantees the modified
+    result is what the LLM sees.
+
+    Returns a fresh ToolResult if any hint was found, or the
+    original result untouched (best-effort, no-op for empty hits).
+    """
+    from mini_agent.tools.base import ToolResult
+    tracker = getattr(agent, "_subdir_tracker", None)
+    if tracker is None:
+        return None  # legacy agent without a tracker — no-op
+
+    def _post_process(tool_name, arguments, result):
+        hints = tracker.hint_for_tool_call(tool_name, arguments or {})
+        if not hints:
+            return result  # no new directories hit; leave the result alone
+        hint_text = format_hints_for_model(hints)
+        # Append (don't replace) — the tool's actual output stays
+        # intact; the hint is additional context for the model.
+        new_content = (result.content or "") + hint_text
+        return ToolResult(
+            success=result.success,
+            content=new_content,
+            error=result.error,
+        )
+
+    return _post_process
+
+
 @app.websocket("/ws/chat/{session_id}")
 async def chat_websocket(websocket: WebSocket, session_id: str):
     """WebSocket endpoint for streaming chat."""
@@ -3442,6 +3504,7 @@ async def chat_websocket(websocket: WebSocket, session_id: str):
                     model_override=model_override,
                     thinking_override=thinking_override,
                     stream_callback=stream_callback,
+                    tool_result_post_processor=_build_subdir_post_processor(agent),
                 )
 
                 # Resolve which model actually ran (override or default)
