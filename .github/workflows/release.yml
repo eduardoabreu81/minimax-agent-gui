@@ -45,6 +45,10 @@ jobs:
           cache: 'npm'
           cache-dependency-path: desktop/package-lock.json
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
       # Linux needs WebKitGTK + co deps for Tauri to build.
       - name: Install Linux system deps
         if: matrix.os == 'ubuntu-latest'
@@ -73,15 +77,19 @@ jobs:
         working-directory: desktop
         run: npm ci
 
-      # The backend sidecar (PyInstaller-bundled FastAPI) is built per-OS
-      # because Windows/Linux/macOS binaries aren't interchangeable.
-      # Runs before `tauri build` so the sidecar gets embedded.
+      # The backend sidecar (PyInstaller-frozen FastAPI) is built per-OS
+      # because Windows/Linux/macOS binaries aren't interchangeable. Built
+      # with the canonical spec (hidden imports, data files, excludes) from
+      # the repo root, so the onedir output lands at <repo>/dist/backend/ —
+      # exactly where tauri.conf.json's bundle.resources expects it. Runs
+      # before `tauri build` so the sidecar gets embedded.
       - name: Build backend sidecar
-        working-directory: desktop
         run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install -r web/backend/requirements.txt
           pip install pyinstaller
-          cd ../web/backend
-          pyinstaller --onefile --name backend main.py --distpath ../../desktop/src-tauri/binaries
+          pyinstaller desktop/packaging/backend.spec --noconfirm
 
       - name: Build Tauri app
         working-directory: desktop

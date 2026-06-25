@@ -42,6 +42,14 @@ const BACKEND_PORT: &str = "8765";
 const BACKEND_URL: &str = "http://127.0.0.1:8765";
 const HEALTHCHECK_TIMEOUT: Duration = Duration::from_secs(30);
 
+/// PyInstaller names the frozen onedir binary `backend.exe` on Windows and
+/// `backend` (no extension) on Linux/macOS. The whole `dist/backend/` folder
+/// is bundled identically as a resource, so only the spawn name differs.
+#[cfg(windows)]
+const BACKEND_BIN: &str = "backend.exe";
+#[cfg(not(windows))]
+const BACKEND_BIN: &str = "backend";
+
 /// Walk up from the resource dir until we find a directory that looks
 /// like the project root (one containing `dist/backend/backend.exe`,
 /// which is the onedir artifact produced by the PyInstaller spike).
@@ -53,7 +61,7 @@ fn repo_root_with_dist(app: &AppHandle) -> Result<PathBuf, String> {
         .or_else(|_| app.path().app_local_data_dir())
         .map_err(|e| format!("Could not resolve resource dir: {}", e))?;
     for _ in 0..8 {
-        if p.join("dist").join("backend").join("backend.exe").exists() {
+        if p.join("dist").join("backend").join(BACKEND_BIN).exists() {
             return Ok(p);
         }
         if !p.pop() {
@@ -75,7 +83,7 @@ fn repo_root_with_dist(app: &AppHandle) -> Result<PathBuf, String> {
 fn resolve_backend_binary(app: &AppHandle) -> Result<(String, Vec<String>, PathBuf, &'static str), String> {
     // (a) production: bundled alongside the app
     if let Ok(res_dir) = app.path().resource_dir() {
-        let bundled = res_dir.join("backend").join("backend.exe");
+        let bundled = res_dir.join("backend").join(BACKEND_BIN);
         if bundled.exists() {
             eprintln!("[minimax-desktop] backend: using bundled exe (a) {}", bundled.display());
             return Ok((bundled.to_string_lossy().into_owned(), vec![], bundled.parent().unwrap().to_path_buf(), "a"));
@@ -84,7 +92,7 @@ fn resolve_backend_binary(app: &AppHandle) -> Result<(String, Vec<String>, PathB
 
     // (b) dev: PyInstaller onedir artifact at <repo>/dist/backend/backend.exe
     if let Ok(repo) = repo_root_with_dist(app) {
-        let dev = repo.join("dist").join("backend").join("backend.exe");
+        let dev = repo.join("dist").join("backend").join(BACKEND_BIN);
         if dev.exists() {
             eprintln!("[minimax-desktop] backend: using dev artifact (b) {}", dev.display());
             return Ok((dev.to_string_lossy().into_owned(), vec![], dev.parent().unwrap().to_path_buf(), "b"));

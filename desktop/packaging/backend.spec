@@ -20,6 +20,8 @@ import os
 import sys
 from pathlib import Path
 
+import certifi
+
 block_cipher = None
 
 # Resolve project root (the directory that contains this .spec file's
@@ -84,9 +86,10 @@ hiddenimports = [
 # Each entry is (source_path_relative_to_PROJECT_ROOT_or_absolute, dest_dir_in_bundle)
 datas = [
     # certifi's CA bundle — required for any TLS connection the
-    # backend makes (and httpx/anthropic/openai do).
-    (str(Path(sys.executable).parent / "Lib" / "site-packages" / "certifi" / "cacert.pem"),
-     "certifi"),
+    # backend makes (and httpx/anthropic/openai do). certifi.where()
+    # resolves correctly on Linux/macOS too, whose site-packages layout
+    # (lib/pythonX.Y/site-packages) differs from Windows' Lib/site-packages.
+    (certifi.where(), "certifi"),
 
     # mini_agent/skills — the agent runtime discovers and loads skill
     # .py files at runtime; they must travel with the bundle.
