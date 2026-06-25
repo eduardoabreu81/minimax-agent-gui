@@ -116,10 +116,16 @@ class TasksCreateTool(TasksBaseTool):
     @property
     def description(self) -> str:
         return (
-            "Create a new task on the user's task board (visible in the Tasks panel). "
-            "Use this when the user asks to add a task, todo, reminder, or any trackable "
-            "item. The task appears immediately in the UI with an 'agent' badge so the "
-            "user can tell it was created by you. Always returns the new task ID."
+            "Create a new task on the user's task board (visible in the Tasks panel "
+            "and the Live Todo panel in coding sessions). Use this when the request "
+            "has 3+ steps or spans multiple turns — for single-step work, just "
+            "execute. Every task MUST have a verifiable definition of done: a "
+            "title starting with a verb that names the outcome, and (when useful) "
+            "a description with the acceptance criteria. The task appears in the "
+            "UI with an 'agent' badge. Always returns the new task ID; pair with "
+            "tasks_update to track lifecycle (pending → in-progress → done). See "
+            "the system prompt 'Task Planning & Tracking' section for the full "
+            "discipline."
         )
 
     @property
