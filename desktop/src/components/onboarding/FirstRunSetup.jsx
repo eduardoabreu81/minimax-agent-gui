@@ -227,7 +227,7 @@ export default function FirstRunSetup({ onComplete }) {
               <StepShell
                 icon={Key}
                 title={t('setup.apikey.title', 'Connect your MiniMax account')}
-                subtitle={t('setup.apikey.subtitle', 'Paste your API key. It is stored locally and never leaves your machine. We validate it before continuing.')}
+                subtitle={t('setup.apikey.subtitle', 'This app is built for MiniMax Token Plan subscribers. Paste your Token Plan API key — it is stored locally and never leaves your machine.')}
               >
                 <label className="text-[11.5px] font-semibold text-muted-foreground mb-1.5 block">
                   {t('setup.apikey.label', 'API key')}
@@ -269,12 +269,12 @@ export default function FirstRunSetup({ onComplete }) {
 
                 <div className="mt-5 flex items-center gap-4 text-[11.5px]">
                   <a
-                    href="https://platform.minimax.io"
+                    href="https://platform.minimax.io/subscribe/token-plan"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-primary hover:underline inline-flex items-center gap-1"
                   >
-                    {t('setup.apikey.getKey', 'Where do I get a key?')} <ExternalLink size={12} />
+                    {t('setup.apikey.getKey', 'Get a Token Plan subscription')} <ExternalLink size={12} />
                   </a>
                   <button
                     onClick={() => { setKeySkipped(true); goNext() }}

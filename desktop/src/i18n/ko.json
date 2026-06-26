@@ -22,12 +22,12 @@
     },
     "apikey": {
       "title": "MiniMax 계정 연결",
-      "subtitle": "API 키를 붙여넣으세요. 로컬에 저장되며 기기를 벗어나지 않습니다. 계속하기 전에 검증합니다.",
+      "subtitle": "이 앱은 MiniMax Token Plan 구독자를 위해 만들어졌습니다. Token Plan의 API 키를 붙여넣으세요. 로컬에 저장되며 기기를 벗어나지 않습니다.",
       "label": "API 키",
       "validate": "검증",
       "connected": "연결됨",
       "error": "키를 검증할 수 없습니다.",
-      "getKey": "키는 어디서 받나요?",
+      "getKey": "Token Plan 구독하기",
       "later": "나중에 할게요"
     },
     "language": {

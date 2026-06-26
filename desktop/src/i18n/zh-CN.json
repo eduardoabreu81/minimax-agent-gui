@@ -22,12 +22,12 @@
     },
     "apikey": {
       "title": "连接你的 MiniMax 账户",
-      "subtitle": "粘贴你的 API 密钥。它仅保存在本地，绝不离开你的设备。我们会在继续前进行验证。",
+      "subtitle": "本应用面向 MiniMax Token Plan 订阅用户。粘贴你的 Token Plan API 密钥——它仅保存在本地，绝不离开你的设备。",
       "label": "API 密钥",
       "validate": "验证",
       "connected": "已连接",
       "error": "无法验证该密钥。",
-      "getKey": "在哪里获取密钥？",
+      "getKey": "订阅 Token Plan",
       "later": "稍后再设置"
     },
     "language": {

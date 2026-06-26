@@ -22,12 +22,12 @@
     },
     "apikey": {
       "title": "MiniMax アカウントを接続",
-      "subtitle": "API キーを貼り付けてください。ローカルに保存され、端末の外に出ることはありません。続行前に検証します。",
+      "subtitle": "このアプリは MiniMax Token Plan の加入者向けです。Token Plan の API キーを貼り付けてください。ローカルに保存され、端末の外に出ることはありません。",
       "label": "API キー",
       "validate": "検証",
       "connected": "接続済み",
       "error": "キーを検証できませんでした。",
-      "getKey": "キーはどこで入手できますか？",
+      "getKey": "Token Plan に登録する",
       "later": "後で設定する"
     },
     "language": {

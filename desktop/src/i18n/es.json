@@ -22,12 +22,12 @@
     },
     "apikey": {
       "title": "Conecta tu cuenta de MiniMax",
-      "subtitle": "Pega tu clave de API. Se guarda localmente y nunca sale de tu equipo. La validamos antes de continuar.",
+      "subtitle": "Esta app está hecha para suscriptores del MiniMax Token Plan. Pega la clave de API de tu Token Plan — se guarda localmente y nunca sale de tu equipo.",
       "label": "Clave de API",
       "validate": "Validar",
       "connected": "Conectado",
       "error": "No se pudo validar la clave.",
-      "getKey": "¿Dónde consigo una clave?",
+      "getKey": "Suscríbete al Token Plan",
       "later": "Lo haré más tarde"
     },
     "language": {

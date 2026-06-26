@@ -22,12 +22,12 @@
     },
     "apikey": {
       "title": "Connect your MiniMax account",
-      "subtitle": "Paste your API key. It is stored locally and never leaves your machine. We validate it before continuing.",
+      "subtitle": "This app is built for MiniMax Token Plan subscribers. Paste your Token Plan API key — it is stored locally and never leaves your machine.",
       "label": "API key",
       "validate": "Validate",
       "connected": "Connected",
       "error": "Could not validate the key.",
-      "getKey": "Where do I get a key?",
+      "getKey": "Get a Token Plan subscription",
       "later": "I'll do this later"
     },
     "language": {
