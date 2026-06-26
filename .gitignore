@@ -92,3 +92,8 @@ web/backend/visitors.json
 !docs/assets/*.png
 !docs/USER_GUIDE.md
 !desktop/docs/screenshots/*.png
+
+# Tauri app icons — embedded at build time by tauri-build. The broad *.png
+# above otherwise hides them, which breaks the Linux/macOS build (only
+# icon.ico/.icns were tracked, so Windows built but the others failed).
+!desktop/src-tauri/icons/*.png
