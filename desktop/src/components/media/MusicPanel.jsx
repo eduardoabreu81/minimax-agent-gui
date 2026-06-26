@@ -230,7 +230,7 @@ export default function MusicPanel() {
         audio_setting: audioSetting,
       }
 
-      const res = await fetch('/api/music', {
+      const res = await apiFetch('/api/music', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),

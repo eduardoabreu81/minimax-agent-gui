@@ -264,7 +264,7 @@ export default function SettingsPanel({ onRestartSetup }) {
     try {
       const url = mcpEditingId ? `/api/mcp/servers/${mcpEditingId}` : '/api/mcp/servers'
       const method = mcpEditingId ? 'PUT' : 'POST'
-      const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+      const res = await apiFetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
       const data = await res.json()
       if (data.success) {
         setSavedMessage(mcpEditingId ? t('settings.serverUpdated') : t('settings.serverAdded'))

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { apiFetch } from '../lib/api.js'
 
 /**
  * useSelectedModel — fetches the currently selected chat model from /api/config.
@@ -22,7 +23,7 @@ export function useSelectedModel({ fallback = 'MiniMax-M3' } = {}) {
 
   const fetchModel = useCallback(async () => {
     try {
-      const res = await fetch('/api/config')
+      const res = await apiFetch('/api/config')
       if (!mountedRef.current) return
       if (res.ok) {
         const data = await res.json()

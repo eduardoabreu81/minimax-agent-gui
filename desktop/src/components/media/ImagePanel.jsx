@@ -235,7 +235,7 @@ export default function ImagePanel() {
         body.subject_reference = [{ type: 'character', image_file: dataUrl }]
       }
 
-      const res = await fetch('/api/image', {
+      const res = await apiFetch('/api/image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
