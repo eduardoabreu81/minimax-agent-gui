@@ -135,7 +135,7 @@ export function TimezoneSelect({ value, onChange, detectedTz }) {
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        placeholder="America/Sao_Paulo"
+        placeholder="Continent/City"
         className="w-full px-3 py-2 bg-surface border border-border rounded-lg text-sm focus:outline-none focus:border-primary font-mono"
       />
     )

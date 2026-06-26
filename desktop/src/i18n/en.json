@@ -3,6 +3,59 @@
     "name": "MiniMax Agent",
     "tagline": "All-in-One Platform"
   },
+  "setup": {
+    "step": {
+      "welcome": "Welcome",
+      "apikey": "API key",
+      "language": "Language",
+      "context": "Agent context",
+      "done": "Done",
+      "about": "About you",
+      "style": "Agent style"
+    },
+    "welcome": {
+      "title": "Welcome to MiniMax Agent",
+      "subtitle": "Your all-in-one desktop workspace for MiniMax M3 — chat, code, media, and an autonomous agent. Three quick steps and you're ready.",
+      "b1": "Connect your MiniMax account",
+      "b2": "Pick your language",
+      "b3": "Teach the agent who you are"
+    },
+    "apikey": {
+      "title": "Connect your MiniMax account",
+      "subtitle": "Paste your API key. It is stored locally and never leaves your machine. We validate it before continuing.",
+      "label": "API key",
+      "validate": "Validate",
+      "connected": "Connected",
+      "error": "Could not validate the key.",
+      "getKey": "Where do I get a key?",
+      "later": "I'll do this later"
+    },
+    "language": {
+      "title": "Choose your language",
+      "subtitle": "You can change this any time in Settings."
+    },
+    "context": {
+      "title": "Teach the agent who you are",
+      "subtitle": "Optional, but the agent gets noticeably better. You can refine it later in Settings.",
+      "personality": "Personality",
+      "role": "Default role"
+    },
+    "done": {
+      "title": "You're all set",
+      "subtitle": "Everything is configured. Press Start to open your workspace.",
+      "keyLater": "Skipped — set it in Settings",
+      "contextDefault": "Defaults applied"
+    },
+    "skipAll": "Skip setup",
+    "back": "Back",
+    "start": "Start",
+    "finish": "Finish",
+    "continue": "Continue",
+    "style": {
+      "title": "Agent style",
+      "subtitle": "Pick a personality and a default role for the agent."
+    }
+  },
   "nav": {
     "chat": "Chat",
     "tts": "TTS",
@@ -153,7 +206,7 @@
     "generationDefaultsHint": "Used by Music and Speech panels on mount; sent with every request that omits them.",
     "about": "About",
     "aboutYouDesc": "Tell the agent about yourself — your preferences, background, goals, or anything you want it to remember across all conversations.",
-    "aboutYouPlaceholder": "e.g. I'm a full-stack developer based in Brazil. I prefer clean, modern UI designs and work mainly with React and Python. I speak Portuguese and English.",
+    "aboutYouPlaceholder": "e.g. your role, the tools you work with, and how you like the agent to respond.",
     "aboutYouHint": "This bio is injected into every conversation automatically.",
     "save": "Save",
     "yourTokenPlan": "Your Token Plan",
@@ -175,7 +228,16 @@
     "apiKeyLabel": "MiniMax API key",
     "apiKeyPlaceholder": "sk-cp-...",
     "apiKeyPlaceholderMasked": "••••••••••••••••••••••••••••",
-    "update": "Update",
+    "update": {
+      "check": "Check for updates",
+      "checking": "Checking…",
+      "upToDate": "You're up to date",
+      "available": "Update available: v{version}",
+      "download": "Download and install",
+      "downloading": "Downloading…",
+      "restart": "Restart to apply",
+      "error": "Could not check for updates"
+    },
     "apiKeyConnected": "Connected · stored locally in config.yaml",
     "apiKeyNotConfigured": "Not configured — agent calls will fail",
     "interfaceLanguage": "Interface language",
@@ -209,16 +271,6 @@
     "serverRemoved": "Server removed",
     "version": "Version {version} · up to date",
     "github": "GitHub",
-    "update": {
-      "check": "Check for updates",
-      "checking": "Checking…",
-      "upToDate": "You're up to date",
-      "available": "Update available: v{version}",
-      "download": "Download and install",
-      "downloading": "Downloading…",
-      "restart": "Restart to apply",
-      "error": "Could not check for updates"
-    },
     "savedSuccess": "Settings saved successfully!",
     "apiKeySaved": "API key saved.",
     "agentSaved": "Agent settings saved.",
@@ -494,7 +546,7 @@
       "next": "Next",
       "create": "Create {n} files",
       "name": "What should I call you?",
-      "namePh": "e.g., Eduardo",
+      "namePh": "How should the agent address you?",
       "timezone": "Timezone",
       "level": "Technical level",
       "personalityQ": "How should I sound?",

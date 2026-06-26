@@ -3,6 +3,59 @@
     "name": "MiniMax 에이전트",
     "tagline": "올인원 플랫폼"
   },
+  "setup": {
+    "step": {
+      "welcome": "환영합니다",
+      "apikey": "API 키",
+      "language": "언어",
+      "context": "에이전트 컨텍스트",
+      "done": "완료",
+      "about": "당신에 대해",
+      "style": "에이전트 스타일"
+    },
+    "welcome": {
+      "title": "MiniMax Agent에 오신 것을 환영합니다",
+      "subtitle": "MiniMax M3를 위한 올인원 데스크톱 작업 공간 — 채팅, 코드, 미디어, 자율 에이전트. 세 단계만 거치면 준비 완료입니다.",
+      "b1": "MiniMax 계정 연결",
+      "b2": "언어 선택",
+      "b3": "에이전트에게 당신을 알려주기"
+    },
+    "apikey": {
+      "title": "MiniMax 계정 연결",
+      "subtitle": "API 키를 붙여넣으세요. 로컬에 저장되며 기기를 벗어나지 않습니다. 계속하기 전에 검증합니다.",
+      "label": "API 키",
+      "validate": "검증",
+      "connected": "연결됨",
+      "error": "키를 검증할 수 없습니다.",
+      "getKey": "키는 어디서 받나요?",
+      "later": "나중에 할게요"
+    },
+    "language": {
+      "title": "언어 선택",
+      "subtitle": "설정에서 언제든지 변경할 수 있습니다."
+    },
+    "context": {
+      "title": "에이전트에게 당신을 알려주기",
+      "subtitle": "선택 사항이지만 에이전트가 눈에 띄게 좋아집니다. 나중에 설정에서 다듬을 수 있습니다.",
+      "personality": "성격",
+      "role": "기본 역할"
+    },
+    "done": {
+      "title": "모두 완료",
+      "subtitle": "모든 설정이 끝났습니다. 시작을 눌러 작업 공간을 여세요.",
+      "keyLater": "건너뜀 — 설정에서 입력하세요",
+      "contextDefault": "기본값 적용됨"
+    },
+    "skipAll": "설정 건너뛰기",
+    "back": "뒤로",
+    "start": "시작",
+    "finish": "완료",
+    "continue": "계속",
+    "style": {
+      "title": "에이전트 스타일",
+      "subtitle": "에이전트의 성격과 기본 역할을 선택하세요."
+    }
+  },
   "nav": {
     "chat": "채팅",
     "tts": "TTS",
@@ -145,7 +198,7 @@
     "generationDefaultsHint": "음악 및 음성 패널이 마운트 시 사용하며, 생략된 모든 요청과 함께 전송됩니다.",
     "about": "정보",
     "aboutYouDesc": "에이전트에 대해 알려주세요 — 선호도, 배경, 목표 또는 모든 대화에서 기억해 주었으면 하는 모든 것.",
-    "aboutYouPlaceholder": "예: 브라질에 기반을 둔 풀스택 개발자입니다. 깔끔하고 현대적인 UI 디자인을 선호하며 주로 React와 Python으로 작업합니다. 포르투갈어와 영어를 구사합니다.",
+    "aboutYouPlaceholder": "예: 당신의 역할, 사용하는 도구, 에이전트가 어떻게 응답하길 원하는지.",
     "aboutYouHint": "이 자기소개는 모든 대화에 자동으로 삽입됩니다.",
     "save": "저장",
     "yourTokenPlan": "내 Token Plan",

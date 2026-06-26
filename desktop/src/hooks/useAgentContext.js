@@ -55,8 +55,8 @@ const FALLBACK_ROLES = {
  * scaffold was below threshold — banner kept showing even after
  * the user "finished" the wizard.
  *
- * @param {string} name — user-supplied name (e.g. "Eduardo")
- * @param {string} timezone — IANA tz (e.g. "America/Sao_Paulo")
+ * @param {string} name — user-supplied name
+ * @param {string} timezone — IANA tz string (e.g. "Continent/City")
  * @param {string} level — "beginner" | "mid" | "senior"
  */
 export function buildUserBody(name, timezone, level) {

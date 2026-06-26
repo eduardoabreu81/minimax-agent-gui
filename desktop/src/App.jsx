@@ -21,7 +21,7 @@ import TaskBoard from './components/taskboard/TaskBoard'
 import SettingsPanel from './components/settings/SettingsPanel'
 import HelpPanel from './components/help/HelpPanel'
 import QuickSettings from './components/settings/QuickSettings'
-import Onboarding from './components/onboarding/Onboarding'
+import FirstRunSetup, { SETUP_COMPLETE_KEY } from './components/onboarding/FirstRunSetup'
 import OnboardingWizard, { WIZARD_SEEN_KEY } from './components/agent-context/OnboardingWizard.jsx'
 import IncompleteContextBanner from './components/agent-context/IncompleteContextBanner.jsx'
 import ContextModal from './components/agent-context/ContextModal.jsx'
@@ -127,15 +127,24 @@ function AppShell() {
   const agentContext = useAgentContext()
   const contextModal = useContextModal()
   const [wizardOpen, setWizardOpen] = useState(false)
-  // Auto-open the wizard on first launch if the user hasn't seen it
-  // AND the .agent/ files are not yet filled. Runs once.
-  useEffect(() => {
-    let seen = false
-    try { seen = !!localStorage.getItem(WIZARD_SEEN_KEY) } catch {}
-    if (!seen && !agentContext.loading && agentContext.status?.banner_visible) {
-      setWizardOpen(true)
-    }
-  }, [agentContext.loading, agentContext.status?.banner_visible])
+
+  // First-run setup gate. Shown once, then `minimax-setup-complete` is set.
+  // Existing users (who already saw the legacy onboarding/wizard) are migrated
+  // to "complete" so the new flow never interrupts them.
+  const [showSetup, setShowSetup] = useState(() => {
+    try {
+      if (localStorage.getItem(SETUP_COMPLETE_KEY)) return false
+      if (localStorage.getItem('minimax-onboarding-seen') || localStorage.getItem(WIZARD_SEEN_KEY)) {
+        localStorage.setItem(SETUP_COMPLETE_KEY, 'true')
+        return false
+      }
+      return true
+    } catch { return false }
+  })
+
+  // FirstRunSetup now owns onboarding, so the agent-context wizard no longer
+  // auto-opens on launch — it's reachable from the IncompleteContextBanner's
+  // "Set up now" button.
 
   // The "Open Settings" / "Set up now" shortcuts in the banner
   // both go to the new Context modal (no more "switch to settings
@@ -289,7 +298,7 @@ function AppShell() {
             setThinkingEnabled={setThinkingEnabled}
             supportsThinking={supportsThinking}
           />
-          <Onboarding />
+          {showSetup && <FirstRunSetup onComplete={() => setShowSetup(false)} />}
           <IncompleteContextBanner
             status={agentContext.status}
             onOpenSettings={openAgentContextSettings}

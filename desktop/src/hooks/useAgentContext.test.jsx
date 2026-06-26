@@ -283,9 +283,9 @@ describe('useAgentContext — preset/role body helpers', () => {
 
 describe('body builders', () => {
   it('buildUserBody includes the name + timezone + level', () => {
-    const body = buildUserBody('Eduardo', 'America/Sao_Paulo', 'senior')
-    expect(body).toContain('Eduardo')
-    expect(body).toContain('America/Sao_Paulo')
+    const body = buildUserBody('Sam', 'Europe/London', 'senior')
+    expect(body).toContain('Sam')
+    expect(body).toContain('Europe/London')
     expect(body).toContain('senior')
   })
 
@@ -295,14 +295,14 @@ describe('body builders', () => {
     // web/backend/agent_context.py), the IncompleteContextBanner
     // keeps showing after the user "finishes" the wizard. This
     // regression test guards against shrinking the scaffold.
-    const body = buildUserBody('Eduardo', 'America/Sao_Paulo', 'senior')
+    const body = buildUserBody('Sam', 'Europe/London', 'senior')
     expect(body.length).toBeGreaterThanOrEqual(500)
   })
 
   it('buildUserBody clears threshold even with empty name (defensive)', () => {
     // Even if the user skips the name field, the scaffold should
     // still clear the threshold so the banner dismisses.
-    const body = buildUserBody('', 'America/Sao_Paulo', 'mid')
+    const body = buildUserBody('', 'Europe/London', 'mid')
     expect(body.length).toBeGreaterThanOrEqual(500)
   })
 
@@ -310,7 +310,7 @@ describe('body builders', () => {
     // The expanded scaffold includes placeholder sections for
     // workflow + communication preferences + current focus — the
     // agent updates these as it learns.
-    const body = buildUserBody('Eduardo', 'America/Sao_Paulo', 'senior')
+    const body = buildUserBody('Sam', 'Europe/London', 'senior')
     expect(body).toContain('How I like to work')
     expect(body).toContain('Communication preferences')
     expect(body).toContain('Current focus')

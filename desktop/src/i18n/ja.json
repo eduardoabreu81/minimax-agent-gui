@@ -3,6 +3,59 @@
     "name": "MiniMax エージェント",
     "tagline": "オールインワンプラットフォーム"
   },
+  "setup": {
+    "step": {
+      "welcome": "ようこそ",
+      "apikey": "APIキー",
+      "language": "言語",
+      "context": "エージェント設定",
+      "done": "完了",
+      "about": "あなたについて",
+      "style": "エージェントのスタイル"
+    },
+    "welcome": {
+      "title": "MiniMax Agent へようこそ",
+      "subtitle": "MiniMax M3 のためのオールインワン・デスクトップ環境 — チャット、コード、メディア、自律エージェント。3つの簡単なステップで準備完了です。",
+      "b1": "MiniMax アカウントを接続",
+      "b2": "言語を選択",
+      "b3": "あなたのことをエージェントに教える"
+    },
+    "apikey": {
+      "title": "MiniMax アカウントを接続",
+      "subtitle": "API キーを貼り付けてください。ローカルに保存され、端末の外に出ることはありません。続行前に検証します。",
+      "label": "API キー",
+      "validate": "検証",
+      "connected": "接続済み",
+      "error": "キーを検証できませんでした。",
+      "getKey": "キーはどこで入手できますか？",
+      "later": "後で設定する"
+    },
+    "language": {
+      "title": "言語を選択",
+      "subtitle": "設定からいつでも変更できます。"
+    },
+    "context": {
+      "title": "あなたのことをエージェントに教える",
+      "subtitle": "任意ですが、エージェントが明らかに賢くなります。後で設定から調整できます。",
+      "personality": "性格",
+      "role": "既定の役割"
+    },
+    "done": {
+      "title": "準備完了",
+      "subtitle": "すべて設定されました。「開始」を押してワークスペースを開きます。",
+      "keyLater": "スキップ — 設定で入力してください",
+      "contextDefault": "既定値を適用"
+    },
+    "skipAll": "設定をスキップ",
+    "back": "戻る",
+    "start": "開始",
+    "finish": "完了",
+    "continue": "次へ",
+    "style": {
+      "title": "エージェントのスタイル",
+      "subtitle": "エージェントの性格と既定の役割を選びます。"
+    }
+  },
   "nav": {
     "chat": "チャット",
     "tts": "TTS",
@@ -145,7 +198,7 @@
     "generationDefaultsHint": "ミュージックとスピーチパネルがマウント時に使用し、リクエストで省略された場合に一緒に送信されます。",
     "about": "情報",
     "aboutYouDesc": "エージェントにあなたのことを伝えましょう — 好み、経歴、目標、あるいはすべての会話で覚えておいてほしいこと。",
-    "aboutYouPlaceholder": "例: ブラジル拠点のフルスタック開発者です。クリーンでモダンな UI を好み、主に React と Python で作業しています。ポルトガル語と英語を話します。",
+    "aboutYouPlaceholder": "例：あなたの役割、使っているツール、エージェントにどう応答してほしいか。",
     "aboutYouHint": "このプロフィールはすべての会話に自動的に注入されます。",
     "save": "保存",
     "yourTokenPlan": "あなたの Token Plan",

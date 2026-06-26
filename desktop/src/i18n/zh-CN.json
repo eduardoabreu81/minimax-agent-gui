@@ -3,6 +3,59 @@
     "name": "MiniMax 智能助手",
     "tagline": "一站式平台"
   },
+  "setup": {
+    "step": {
+      "welcome": "欢迎",
+      "apikey": "API 密钥",
+      "language": "语言",
+      "context": "智能体上下文",
+      "done": "完成",
+      "about": "关于你",
+      "style": "智能体风格"
+    },
+    "welcome": {
+      "title": "欢迎使用 MiniMax Agent",
+      "subtitle": "面向 MiniMax M3 的一体化桌面工作区 — 聊天、代码、媒体和自主智能体。三步即可就绪。",
+      "b1": "连接你的 MiniMax 账户",
+      "b2": "选择你的语言",
+      "b3": "让智能体了解你"
+    },
+    "apikey": {
+      "title": "连接你的 MiniMax 账户",
+      "subtitle": "粘贴你的 API 密钥。它仅保存在本地，绝不离开你的设备。我们会在继续前进行验证。",
+      "label": "API 密钥",
+      "validate": "验证",
+      "connected": "已连接",
+      "error": "无法验证该密钥。",
+      "getKey": "在哪里获取密钥？",
+      "later": "稍后再设置"
+    },
+    "language": {
+      "title": "选择你的语言",
+      "subtitle": "你可以随时在设置中更改。"
+    },
+    "context": {
+      "title": "让智能体了解你",
+      "subtitle": "可选，但智能体会明显变得更好。你可以稍后在设置中调整。",
+      "personality": "性格",
+      "role": "默认角色"
+    },
+    "done": {
+      "title": "全部就绪",
+      "subtitle": "一切已配置完成。点击开始打开你的工作区。",
+      "keyLater": "已跳过 — 请在设置中填写",
+      "contextDefault": "已应用默认值"
+    },
+    "skipAll": "跳过设置",
+    "back": "返回",
+    "start": "开始",
+    "finish": "完成",
+    "continue": "继续",
+    "style": {
+      "title": "智能体风格",
+      "subtitle": "为智能体选择性格和默认角色。"
+    }
+  },
   "nav": {
     "chat": "聊天",
     "tts": "语音合成",
@@ -145,7 +198,7 @@
     "generationDefaultsHint": "由音乐和语音面板挂载时使用；在省略它们的每个请求中发送。",
     "about": "关于",
     "aboutYouDesc": "告诉智能体关于您自己的信息 — 您的偏好、背景、目标或您希望它在所有对话中记住的任何内容。",
-    "aboutYouPlaceholder": "例：我是位于巴西的全栈开发人员。偏好简洁现代的 UI 设计，主要使用 React 和 Python。会葡萄牙语和英语。",
+    "aboutYouPlaceholder": "例如：你的角色、使用的工具，以及你希望智能体如何回应。",
     "aboutYouHint": "此简介会自动注入到每次对话中。",
     "save": "保存",
     "yourTokenPlan": "您的 Token Plan",

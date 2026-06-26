@@ -3,6 +3,59 @@
     "name": "MiniMax Agente",
     "tagline": "Plataforma Tudo-em-Um"
   },
+  "setup": {
+    "step": {
+      "welcome": "Boas-vindas",
+      "apikey": "Chave de API",
+      "language": "Idioma",
+      "context": "Contexto do agente",
+      "done": "Pronto",
+      "about": "Sobre você",
+      "style": "Estilo do agente"
+    },
+    "welcome": {
+      "title": "Bem-vindo ao MiniMax Agent",
+      "subtitle": "Seu ambiente desktop completo para o MiniMax M3 — chat, código, mídia e um agente autônomo. Três passos rápidos e você está pronto.",
+      "b1": "Conecte sua conta MiniMax",
+      "b2": "Escolha seu idioma",
+      "b3": "Ensine o agente sobre você"
+    },
+    "apikey": {
+      "title": "Conecte sua conta MiniMax",
+      "subtitle": "Cole sua chave de API. Ela fica salva localmente e nunca sai da sua máquina. Validamos antes de continuar.",
+      "label": "Chave de API",
+      "validate": "Validar",
+      "connected": "Conectado",
+      "error": "Não foi possível validar a chave.",
+      "getKey": "Onde consigo uma chave?",
+      "later": "Faço isso depois"
+    },
+    "language": {
+      "title": "Escolha seu idioma",
+      "subtitle": "Você pode mudar a qualquer momento nas Configurações."
+    },
+    "context": {
+      "title": "Ensine o agente sobre você",
+      "subtitle": "Opcional, mas o agente fica visivelmente melhor. Você pode ajustar depois nas Configurações.",
+      "personality": "Personalidade",
+      "role": "Função padrão"
+    },
+    "done": {
+      "title": "Tudo pronto",
+      "subtitle": "Tudo configurado. Clique em Começar para abrir seu workspace.",
+      "keyLater": "Pulado — configure nas Configurações",
+      "contextDefault": "Padrões aplicados"
+    },
+    "skipAll": "Pular configuração",
+    "back": "Voltar",
+    "start": "Começar",
+    "finish": "Concluir",
+    "continue": "Continuar",
+    "style": {
+      "title": "Estilo do agente",
+      "subtitle": "Escolha uma personalidade e uma função padrão para o agente."
+    }
+  },
   "nav": {
     "chat": "Chat",
     "tts": "TTS",
@@ -153,7 +206,7 @@
     "generationDefaultsHint": "Usado pelos painéis Música e Fala ao montar; enviado em toda requisição que os omite.",
     "about": "Sobre",
     "aboutYouDesc": "Conte para o agente sobre você — suas preferências, histórico, objetivos ou qualquer coisa que você queira que ele lembre em todas as conversas.",
-    "aboutYouPlaceholder": "ex. Sou desenvolvedor full-stack baseado no Brasil. Prefiro UIs limpas e modernas e trabalho principalmente com React e Python. Falo português e inglês.",
+    "aboutYouPlaceholder": "ex.: sua função, as ferramentas que você usa e como prefere que o agente responda.",
     "aboutYouHint": "Esta bio é injetada em toda conversa automaticamente.",
     "save": "Salvar",
     "yourTokenPlan": "Seu Token Plan",
@@ -175,7 +228,16 @@
     "apiKeyLabel": "Chave da API MiniMax",
     "apiKeyPlaceholder": "sk-cp-...",
     "apiKeyPlaceholderMasked": "••••••••••••••••••••••••••••",
-    "update": "Atualizar",
+    "update": {
+      "check": "Verificar atualizações",
+      "checking": "Verificando…",
+      "upToDate": "Você está na versão mais recente",
+      "available": "Atualização disponível: v{version}",
+      "download": "Baixar e instalar",
+      "downloading": "Baixando…",
+      "restart": "Reiniciar para aplicar",
+      "error": "Não foi possível verificar atualizações"
+    },
     "apiKeyConnected": "Conectado · armazenada localmente em config.yaml",
     "apiKeyNotConfigured": "Não configurada — chamadas do agente vão falhar",
     "interfaceLanguage": "Idioma da interface",
@@ -209,16 +271,6 @@
     "serverRemoved": "Servidor removido",
     "version": "Versão {version} · atualizado",
     "github": "GitHub",
-    "update": {
-      "check": "Verificar atualizações",
-      "checking": "Verificando…",
-      "upToDate": "Você está na versão mais recente",
-      "available": "Atualização disponível: v{version}",
-      "download": "Baixar e instalar",
-      "downloading": "Baixando…",
-      "restart": "Reiniciar para aplicar",
-      "error": "Não foi possível verificar atualizações"
-    },
     "savedSuccess": "Configurações salvas com sucesso!",
     "apiKeySaved": "Chave da API salva.",
     "agentSaved": "Configurações do agente salvas.",
@@ -386,7 +438,7 @@
       "next": "Próximo",
       "create": "Criar {n} arquivos",
       "name": "Como você quer ser chamado?",
-      "namePh": "ex.: Eduardo",
+      "namePh": "Como o agente deve te chamar?",
       "timezone": "Fuso horário",
       "level": "Nível técnico",
       "personalityQ": "Como você quer que eu soe?",

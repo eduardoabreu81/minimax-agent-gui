@@ -3,6 +3,59 @@
     "name": "MiniMax Agente",
     "tagline": "Plataforma Todo-en-Uno"
   },
+  "setup": {
+    "step": {
+      "welcome": "Bienvenida",
+      "apikey": "Clave de API",
+      "language": "Idioma",
+      "context": "Contexto del agente",
+      "done": "Listo",
+      "about": "Sobre ti",
+      "style": "Estilo del agente"
+    },
+    "welcome": {
+      "title": "Bienvenido a MiniMax Agent",
+      "subtitle": "Tu espacio de trabajo de escritorio todo en uno para MiniMax M3 — chat, código, medios y un agente autónomo. Tres pasos rápidos y estás listo.",
+      "b1": "Conecta tu cuenta de MiniMax",
+      "b2": "Elige tu idioma",
+      "b3": "Enséñale al agente quién eres"
+    },
+    "apikey": {
+      "title": "Conecta tu cuenta de MiniMax",
+      "subtitle": "Pega tu clave de API. Se guarda localmente y nunca sale de tu equipo. La validamos antes de continuar.",
+      "label": "Clave de API",
+      "validate": "Validar",
+      "connected": "Conectado",
+      "error": "No se pudo validar la clave.",
+      "getKey": "¿Dónde consigo una clave?",
+      "later": "Lo haré más tarde"
+    },
+    "language": {
+      "title": "Elige tu idioma",
+      "subtitle": "Puedes cambiarlo cuando quieras en Configuración."
+    },
+    "context": {
+      "title": "Enséñale al agente quién eres",
+      "subtitle": "Opcional, pero el agente mejora notablemente. Puedes ajustarlo luego en Configuración.",
+      "personality": "Personalidad",
+      "role": "Rol predeterminado"
+    },
+    "done": {
+      "title": "Todo listo",
+      "subtitle": "Todo está configurado. Pulsa Empezar para abrir tu espacio.",
+      "keyLater": "Omitido — configúralo en Configuración",
+      "contextDefault": "Valores por defecto aplicados"
+    },
+    "skipAll": "Omitir configuración",
+    "back": "Atrás",
+    "start": "Empezar",
+    "finish": "Finalizar",
+    "continue": "Continuar",
+    "style": {
+      "title": "Estilo del agente",
+      "subtitle": "Elige una personalidad y un rol predeterminado para el agente."
+    }
+  },
   "nav": {
     "chat": "Chat",
     "tts": "TTS",
@@ -145,7 +198,7 @@
     "generationDefaultsHint": "Usado por los paneles Música y Voz al montar; enviado con cada solicitud que los omite.",
     "about": "Acerca de",
     "aboutYouDesc": "Cuéntale al agente sobre ti — tus preferencias, formación, objetivos o cualquier cosa que quieras que recuerde en todas las conversaciones.",
-    "aboutYouPlaceholder": "ej. Soy desarrollador full-stack en Brasil. Prefiero UIs limpias y modernas y trabajo principalmente con React y Python. Hablo portugués e inglés.",
+    "aboutYouPlaceholder": "ej.: tu rol, las herramientas que usas y cómo prefieres que responda el agente.",
     "aboutYouHint": "Esta bio se inyecta en cada conversación automáticamente.",
     "save": "Guardar",
     "yourTokenPlan": "Tu Token Plan",
