@@ -267,7 +267,10 @@
     "navigatePalette": "팔레트 항목 탐색",
     "selectPalette": "팔레트 항목 선택",
     "newLine": "입력에 새 줄",
-    "skills": "스킬"
+    "skills": "스킬",
+    "personality": {
+      "preset": "프리셋"
+    }
   },
   "onboarding": {
     "welcome": "MiniMax 에이전트에 오신 것을 환영합니다",

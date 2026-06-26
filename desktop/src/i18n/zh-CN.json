@@ -267,7 +267,10 @@
     "navigatePalette": "在面板项中导航",
     "selectPalette": "选择面板项",
     "newLine": "在输入中换行",
-    "skills": "技能"
+    "skills": "技能",
+    "personality": {
+      "preset": "预设"
+    }
   },
   "onboarding": {
     "welcome": "欢迎使用 MiniMax 智能助手",

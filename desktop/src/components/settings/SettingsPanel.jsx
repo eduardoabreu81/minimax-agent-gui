@@ -121,7 +121,7 @@ function Toggle({ on, onChange, label }) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function SettingsPanel() {
+export default function SettingsPanel({ onRestartSetup }) {
   const { t, i18n } = useTranslation()
   const { theme, setTheme, mode, setMode, toggleMatrixEffect, matrixEffect, themes: THEME_LIST } = useTheme()
 
@@ -1308,6 +1308,25 @@ export default function SettingsPanel() {
               {t('settings.github')}
             </button>
           </div>
+
+          {/* Rerun the first-run setup (welcome → language → API key →
+              agent context). Clears the localStorage gate via App's
+              restartSetup, then the FirstRunSetup overlay reopens on top. */}
+          {onRestartSetup && (
+            <div className="border-t border-border px-5 py-4 flex items-center gap-3">
+              <div className="flex-1 min-w-0">
+                <div className="text-[12px] font-medium text-foreground">{t('settings.rerunSetup', 'First-run setup')}</div>
+                <div className="text-[10.5px] text-muted-foreground">{t('settings.rerunSetupHint', 'Re-run the welcome, language, API key and agent-context steps.')}</div>
+              </div>
+              <button
+                onClick={onRestartSetup}
+                className="h-[32px] px-3 rounded-[8px] border border-border bg-transparent text-foreground text-[12px] font-medium hover:border-primary/50 transition-colors flex items-center gap-1.5"
+              >
+                <RefreshCw size={12} />
+                {t('settings.rerunSetupBtn', 'Rerun')}
+              </button>
+            </div>
+          )}
 
           {/* Update row — auto-updater (tauri-plugin-updater). Status text
               drives the button label and the disabled state. The actual

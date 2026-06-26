@@ -142,6 +142,25 @@ function AppShell() {
     } catch { return false }
   })
 
+  // Clears the first-run flags and re-opens the setup overlay. Wired to the
+  // "Rerun setup" button in Settings → About so users can redo onboarding.
+  const restartSetup = useCallback(() => {
+    try {
+      localStorage.removeItem(SETUP_COMPLETE_KEY)
+      localStorage.removeItem('minimax-onboarding-seen')
+      localStorage.removeItem(WIZARD_SEEN_KEY)
+    } catch {}
+    setShowSetup(true)
+  }, [])
+
+  // Any "rerun onboarding" affordance (Settings → About, the Agent Context
+  // modal header) dispatches this event so it works from anywhere.
+  useEffect(() => {
+    const onRerun = () => restartSetup()
+    window.addEventListener('minimax:rerun-setup', onRerun)
+    return () => window.removeEventListener('minimax:rerun-setup', onRerun)
+  }, [restartSetup])
+
   // FirstRunSetup now owns onboarding, so the agent-context wizard no longer
   // auto-opens on launch — it's reachable from the IncompleteContextBanner's
   // "Set up now" button.
@@ -175,7 +194,7 @@ function AppShell() {
                       setThinkingEnabled={setThinkingEnabled}
                       supportsThinking={supportsThinking} />,
     tasks: <TaskBoard />,
-    settings: <SettingsPanel />,
+    settings: <SettingsPanel onRestartSetup={restartSetup} />,
     help: <HelpPanel />,
   }
 

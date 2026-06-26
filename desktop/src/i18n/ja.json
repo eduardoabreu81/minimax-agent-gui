@@ -267,7 +267,10 @@
     "navigatePalette": "パレット項目を移動",
     "selectPalette": "パレット項目を選択",
     "newLine": "入力欄に改行",
-    "skills": "スキル"
+    "skills": "スキル",
+    "personality": {
+      "preset": "プリセット"
+    }
   },
   "onboarding": {
     "welcome": "MiniMax エージェントへようこそ",

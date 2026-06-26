@@ -267,7 +267,10 @@
     "navigatePalette": "Navegar por los elementos de la paleta",
     "selectPalette": "Seleccionar elemento de la paleta",
     "newLine": "Nueva línea en la entrada",
-    "skills": "Skills"
+    "skills": "Skills",
+    "personality": {
+      "preset": "Preajuste"
+    }
   },
   "onboarding": {
     "welcome": "Bienvenido a MiniMax Agente",

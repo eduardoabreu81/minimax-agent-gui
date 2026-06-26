@@ -17,8 +17,16 @@
 // (kept in sync). The web build does NOT install @tauri-apps/api, so
 // the import has to be lazy and the call guarded.
 
+// Tauri production detection. On Linux/macOS the app is served from the
+// `tauri://localhost` custom protocol; on Windows (WebView2) it's served from
+// `http://tauri.localhost`, so the protocol check alone misses Windows and
+// apiFetch wrongly falls back to relative URLs (which hit the asset server and
+// return index.html). Match the tauri.localhost host too. Dev (Vite on
+// localhost:1420) stays false on purpose so the Vite proxy handles /api + /ws.
 const IS_TAURI =
-  typeof window !== "undefined" && window.location?.protocol === "tauri:";
+  typeof window !== "undefined" &&
+  (window.location?.protocol === "tauri:" ||
+    /(^|\.)tauri\.localhost$/i.test(window.location?.hostname || ""));
 
 // Lazy import so the web build (no @tauri-apps/api installed) does
 // not crash. If anything goes wrong, we fall back to a relative path

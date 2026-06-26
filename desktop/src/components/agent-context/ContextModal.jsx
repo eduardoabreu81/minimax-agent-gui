@@ -133,7 +133,7 @@ export default function ContextModal() {
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <button
-              onClick={openModalAndWizard}
+              onClick={() => { closeModal(); window.dispatchEvent(new Event('minimax:rerun-setup')) }}
               className="
                 inline-flex items-center gap-1.5
                 px-2.5 py-1.5 rounded-md
