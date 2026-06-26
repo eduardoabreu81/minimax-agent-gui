@@ -98,10 +98,14 @@ jobs:
           # emit the per-target *-updater.json that the auto-updater polls.
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          # macOS-only (no-op on other runners).
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          # macOS code-signing is OFF — no Apple Developer ID ($99/yr). The
+          # .app/.dmg ship UNSIGNED (users right-click -> Open the first time).
+          # Passing empty APPLE_* vars makes Tauri attempt `security import`
+          # and fail, so they stay commented. To enable signed/notarized macOS
+          # builds later, add the three secrets and uncomment:
+          # APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          # APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          # APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
