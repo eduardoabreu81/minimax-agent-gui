@@ -382,5 +382,19 @@
   },
   "common": {
     "statusSummary": "Pendientes: {pending} · En progreso: {progress} · En revisión: {review} · Hechas: {done}"
+  },
+  "agentContext": {
+    "roles": {
+      "eng": "Compañero de ingeniería",
+      "reviewer": "Revisor de código",
+      "pm": "Gerente de proyecto"
+    },
+    "presetDesc": {
+      "concise": "Directo, prosa mínima. Sustancia por encima de formalidad.",
+      "friendly": "Cálido y alentador. Celebra los logros, explica con paciencia.",
+      "mentor": "Paciente. Explica el porqué antes del cómo.",
+      "expert": "Denso y técnico. Cita compensaciones y casos límite.",
+      "creative": "Genera opciones, explora ángulos inesperados."
+    }
   }
 }

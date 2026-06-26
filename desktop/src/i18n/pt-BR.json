@@ -500,9 +500,9 @@
       "creative": "Criativo"
     },
     "roles": {
-      "eng": "Engineering partner",
-      "reviewer": "Code reviewer",
-      "pm": "Project manager",
+      "eng": "Parceiro de engenharia",
+      "reviewer": "Revisor de código",
+      "pm": "Gerente de projeto",
       "custom": "Customizado"
     },
     "file": {
@@ -511,6 +511,13 @@
       "user": "Seu perfil",
       "memory": "Memória do projeto",
       "daily": "Registros do dia"
+    },
+    "presetDesc": {
+      "concise": "Direto, prosa mínima. Conteúdo acima de formalidade.",
+      "friendly": "Caloroso e encorajador. Comemora vitórias, explica com paciência.",
+      "mentor": "Paciente. Explica o porquê antes do como.",
+      "expert": "Denso e técnico. Cita trade-offs e casos extremos.",
+      "creative": "Gera opções, explora ângulos inesperados."
     }
   }
 }

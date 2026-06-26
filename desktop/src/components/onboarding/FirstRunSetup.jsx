@@ -385,10 +385,10 @@ export default function FirstRunSetup({ onComplete }) {
                         </span>
                         <span className="min-w-0">
                           <span className="block text-sm font-medium text-foreground">
-                            {presets.find((x) => x.id === p)?.name || t(`agentContext.presets.${p}`, p)}
+                            {t(`agentContext.presets.${p}`, presets.find((x) => x.id === p)?.name || p)}
                           </span>
                           <span className="block text-xs text-muted-foreground line-clamp-2">
-                            {presetTeaser(p)}
+                            {t(`agentContext.presetDesc.${p}`, presetTeaser(p))}
                           </span>
                         </span>
                       </button>
@@ -402,7 +402,7 @@ export default function FirstRunSetup({ onComplete }) {
                 <div className="flex flex-wrap gap-2">
                   {['eng', 'reviewer', 'pm'].map((r) => (
                     <Chip key={r} active={role === r} onClick={() => setRole(r)}>
-                      {roles.find((x) => x.id === r)?.name || t(`agentContext.roles.${r}`, r)}
+                      {t(`agentContext.roles.${r}`, roles.find((x) => x.id === r)?.name || r)}
                     </Chip>
                   ))}
                 </div>
@@ -421,8 +421,8 @@ export default function FirstRunSetup({ onComplete }) {
                   <SummaryRow label={t('agentContext.wizard.name', 'Your name')} value={name || '—'} ok={!!name} />
                   <SummaryRow label={t('agentContext.wizard.timezone', 'Timezone')} value={timezone || '—'} ok={!!timezone} />
                   <SummaryRow label={t('agentContext.wizard.level', 'Technical level')} value={t(`agentContext.wizard.level${level.charAt(0).toUpperCase() + level.slice(1)}`, level)} ok />
-                  <SummaryRow label={t('setup.context.personality', 'Personality')} value={presets.find((x) => x.id === preset)?.name || t(`agentContext.presets.${preset}`, preset)} ok />
-                  <SummaryRow label={t('setup.context.role', 'Default role')} value={roles.find((x) => x.id === role)?.name || t(`agentContext.roles.${role}`, role)} ok />
+                  <SummaryRow label={t('setup.context.personality', 'Personality')} value={t(`agentContext.presets.${preset}`, presets.find((x) => x.id === preset)?.name || preset)} ok />
+                  <SummaryRow label={t('setup.context.role', 'Default role')} value={t(`agentContext.roles.${role}`, roles.find((x) => x.id === role)?.name || role)} ok />
                 </div>
               </StepShell>
             )}

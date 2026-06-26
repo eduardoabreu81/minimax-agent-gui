@@ -382,5 +382,19 @@
   },
   "common": {
     "statusSummary": "대기: {pending} · 진행: {progress} · 검토: {review} · 완료: {done}"
+  },
+  "agentContext": {
+    "roles": {
+      "eng": "엔지니어링 파트너",
+      "reviewer": "코드 리뷰어",
+      "pm": "프로젝트 매니저"
+    },
+    "presetDesc": {
+      "concise": "직접적이고 간결함. 형식보다 본질.",
+      "friendly": "따뜻하고 격려하는 스타일. 성과를 축하하고 차분히 설명.",
+      "mentor": "인내심 있음. 방법보다 이유를 먼저 설명.",
+      "expert": "밀도 높고 기술적. 트레이드오프와 엣지 케이스를 언급.",
+      "creative": "여러 선택지를 만들고 예상치 못한 관점을 탐색."
+    }
   }
 }

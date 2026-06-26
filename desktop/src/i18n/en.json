@@ -619,6 +619,13 @@
       "user": "Your profile",
       "memory": "Project memory",
       "daily": "Daily logs"
+    },
+    "presetDesc": {
+      "concise": "Direct, minimal prose. Substance over formality.",
+      "friendly": "Warm and encouraging. Celebrates wins, explains patiently.",
+      "mentor": "Patient. Explains the why before the how.",
+      "expert": "Dense and technical. Cites trade-offs and edge cases.",
+      "creative": "Generates options, explores unexpected angles."
     }
   }
 }

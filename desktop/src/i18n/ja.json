@@ -382,5 +382,19 @@
   },
   "common": {
     "statusSummary": "保留: {pending} · 進行中: {progress} · レビュー: {review} · 完了: {done}"
+  },
+  "agentContext": {
+    "roles": {
+      "eng": "エンジニアリングパートナー",
+      "reviewer": "コードレビュアー",
+      "pm": "プロジェクトマネージャー"
+    },
+    "presetDesc": {
+      "concise": "直接的で簡潔。形式よりも中身を重視。",
+      "friendly": "温かく励ます。成果を称え、丁寧に説明。",
+      "mentor": "辛抱強い。方法の前に理由を説明。",
+      "expert": "濃密で技術的。トレードオフやエッジケースに言及。",
+      "creative": "選択肢を生み出し、意外な視点を探る。"
+    }
   }
 }

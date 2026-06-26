@@ -382,5 +382,19 @@
   },
   "common": {
     "statusSummary": "待办: {pending} · 进行: {progress} · 审核: {review} · 完成: {done}"
+  },
+  "agentContext": {
+    "roles": {
+      "eng": "工程伙伴",
+      "reviewer": "代码审查者",
+      "pm": "项目经理"
+    },
+    "presetDesc": {
+      "concise": "直接、简洁。重内容轻形式。",
+      "friendly": "温暖鼓励。庆祝成果，耐心讲解。",
+      "mentor": "有耐心。先讲为什么，再讲怎么做。",
+      "expert": "密集且技术性强。指出权衡与边界情况。",
+      "creative": "生成多种选项，探索意想不到的角度。"
+    }
   }
 }
