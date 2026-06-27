@@ -7,7 +7,7 @@
 //
 // Gated by a single localStorage flag (`minimax-setup-complete`). The API key
 // step is the only hard requirement; it validates the key for real by saving
-// it (POST /api/config/api-key) and then reading the plan back from
+// it (PUT /api/config/api-key) and then reading the plan back from
 // GET /api/minimax/quota. The agent-context step reuses useAgentContext so we
 // don't duplicate the SOUL/IDENTITY/USER/MEMORY logic.
 
@@ -117,7 +117,7 @@ export default function FirstRunSetup({ onComplete }) {
     setKeyError(null)
     try {
       const save = await apiFetch('/api/config/api-key', {
-        method: 'POST',
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ api_key: key }),
       })
