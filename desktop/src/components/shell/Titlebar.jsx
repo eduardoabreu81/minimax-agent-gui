@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { Search, ChevronRight, GitBranch } from 'lucide-react'
+import { Search } from 'lucide-react'
 import { useAgentActivity } from '../../context/AgentActivityContext'
 
 // Agent status surfaced in the titlebar chip. Bound to AgentActivityContext
@@ -60,12 +60,6 @@ export default function Titlebar({ onOpenPalette }) {
         </div>
         <div className="flex items-center gap-1.5 text-[12.5px]">
           <span className="font-semibold tracking-[-0.01em] text-foreground">MiniMax Studio</span>
-          <ChevronRight size={12} className="text-muted-foreground" aria-hidden="true" />
-          <span className="text-muted-foreground">minimax-agent-gui</span>
-          <span className="inline-flex items-center gap-1 px-[7px] py-[2px] rounded-[5px] bg-secondary text-muted-foreground text-[11px]">
-            <GitBranch size={11} aria-hidden="true" />
-            main
-          </span>
         </div>
       </div>
 
