@@ -1,20 +1,17 @@
-# Release workflow — runs on every `v*` tag push.
+# Release workflow — builds the desktop app for ubuntu/windows/macos with
+# tauri-action, which signs the bundles, generates the updater manifest
+# (latest.json), and attaches everything to a GitHub Release.
 #
-# Builds the desktop app for ubuntu/windows/macos, signs the bundles
-# with the Tauri signing key (Ed25519, EdDSA), and uploads everything
-# (binaries + per-target `*-updater.json`) to a GitHub Release.
-#
-# The `*-updater.json` files are what the in-app auto-updater polls
-# (see tauri.conf.json plugins.updater.endpoints). The updater plugin
-# verifies each release against the pubkey in tauri.conf.json before
-# applying — unsigned updates are rejected client-side.
+# On a `v*` tag push it creates a DRAFT release: review + test the installers,
+# then click "Publish release" in the GitHub UI to go live (which also enables
+# the auto-updater, since the updater polls releases/latest/download/latest.json).
+# On workflow_dispatch it builds + signs only (no release) — a 3-OS dry-run.
 #
 # Required GitHub Secrets:
-#   TAURI_SIGNING_PRIVATE_KEY       — contents of `tauri signer generate` output
-#   TAURI_SIGNING_PRIVATE_KEY_PASSWORD — passphrase for the signing key (if any)
-#   APPLE_CERTIFICATE               — base64 .p12 (macOS only, optional)
-#   APPLE_CERTIFICATE_PASSWORD      — .p12 password (macOS only, optional)
-#   APPLE_SIGNING_IDENTITY          — "Developer ID Application: <Name> (<Team>)"
+#   TAURI_SIGNING_PRIVATE_KEY          — `tauri signer generate` private key
+#   TAURI_SIGNING_PRIVATE_KEY_PASSWORD — its passphrase (if one was set)
+# macOS code-signing (APPLE_*) is intentionally off — no Apple Developer ID;
+# the .app/.dmg ship unsigned (right-click → Open on first launch).
 
 name: Release desktop
 
@@ -72,16 +69,9 @@ jobs:
         with:
           workspaces: desktop/src-tauri
 
-      - name: Install npm deps
-        working-directory: desktop
-        run: npm ci
-
-      # The backend sidecar (PyInstaller-frozen FastAPI) is built per-OS
-      # because Windows/Linux/macOS binaries aren't interchangeable. Built
-      # with the canonical spec (hidden imports, data files, excludes) from
-      # the repo root, so the onedir output lands at <repo>/dist/backend/ —
-      # exactly where tauri.conf.json's bundle.resources expects it. Runs
-      # before `tauri build` so the sidecar gets embedded.
+      # The FastAPI sidecar (PyInstaller onedir) must exist before the Tauri
+      # build so tauri.conf.json's bundle.resources can embed it. Built from
+      # the repo root with the canonical spec; output lands at <repo>/dist/backend/.
       - name: Build backend sidecar
         run: |
           python -m pip install --upgrade pip
@@ -90,62 +80,22 @@ jobs:
           pip install pyinstaller
           pyinstaller desktop/packaging/backend.spec --noconfirm
 
-      - name: Build Tauri app
-        working-directory: desktop
-        run: npm run tauri:build
+      # tauri-action installs the frontend deps, runs the Tauri build, signs the
+      # bundles, generates latest.json (the updater manifest), and uploads
+      # everything to a draft GitHub Release for the tag.
+      - name: Build, sign & draft release
+        uses: tauri-apps/tauri-action@v0
         env:
-          # Tauri CLI picks these up automatically to sign all bundles +
-          # emit the per-target *-updater.json that the auto-updater polls.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          # macOS code-signing is OFF — no Apple Developer ID ($99/yr). The
-          # .app/.dmg ship UNSIGNED (users right-click -> Open the first time).
-          # Passing empty APPLE_* vars makes Tauri attempt `security import`
-          # and fail, so they stay commented. To enable signed/notarized macOS
-          # builds later, add the three secrets and uncomment:
-          # APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          # APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          # APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v7
         with:
-          name: minimax-agent-${{ matrix.os }}
-          if-no-files-found: ignore
-          path: |
-            desktop/src-tauri/target/release/bundle/dmg/*.dmg
-            desktop/src-tauri/target/release/bundle/macos/*.app
-            desktop/src-tauri/target/release/bundle/msi/*.msi
-            desktop/src-tauri/target/release/bundle/nsis/*.exe
-            desktop/src-tauri/target/release/bundle/appimage/*.AppImage
-            desktop/src-tauri/target/release/bundle/deb/*.deb
-            desktop/src-tauri/target/release/bundle/*-updater.json
-
-  release:
-    name: Publish GitHub Release
-    needs: build
-    # Only publish on a real version tag. A manual workflow_dispatch run is a
-    # build-only dry-run (its github.ref is a branch, which would otherwise
-    # create a junk "main" release).
-    if: startsWith(github.ref, 'refs/tags/')
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/download-artifact@v8
-        with:
-          path: artifacts
-
-      - name: Flatten artifacts
-        run: |
-          mkdir -p release
-          find artifacts -type f \( -name "*.msi" -o -name "*.exe" -o -name "*.dmg" -o -name "*.AppImage" -o -name "*.deb" -o -name "*-updater.json" \) -exec mv {} release/ \;
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.ref_name }}
-          name: ${{ github.ref_name }}
-          draft: false
+          projectPath: desktop
+          # Empty tagName on workflow_dispatch → build + sign only (dry-run).
+          # On a v* tag → create/append to that tag's DRAFT release.
+          tagName: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
+          releaseName: ${{ github.ref_name }}
+          releaseBody: 'Download the installer for your platform below. macOS builds are unsigned — right-click → Open on first launch.'
+          releaseDraft: true
           prerelease: false
-          generate_release_notes: true
-          files: |
-            release/*
+          includeUpdaterJson: true
