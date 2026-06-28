@@ -69,6 +69,13 @@ jobs:
         with:
           workspaces: desktop/src-tauri
 
+      # tauri-action does NOT install node deps on its own, so install them
+      # here — otherwise the `tauri` CLI is missing and the build fails with
+      # "tauri: not found" (exit 127).
+      - name: Install frontend deps
+        working-directory: desktop
+        run: npm ci
+
       # The FastAPI sidecar (PyInstaller onedir) must exist before the Tauri
       # build so tauri.conf.json's bundle.resources can embed it. Built from
       # the repo root with the canonical spec; output lands at <repo>/dist/backend/.
@@ -80,9 +87,9 @@ jobs:
           pip install pyinstaller
           pyinstaller desktop/packaging/backend.spec --noconfirm
 
-      # tauri-action installs the frontend deps, runs the Tauri build, signs the
-      # bundles, generates latest.json (the updater manifest), and uploads
-      # everything to a draft GitHub Release for the tag.
+      # tauri-action runs the Tauri build, signs the bundles, generates
+      # latest.json (the updater manifest), and uploads everything to a draft
+      # GitHub Release for the tag. (Node deps are installed in the step above.)
       - name: Build, sign & draft release
         uses: tauri-apps/tauri-action@v0
         env:
