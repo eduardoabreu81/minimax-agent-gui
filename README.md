@@ -25,6 +25,8 @@ MiniMax Studio brings everything MiniMax can do into a single app on your comput
 
 > **Good to know:** MiniMax Studio is made for **[MiniMax Token Plan](https://platform.minimax.io/subscribe/token-plan)** subscribers. It's a real app you install on Windows, macOS or Linux — everything (chat, media, code, settings) lives in one window.
 
+> ⚠️ **Installed the very first build (v0.4.0)?** It shipped under the old name **“MiniMax Agent”**. The app was renamed to **MiniMax Studio**, and because the name changed, that early build **won't auto-update**. If you have **MiniMax Agent** installed, please **uninstall it** (Windows: *Settings → Apps → MiniMax Agent → Uninstall*) and grab the latest **MiniMax Studio** from the **[Releases page](https://github.com/eduardoabreu81/minimax-agent-gui/releases/latest)**. You only need to do this once — every version after that updates itself.
+
 ## ✨ What you can do
 
 <table>
