@@ -3659,7 +3659,7 @@ async def image_i2i_generate(req: ImageRequest, session_id: str = ""):
         )
 
         if success:
-            rel_path = str(Path(result).relative_to(PROJECT_ROOT)).replace('\\', '/')
+            rel_path = str(Path(result).relative_to(get_app_workspace_dir())).replace('\\', '/')
             cost = calculate_image_cost(n)
             return {
                 "success": True,
@@ -4664,7 +4664,7 @@ async def music_generate(req: MusicRequest):
         extra_info = (result.get("extra_info") or {}) if isinstance(result, dict) else {}
         trace_id = (result.get("trace_id") or "") if isinstance(result, dict) else ""
 
-        rel_path = str(Path(actual_path).relative_to(PROJECT_ROOT)).replace("\\", "/")
+        rel_path = str(Path(actual_path).relative_to(get_app_workspace_dir())).replace("\\", "/")
         cost = calculate_music_cost(include_lyrics=bool(req.lyrics.strip()))
         return {
             "success": True,
@@ -4988,7 +4988,7 @@ async def list_generations():
             stat = f.stat()
             result[subdir].append({
                 "name": f.name,
-                "path": str(f.relative_to(PROJECT_ROOT)).replace("\\", "/"),
+                "path": str(f.relative_to(get_app_workspace_dir())).replace("\\", "/"),
                 "type": subdir,
                 "size": stat.st_size,
                 "modified_at": datetime.fromtimestamp(stat.st_mtime).isoformat(),
