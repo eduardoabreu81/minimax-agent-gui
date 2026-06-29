@@ -238,6 +238,42 @@ function AppShell() {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)
   }, [])
 
+  // Download links to the bundled backend point at an absolute
+  // http://127.0.0.1:8765 URL. In the Tauri WebView a cross-origin
+  // `<a download>` is treated as a *navigation* (the download attribute is
+  // ignored across origins), which leaves the SPA and trips the beforeunload
+  // guard above ("Leave site?"). Intercept those clicks and save the file via
+  // a same-origin blob URL instead — the WebView downloads it with no
+  // navigation and no prompt.
+  useEffect(() => {
+    const onClick = (e) => {
+      const a = e.target.closest?.('a[download]')
+      if (!a) return
+      const href = a.getAttribute('href') || ''
+      if (!href.includes('/api/files/')) return
+      e.preventDefault()
+      ;(async () => {
+        try {
+          const res = await fetch(href)
+          if (!res.ok) throw new Error(`download failed (${res.status})`)
+          const blob = await res.blob()
+          const url = URL.createObjectURL(blob)
+          const link = document.createElement('a')
+          link.href = url
+          link.download = a.getAttribute('download') || 'download'
+          document.body.appendChild(link)
+          link.click()
+          link.remove()
+          setTimeout(() => URL.revokeObjectURL(url), 1500)
+        } catch (err) {
+          console.error('[download] failed:', err)
+        }
+      })()
+    }
+    document.addEventListener('click', onClick, true)
+    return () => document.removeEventListener('click', onClick, true)
+  }, [])
+
   const handleNavigate = useCallback((tabId) => {
     if (hasAnyRisk() && tabId !== activeTab) {
       setGuardAction('navigate')
