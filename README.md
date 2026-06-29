@@ -1,8 +1,8 @@
 <div align="center">
 
-<img src="docs/assets/minimax-agent-gui-banner.png" alt="MiniMax Agent" width="100%" />
+<img src="docs/assets/minimax-agent-gui-banner.png" alt="MiniMax Studio" width="100%" />
 
-# MiniMax Agent ☄
+# MiniMax Studio ☄
 
 **The all-in-one desktop workspace for MiniMax M3.** Chat, code, generate image / video / music / speech, run skills and MCP tools, and let an autonomous agent carry the work across sessions — in one self-updating Tauri app.
 
@@ -21,9 +21,9 @@
 
 ---
 
-MiniMax Agent puts the whole MiniMax platform behind a single native window. It talks to **MiniMax M3** with a 1M-token context and a thinking block streamed live next to the reply, runs an autonomous **code agent** in a real workspace, generates media, and remembers who you are between sessions through a small set of `.agent/*.md` files. The backend is a bundled FastAPI sidecar — no CLI to install, no browser tabs, no separate web app.
+MiniMax Studio puts the whole MiniMax platform behind a single native window. It talks to **MiniMax M3** with a 1M-token context and a thinking block streamed live next to the reply, runs an autonomous **code agent** in a real workspace, generates media, and remembers who you are between sessions through a small set of `.agent/*.md` files. The backend is a bundled FastAPI sidecar — no CLI to install, no browser tabs, no separate web app.
 
-> **Heads up:** this is a desktop-first app. The Tauri shell is the only installable interface — everything (chat, media, code, settings) lives in one window that updates itself from signed GitHub releases.
+> **Heads up:** MiniMax Studio is built for **[MiniMax Token Plan](https://platform.minimax.io/subscribe/token-plan)** subscribers and is desktop-first — the Tauri shell is the only installable interface, with everything (chat, media, code, settings) in one window.
 
 ## ✨ Features
 
@@ -111,21 +111,23 @@ You install the app like any other desktop application — there's nothing to co
 
 Grab the installer for your platform from the [latest release](https://github.com/eduardoabreu81/minimax-agent-gui/releases/latest):
 
-| OS | File |
+All installers are named `MiniMax Studio_<version>_…` — pick the one whose suffix matches your platform:
+
+| OS | File suffix |
 |---|---|
-| **Windows** (x64) | `MiniMax-Agent_x.x.x_x64-setup.exe` |
-| **macOS** (Apple Silicon + Intel) | `MiniMax-Agent_x.x.x_universal.dmg` |
-| **Linux** (x64) | `MiniMax-Agent_x.x.x_amd64.AppImage` or `.deb` |
+| **Windows** (x64) | `_x64-setup.exe` |
+| **macOS** (Apple Silicon) | `_aarch64.dmg` |
+| **Linux** (x64) | `_amd64.AppImage` or `_amd64.deb` |
 
 ### 2. Install
 
 - **Windows** — double-click the `.exe`, follow the wizard
-- **macOS** — open the `.dmg`, drag **MiniMax Agent** into **Applications**
-- **Linux** — `chmod +x MiniMax-Agent_*.AppImage && ./MiniMax-Agent_*.AppImage`, or `sudo dpkg -i MiniMax-Agent_*.deb`
+- **macOS** — open the `.dmg`, drag **MiniMax Studio** into **Applications**. The build is not notarized yet, so the first launch needs **right-click → Open** (then *Open* again) to clear Gatekeeper.
+- **Linux** — `chmod +x MiniMax\ Studio_*.AppImage && ./MiniMax\ Studio_*.AppImage`, or `sudo dpkg -i MiniMax\ Studio_*.deb`
 
 ### 3. Open & set up
 
-The first launch walks you through connecting your **MiniMax API key** (get one at [platform.minimax.io](https://platform.minimax.io)). The key is stored locally in `config/config.yaml` (gitignored) and never leaves your machine.
+MiniMax Studio is built for **MiniMax Token Plan** subscribers. The first launch walks you through connecting your API key — subscribe and get one at [platform.minimax.io](https://platform.minimax.io/subscribe/token-plan). The key is stored locally in the app's per-user data folder and never leaves your machine.
 
 ### 4. Stay up to date
 
@@ -168,18 +170,18 @@ Environment variables override the config: `MINIMAX_API_KEY` and `MINIMAX_API_BA
 
 ## 🔄 Updates
 
-The app updates itself. **Settings → About → Check for updates** polls GitHub Releases; when a newer signed version is available it downloads in the background and prompts you to restart. No manual download required.
+A built-in updater (`tauri-plugin-updater`) is wired in: **Settings → About → Check for updates** polls GitHub Releases and, once a newer signed version is published, downloads it in the background and prompts a restart — no manual download. (The update manifest ships from the next release onward; see Roadmap.)
 
 ## 🗺️ Roadmap
 
 **Shipped (v0.4.0 — desktop-first):**
-Tauri 2 shell · full Speech stack (clone + design) · Settings index rail · live Status Bar · multi-source Skills · Agent Context (`.agent/*.md`) · shared Composer · Task Board · subdirectory hints · auto-updater · bilingual in-app Help.
+Tauri 2 shell · 6-step first-run onboarding · personality presets (concise / friendly / mentor / expert / creative) · full Speech stack (clone + design) · Settings index rail · live Status Bar · multi-source Skills · Agent Context (`.agent/*.md`) · shared Composer · Task Board · subdirectory hints · bilingual in-app Help · cross-platform signed installers.
 
 **Next:**
-- [ ] Personality presets (concise / friendly / mentor / expert / creative)
+- [ ] Auto-update manifest (`latest.json`) so installed apps self-update from new releases
+- [ ] macOS notarization (signed — no Gatekeeper prompt)
 - [ ] `CLAUDE.md` / `.cursorrules` startup loading
 - [ ] Quota Dashboard refinements
-- [ ] First fully-signed GitHub Release, end to end
 
 ## 📖 Documentation
 

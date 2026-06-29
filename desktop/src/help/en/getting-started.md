@@ -1,6 +1,6 @@
 # Getting Started
 
-MiniMax Agent is a desktop workspace for the MiniMax platform — chat with
+MiniMax Studio is a desktop workspace for the MiniMax platform — chat with
 expert models, run an autonomous coding agent, generate media, and track
 work, all from one window.
 

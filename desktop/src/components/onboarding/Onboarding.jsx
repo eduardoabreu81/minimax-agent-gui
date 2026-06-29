@@ -7,7 +7,7 @@ import {
 const STEPS = [
   {
     id: 'welcome',
-    title: 'Welcome to MiniMax Agent',
+    title: 'Welcome to MiniMax Studio',
     description: 'Your all-in-one platform for MiniMax Token Plan. Chat, generate media, code, and manage tasks — all in one place.',
     icon: Sparkles,
     color: 'text-primary',

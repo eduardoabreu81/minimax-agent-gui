@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "MiniMax Agent",
+  "productName": "MiniMax Studio",
   "version": "0.4.0",
   "identifier": "com.minimax.agent.desktop",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "MiniMax Agent",
+        "title": "MiniMax Studio",
         "width": 1320,
         "height": 860,
         "minWidth": 1040,
@@ -43,8 +43,8 @@
       "icons/icon.ico"
     ],
     "category": "DeveloperTool",
-    "shortDescription": "MiniMax Agent - AI-powered desktop assistant",
-    "longDescription": "Professional desktop app for the MiniMax Agent platform with multi-expert support, code workspace, and persistent memory.",
+    "shortDescription": "MiniMax Studio - AI-powered desktop assistant",
+    "longDescription": "Professional desktop app for the MiniMax Studio platform with multi-expert support, code workspace, and persistent memory.",
     "publisher": "MiniMax",
     "copyright": "Copyright (c) 2026 MiniMax"
   },

@@ -1,6 +1,6 @@
 # Primeiros Passos
 
-O MiniMax Agent é um ambiente de trabalho desktop para a plataforma MiniMax —
+O MiniMax Studio é um ambiente de trabalho desktop para a plataforma MiniMax —
 converse com modelos especialistas, rode um agente de código autônomo, gere
 mídia e acompanhe seu trabalho, tudo em uma janela.
 

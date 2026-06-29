@@ -22,7 +22,7 @@ export default function BackendLoader({ status, error, attempt, onRetry }) {
           <div className="w-16 h-16 rounded-2xl bg-primary/[0.13] flex items-center justify-center">
             <Sparkles className="h-8 w-8 text-primary" />
           </div>
-          <div className="text-xl font-semibold tracking-tight">MiniMax Agent</div>
+          <div className="text-xl font-semibold tracking-tight">MiniMax Studio</div>
         </div>
 
         {/* Progress: pulsing bar while connecting, solid red when errored */}

@@ -1,6 +1,6 @@
 {
   "app": {
-    "name": "MiniMax Agent",
+    "name": "MiniMax Studio",
     "tagline": "All-in-One Platform"
   },
   "setup": {
@@ -14,7 +14,7 @@
       "style": "Agent style"
     },
     "welcome": {
-      "title": "Welcome to MiniMax Agent",
+      "title": "Welcome to MiniMax Studio",
       "subtitle": "Your all-in-one desktop workspace for MiniMax M3 — chat, code, media, and an autonomous agent. Three quick steps and you're ready.",
       "b1": "Connect your MiniMax account",
       "b2": "Pick your language",
@@ -77,9 +77,9 @@
     "title": "Agent Chat",
     "connected": "Connected",
     "disconnected": "Disconnected",
-    "placeholder": "Message MiniMax Agent...",
+    "placeholder": "Message MiniMax Studio...",
     "sendHint": "Ctrl+Enter to send",
-    "emptyTitle": "Start a conversation with MiniMax Agent",
+    "emptyTitle": "Start a conversation with MiniMax Studio",
     "emptySubtitle": "Powered by MiniMax-M3",
     "thinking": "thinking...",
     "newChat": "New Chat",
@@ -291,7 +291,7 @@
     }
   },
   "onboarding": {
-    "welcome": "Welcome to MiniMax Agent",
+    "welcome": "Welcome to MiniMax Studio",
     "welcomeDesc": "Your all-in-one platform for MiniMax Token Plan. Chat, generate media, code, and manage tasks — all in one place.",
     "chat": "Agent Chat",
     "chatDesc": "Chat with the MiniMax-M3 powered agent. Ask questions, get help with coding, or brainstorm ideas.",

@@ -3,7 +3,7 @@
   Source: desktop/src/help/<lang>/*.md  ·  Rebuild: cd desktop && npm run docs
 -->
 
-# MiniMax Agent — User Guide
+# MiniMax Studio — User Guide
 
 This guide mirrors the in-app Help (press `F1` or `?` inside the app). It is
 written in English here; the app shows it in whichever of the six languages
@@ -22,7 +22,7 @@ back to English for any untranslated topic.
 
 ## Getting Started
 
-MiniMax Agent is a desktop workspace for the MiniMax platform — chat with
+MiniMax Studio is a desktop workspace for the MiniMax platform — chat with
 expert models, run an autonomous coding agent, generate media, and track
 work, all from one window.
 

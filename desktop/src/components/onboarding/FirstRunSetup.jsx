@@ -172,7 +172,7 @@ export default function FirstRunSetup({ onComplete }) {
             <span className="w-7 h-7 rounded-lg bg-primary/[0.13] flex items-center justify-center text-primary">
               <Sparkles size={16} />
             </span>
-            <span className="text-sm font-semibold">MiniMax Agent</span>
+            <span className="text-sm font-semibold">MiniMax Studio</span>
           </div>
 
           <div className="flex flex-col gap-1">
@@ -205,7 +205,7 @@ export default function FirstRunSetup({ onComplete }) {
             {stepId === 'welcome' && (
               <StepShell
                 icon={Sparkles}
-                title={t('setup.welcome.title', 'Welcome to MiniMax Agent')}
+                title={t('setup.welcome.title', 'Welcome to MiniMax Studio')}
                 subtitle={t('setup.welcome.subtitle', 'Your all-in-one desktop workspace for MiniMax M3 — chat, code, media, and an autonomous agent. Three quick steps and you are ready.')}
               >
                 <ul className="space-y-2.5 mt-2">

@@ -1,5 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
-# PyInstaller spec for the MiniMax Agent backend.
+# PyInstaller spec for the MiniMax Studio backend.
 #
 # Spike: prove the FastAPI backend in web/backend/main.py can be frozen
 # into a standalone ONEDIR executable that runs without a Python install

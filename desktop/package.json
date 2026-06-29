@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.4.0",
   "type": "module",
-  "description": "MiniMax Agent Desktop — Tauri 2.x shell wrapping the existing web frontend",
+  "description": "MiniMax Studio Desktop — Tauri 2.x shell wrapping the existing web frontend",
   "scripts": {
     "dev": "vite",
     "build": "vite build",

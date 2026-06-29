@@ -1,6 +1,6 @@
-# MiniMax Agent — Desktop (Tauri)
+# MiniMax Studio — Desktop (Tauri)
 
-Professional desktop application for the **MiniMax Agent** platform, built with
+Professional desktop application for the **MiniMax Studio** platform, built with
 **Tauri 2.x + React 18 + shadcn/ui + Tailwind CSS**. Wraps the existing
 `web/` FastAPI backend as a sidecar process.
 
@@ -68,9 +68,9 @@ npm run tauri:build
 ```
 
 Output:
-- **Windows:** `src-tauri/target/release/bundle/msi/MiniMax Agent_0.1.0_x64_en-US.msi`
-- **Windows NSIS:** `src-tauri/target/release/bundle/nsis/MiniMax Agent_0.1.0_x64-setup.exe`
-- **macOS:** `src-tauri/target/release/bundle/dmg/MiniMax Agent_0.1.0_x64.dmg`
+- **Windows:** `src-tauri/target/release/bundle/msi/MiniMax Studio_0.1.0_x64_en-US.msi`
+- **Windows NSIS:** `src-tauri/target/release/bundle/nsis/MiniMax Studio_0.1.0_x64-setup.exe`
+- **macOS:** `src-tauri/target/release/bundle/dmg/MiniMax Studio_0.1.0_x64.dmg`
 - **Linux:** `src-tauri/target/release/{deb,appimage}/...`
 
 ## Project layout
@@ -135,7 +135,7 @@ desktop/
 
 ## Getting Started
 
-MiniMax Agent is a desktop workspace for the MiniMax platform — chat with
+MiniMax Studio is a desktop workspace for the MiniMax platform — chat with
 expert models, run an autonomous coding agent, generate media, and track
 work, all from one window.
 

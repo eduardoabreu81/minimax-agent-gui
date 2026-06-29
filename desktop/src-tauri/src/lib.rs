@@ -1,4 +1,4 @@
-// MiniMax Agent Desktop - Tauri 2.x shell
+// MiniMax Studio Desktop - Tauri 2.x shell
 //
 // Responsibilities:
 // - Boot the React frontend
@@ -494,7 +494,7 @@ pub fn run() {
             }
         })
         .build(tauri::generate_context!())
-        .expect("error while building MiniMax Agent Desktop");
+        .expect("error while building MiniMax Studio Desktop");
 
     // App-level exit handling. This catches:
     //  - normal exit (user clicked X, then OS is shutting Tauri down)

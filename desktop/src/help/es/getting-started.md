@@ -1,6 +1,6 @@
 # Primeros Pasos
 
-MiniMax Agent es un espacio de trabajo de escritorio para la plataforma
+MiniMax Studio es un espacio de trabajo de escritorio para la plataforma
 MiniMax: chatea con modelos expertos, ejecuta un agente de programación
 autónomo, genera contenido multimedia y haz seguimiento de tu trabajo, todo
 en una sola ventana.

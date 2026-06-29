@@ -37,7 +37,7 @@ export function ChatPanel({ expertLabel, backendStatus, backendMessage, onToolAc
             <Sparkles className="h-4 w-4 text-white" />
           </div>
           <div className="flex flex-col leading-tight">
-            <h1 className="text-sm font-semibold">MiniMax Agent</h1>
+            <h1 className="text-sm font-semibold">MiniMax Studio</h1>
             <p className="text-xs text-muted-foreground">
               Expert: <span className="font-medium text-foreground">{expertLabel}</span>
             </p>
@@ -60,7 +60,7 @@ export function ChatPanel({ expertLabel, backendStatus, backendMessage, onToolAc
           {state.messages.length === 0 ? (
             <div className="rounded-lg border border-border bg-card p-4">
               <p className="text-sm text-muted-foreground">
-                👋 Welcome to MiniMax Agent Desktop.
+                👋 Welcome to MiniMax Studio Desktop.
               </p>
               <p className="mt-2 text-sm">
                 Phase 2 ready — chat wired to the FastAPI sidecar via WebSocket. Type

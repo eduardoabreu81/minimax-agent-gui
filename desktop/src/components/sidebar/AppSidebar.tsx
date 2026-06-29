@@ -67,7 +67,7 @@ export function AppSidebar({
               <Sparkles className="h-4 w-4 text-white" />
             </div>
             <div className="flex flex-col leading-tight">
-              <span className="text-sm font-semibold">MiniMax Agent</span>
+              <span className="text-sm font-semibold">MiniMax Studio</span>
               <span className="text-[10px] text-muted-foreground">Desktop</span>
             </div>
           </div>
