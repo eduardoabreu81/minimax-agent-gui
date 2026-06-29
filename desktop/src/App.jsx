@@ -5,6 +5,7 @@ import { AgentActivityProvider } from './context/AgentActivityContext'
 import { SessionTokensProvider } from './context/SessionTokensContext'
 import { hasAnyRisk } from './hooks/useSessionProtection'
 import { useBackendReady } from './hooks/useBackendReady'
+import { apiFetch, isTauri } from './lib/api.js'
 import { useAgentContext } from './hooks/useAgentContext'
 import { ContextModalProvider, useContextModal } from './components/agent-context/ContextProvider.jsx'
 import Sidebar from './components/Sidebar'
@@ -252,15 +253,39 @@ function AppShell() {
       const href = a.getAttribute('href') || ''
       if (!href.includes('/api/files/')) return
       e.preventDefault()
+      const filename = a.getAttribute('download') || 'download'
       ;(async () => {
         try {
+          if (isTauri) {
+            // Native "Save as…": let the user pick where to save, then have
+            // the backend (which already has the file on disk) copy it there.
+            let srcPath = '', sessionId = ''
+            try {
+              const u = new URL(href)
+              srcPath = u.searchParams.get('path') || ''
+              sessionId = u.searchParams.get('session_id') || ''
+            } catch { /* unparseable href — fall through to blob */ }
+            if (srcPath) {
+              const { save } = await import('@tauri-apps/plugin-dialog')
+              const dest = await save({ defaultPath: filename })
+              if (!dest) return // user cancelled the dialog
+              const res = await apiFetch('/api/files/export', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ path: srcPath, dest, session_id: sessionId }),
+              })
+              if (!res.ok) throw new Error(`export failed (${res.status})`)
+              return
+            }
+          }
+          // Web (or unparseable href): same-origin blob download.
           const res = await fetch(href)
           if (!res.ok) throw new Error(`download failed (${res.status})`)
           const blob = await res.blob()
           const url = URL.createObjectURL(blob)
           const link = document.createElement('a')
           link.href = url
-          link.download = a.getAttribute('download') || 'download'
+          link.download = filename
           document.body.appendChild(link)
           link.click()
           link.remove()

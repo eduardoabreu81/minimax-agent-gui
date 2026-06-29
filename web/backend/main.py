@@ -4953,6 +4953,34 @@ async def download_file(path: str, session_id: str = ""):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/api/files/export")
+async def export_file(req: dict):
+    """Copy a workspace/generated file to a user-chosen absolute path.
+
+    Powers the desktop "Save as…" flow: the frontend opens the native save
+    dialog, then posts the chosen ``dest`` here. ``path`` is the
+    workspace-relative source (validated under the session root via
+    _safe_join); ``dest`` is trusted because the user picked it explicitly
+    in the OS dialog.
+    """
+    import shutil
+    src_path = (req.get("path") or "").strip()
+    dest = (req.get("dest") or "").strip()
+    session_id = req.get("session_id") or ""
+    if not src_path or not dest:
+        raise HTTPException(status_code=400, detail="path and dest are required")
+    root = _resolve_session_root(session_id)
+    src = _safe_join(root, src_path)
+    if not src.is_file():
+        raise HTTPException(status_code=404, detail="Source file not found")
+    try:
+        target = Path(dest)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(str(src), str(target))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Could not save file: {e}")
+    return {"success": True, "path": str(target)}
+
 @app.get("/api/files/raw")
 async def get_file_raw(path: str, session_id: str = ""):
     """Serve a file inline (image/audio/video previews)."""
