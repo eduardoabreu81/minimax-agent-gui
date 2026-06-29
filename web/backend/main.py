@@ -3712,6 +3712,27 @@ def _resolve_local_audio_url(url: str) -> Optional[Path]:
     except Exception:
         return None
 
+
+def _audio_source_for_minimax(audio_url: str, audio_base64: str) -> tuple[str, str]:
+    """Resolve reference audio into a form MiniMax's servers can actually read.
+
+    The cover APIs accept either ``audio_url`` or ``audio_base64``. But the
+    desktop app serves uploads from a local workspace URL (127.0.0.1) that
+    MiniMax's servers cannot reach — so when ``audio_url`` points at a local
+    file we read it and send it as base64 instead. External http(s) URLs pass
+    through unchanged. Returns ``(audio_url, audio_base64)`` with at most one
+    non-empty value.
+    """
+    if audio_base64:
+        return "", audio_base64
+    if audio_url:
+        local = _resolve_local_audio_url(audio_url)
+        if local is not None:
+            import base64 as _b64
+            return "", _b64.b64encode(local.read_bytes()).decode("ascii")
+        return audio_url, ""
+    return "", ""
+
 @app.post("/api/minimax/music/preprocess")
 async def music_cover_preprocess(req: MusicCoverPreprocessRequest):
     """Two-step cover flow — step 1: extract features + lyrics.
@@ -3775,11 +3796,16 @@ async def music_cover_preprocess(req: MusicCoverPreprocessRequest):
                     ),
                 )
 
+        # Local workspace URLs aren't reachable by MiniMax — send the bytes
+        # as base64 when the reference is a local upload.
+        api_audio_url, api_audio_base64 = _audio_source_for_minimax(
+            req.audio_url, req.audio_base64
+        )
         client = MiniMaxSyncClient(api_key, api_base)
         try:
             success, result = client.music_cover_preprocess(
-                audio_url=req.audio_url,
-                audio_base64=req.audio_base64,
+                audio_url=api_audio_url,
+                audio_base64=api_audio_base64,
             )
         finally:
             client.close()
@@ -4592,6 +4618,12 @@ async def music_generate(req: MusicRequest):
                 counter += 1
             output_path = music_dir / f"{stem}_{counter}.{ext}"
 
+        # One-step cover passes a reference audio_url; if it's a local upload,
+        # convert to base64 so MiniMax can actually read it (it can't reach
+        # 127.0.0.1). No-op for text-to-music (both empty).
+        api_audio_url, api_audio_base64 = _audio_source_for_minimax(
+            req.audio_url, req.audio_base64
+        )
         client = MiniMaxSyncClient(api_key, api_base)
         try:
             success, result = client.music_generate(
@@ -4602,8 +4634,8 @@ async def music_generate(req: MusicRequest):
                 audio_setting=audio_setting,
                 lyrics_optimizer=req.lyrics_optimizer,
                 is_instrumental=req.is_instrumental,
-                audio_url=req.audio_url,
-                audio_base64=req.audio_base64,
+                audio_url=api_audio_url,
+                audio_base64=api_audio_base64,
                 cover_feature_id=req.cover_feature_id,
                 output_format="hex",
             )
