@@ -3687,12 +3687,22 @@ class MusicCoverPreprocessRequest(BaseModel):
     audio_base64: str = ""
 
 def _resolve_local_audio_url(url: str) -> Optional[Path]:
-    """Map a workspace-relative ``/api/files/download?path=...`` URL back
-    to its on-disk path under PROJECT_ROOT, for pre-flight validation.
+    """Map a ``/api/files/download?path=...`` URL (what the frontend builds
+    after /api/upload) back to its on-disk file, so the cover flow can read it
+    and send it as base64.
 
-    Returns ``None`` for external URLs (the API will validate those).
-    Returns ``None`` if the resolved path escapes PROJECT_ROOT or doesn't
-    exist on disk.
+    Per the MiniMax cover guide
+    (https://platform.minimax.io/docs/guides/music-generation#cover-generation)
+    ``audio_url`` is only for **public internet links** — a local file must be
+    sent as ``audio_base64`` (or preprocessed into a ``cover_feature_id``).
+    The uploaded ``path`` is relative to the *workspace* root (see
+    /api/upload, which returns ``relative_to(_resolve_session_root(...))``), so
+    resolve it against that same root — NOT PROJECT_ROOT, which is one level up
+    and made the file look missing (so we wrongly forwarded the local URL and
+    the API rejected it with "2013 - disallowed audio_url").
+
+    Returns ``None`` for external URLs (a real audio_url) or if the path does
+    not resolve to an existing file under the workspace.
     """
     if not url or "/api/files/download" not in url:
         return None
@@ -3702,11 +3712,12 @@ def _resolve_local_audio_url(url: str) -> Optional[Path]:
         raw_path = (q.get("path") or [""])[0]
         if not raw_path:
             return None
-        candidate = (PROJECT_ROOT / raw_path).resolve()
-        proj_root = PROJECT_ROOT.resolve()
-        if proj_root not in candidate.parents and candidate != proj_root:
+        session_id = (q.get("session_id") or [""])[0]
+        root = _resolve_session_root(session_id or None).resolve()
+        candidate = (root / raw_path).resolve()
+        if root not in candidate.parents and candidate != root:
             return None
-        if not candidate.exists() or not candidate.is_file():
+        if not candidate.is_file():
             return None
         return candidate
     except Exception:
