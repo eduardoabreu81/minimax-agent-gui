@@ -1,6 +1,6 @@
 [package]
 name = "minimax-agent-desktop"
-version = "0.4.1"
+version = "0.4.2"
 description = "MiniMax Studio Desktop - Tauri shell"
 authors = ["Eduardo"]
 edition = "2021"
