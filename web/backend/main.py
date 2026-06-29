@@ -3639,8 +3639,8 @@ async def image_i2i_generate(req: ImageRequest, session_id: str = ""):
         if not full_image_path.exists():
             raise HTTPException(status_code=404, detail="Reference image not found")
 
-        output_path = PROJECT_ROOT / "workspace" / f"image_i2i_{asyncio.get_event_loop().time()}.png"
-        output_path.parent.mkdir(exist_ok=True)
+        output_path = _media_output_dir(session_id, "images") / f"image_i2i_{asyncio.get_event_loop().time()}.png"
+        output_path.parent.mkdir(parents=True, exist_ok=True)
 
         n = max(int(req.n or 1), 1)
 
@@ -3659,7 +3659,7 @@ async def image_i2i_generate(req: ImageRequest, session_id: str = ""):
         )
 
         if success:
-            rel_path = str(Path(result).relative_to(get_app_workspace_dir())).replace('\\', '/')
+            rel_path = str(Path(result).relative_to(_resolve_session_root(session_id or None))).replace('\\', '/')
             cost = calculate_image_cost(n)
             return {
                 "success": True,
@@ -4608,7 +4608,7 @@ async def music_generate(req: MusicRequest):
             stem = f"music_{int(asyncio.get_event_loop().time())}"
 
         ext = audio_setting["format"]
-        music_dir = PROJECT_ROOT / "workspace" / "music"
+        music_dir = _media_output_dir("", "music")
         music_dir.mkdir(parents=True, exist_ok=True)
         # Avoid clobbering existing files — append a counter on collision.
         output_path = music_dir / f"{stem}.{ext}"
@@ -4825,21 +4825,19 @@ async def video_download(req: dict):
         api_key = minimax_config["api_key"]
         api_base = minimax_config["api_base"]
 
-        # Default to workspace/video_<ts>.mp4 so each download is unique
-        default_path = f"workspace/video_{int(time.time())}.mp4"
-        output_path = req.get("output_path") or default_path
-
-        # Make sure it's inside PROJECT_ROOT
-        target = PROJECT_ROOT / output_path
-        if not str(target).startswith(str(PROJECT_ROOT)):
-            raise HTTPException(status_code=403, detail="output_path outside project root")
+        # Save under the app workspace's generations/videos so it shows up in
+        # the gallery and resolves cleanly via /api/files/* (which root at the
+        # app workspace). Return a workspace-relative path.
+        out_dir = _media_output_dir("", "videos")
+        target = out_dir / f"video_{int(time.time())}.mp4"
 
         client = MiniMaxSyncClient(api_key, api_base)
         success, result = client.video_download(file_id, str(target))
         client.close()
 
         if success:
-            return {"success": True, "path": output_path}
+            rel = str(target.relative_to(get_app_workspace_dir())).replace("\\", "/")
+            return {"success": True, "path": rel}
         else:
             return {"success": False, "error": result}
     except Exception as e:
