@@ -4,83 +4,83 @@
 
 # MiniMax Studio ☄
 
-**The all-in-one desktop workspace for MiniMax M3.** Chat, code, generate image / video / music / speech, run skills and MCP tools, and let an autonomous agent carry the work across sessions — in one self-updating Tauri app.
+**Everything MiniMax can do — in one app on your desktop.** Chat and get answers, create images, video, music and voice, get a hand with code, and let it carry your work from one session to the next. One window, nothing technical to set up.
 
-[![Tauri](https://img.shields.io/badge/Tauri-2.1-FFC131?style=for-the-badge&logo=tauri&logoColor=white)](https://tauri.app/)
-[![React](https://img.shields.io/badge/React-18-61DAFB?style=for-the-badge&logo=react&logoColor=white)](https://react.dev/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-Python-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![Windows](https://img.shields.io/badge/Windows-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/eduardoabreu81/minimax-agent-gui/releases/latest)
+[![macOS](https://img.shields.io/badge/macOS-111111?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/eduardoabreu81/minimax-agent-gui/releases/latest)
+[![Linux](https://img.shields.io/badge/Linux-FCC624?style=for-the-badge&logo=linux&logoColor=black)](https://github.com/eduardoabreu81/minimax-agent-gui/releases/latest)
 [![License](https://img.shields.io/badge/License-MIT-22c55e?style=for-the-badge)](LICENSE)
 [![Version](https://img.shields.io/badge/version-0.4.0-3b82f6?style=for-the-badge)](CHANGELOG.md)
 
 **[⬇ Download](https://github.com/eduardoabreu81/minimax-agent-gui/releases)** ·
+**[✨ What you can do](#-what-you-can-do)** ·
 **[📖 User Guide](docs/USER_GUIDE.md)** ·
-**[🗺️ Roadmap](#-roadmap)** ·
-**[🐛 Report a Bug](https://github.com/eduardoabreu81/minimax-agent-gui/issues)**
+**[🐛 Report a Problem](https://github.com/eduardoabreu81/minimax-agent-gui/issues)**
 
 </div>
 
 ---
 
-MiniMax Studio puts the whole MiniMax platform behind a single native window. It talks to **MiniMax M3** with a 1M-token context and a thinking block streamed live next to the reply, runs an autonomous **code agent** in a real workspace, generates media, and remembers who you are between sessions through a small set of `.agent/*.md` files. The backend is a bundled FastAPI sidecar — no CLI to install, no browser tabs, no separate web app.
+MiniMax Studio brings everything MiniMax can do into a single app on your computer — no browser tabs, no command line, nothing technical to install. Chat and get clear answers (and watch it think things through), turn an idea into images, video, music or speech, get help with code in a real workspace, and have it remember who you are and how you like to work from one session to the next.
 
-> **Heads up:** MiniMax Studio is built for **[MiniMax Token Plan](https://platform.minimax.io/subscribe/token-plan)** subscribers and is desktop-first — the Tauri shell is the only installable interface, with everything (chat, media, code, settings) in one window.
+> **Good to know:** MiniMax Studio is made for **[MiniMax Token Plan](https://platform.minimax.io/subscribe/token-plan)** subscribers. It's a real app you install on Windows, macOS or Linux — everything (chat, media, code, settings) lives in one window.
 
-## ✨ Features
+## ✨ What you can do
 
 <table>
 <tr>
 <td width="50%" valign="top">
 
-### 🧠 Chat with M3
-1M-token context with native image and video input. The adaptive **thinking block** streams live alongside the answer. Per-turn model picker and thinking toggle, file attachments, `@`-ref autocomplete, and conversation search — all from one **Composer** shared with the Code panel.
+### 💬 Chat & ask anything
+Ask questions, drop in an image or a video, and get clear answers — you can even watch it **think** before it replies. It keeps up with very long conversations, so you never lose the thread, and you can search back through everything you've discussed.
 
 </td>
 <td width="50%" valign="top">
 
-### 💻 Code Agent
-A real workspace: file explorer, editor, and an integrated **xterm.js** terminal. Three execution modes — **Agent** (approve risky tools), **Plan** (edit the plan first), **YOLO** (hands-off). Live step-by-step activity stream.
-
-</td>
-</tr>
-<tr>
-<td width="50%" valign="top">
-
-### 🎬 Media Studio
-**Image** (text-to-image + subject reference), **Video** (Hailuo text/image-to-video), **Music** (prompt or full lyrics, cover from reference), and **Speech** (30+ voices, voice clone, voice design). Each panel keeps a *Recent Generations* gallery.
-
-</td>
-<td width="50%" valign="top">
-
-### 🧠 Agent Memory
-`SOUL / IDENTITY / USER / MEMORY` files persist the agent's personality and context across sessions, plus a daily session log. A `memory` tool lets long-running agents write back without losing the thread.
+### 💻 Get things built
+A built-in workspace where the assistant can read, write, and run code **for you** — like having a developer on call. You decide how much it does on its own: ask first, plan it together, or fully hands-off.
 
 </td>
 </tr>
 <tr>
 <td width="50%" valign="top">
 
-### 🔌 Skills & MCP
-Built-in web search and image understanding. Bring-your-own MCP servers (stdio / SSE) from Settings. Reusable **skills** as slash-command templates, merged from a multi-source loader.
+### 🎬 Create images, video, music & voice
+Turn a simple description into **images**, short **videos**, **songs** (bring your own lyrics), or **speech** in 30+ voices — you can even clone or design a brand-new voice. Everything you make is saved to a gallery.
 
 </td>
 <td width="50%" valign="top">
 
-### 📋 Task Board
-When the agent plans multi-step work, todos appear in a board — **locked** while running, marked **done** only after the agent verifies. A live counter shows progress; tasks survive reloads.
+### 🧠 It remembers you
+Tell it who you are and how you like to work once — it remembers across sessions, so you're not re-explaining yourself every time you open the app.
 
 </td>
 </tr>
 <tr>
 <td width="50%" valign="top">
 
-### 🔄 Self-updating
-`tauri-plugin-updater` pulls signed releases from GitHub. Settings → About → **Check for updates**, then click *Restart*. That's it.
+### 🔍 Web search & extras
+Web search and image understanding are built in and ready to use. Want more? Power users can plug in extra tools and shortcuts — but you don't need any of that to get started.
 
 </td>
 <td width="50%" valign="top">
 
-### 🌍 6 Languages
-English, Português (BR), Español, 日本語, 한국어, 中文 — UI **and** in-app help. Press `F1` or `?` anywhere for context-aware documentation.
+### 📋 See the plan, track progress
+For bigger jobs, the assistant lays out a **checklist** and only ticks each item off once it's truly done — so you can follow along and trust nothing got skipped.
+
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+
+### 🔄 Updates made easy
+When a new version is ready, updating is **one click** in Settings — no website to visit, no installer to hunt down.
+
+</td>
+<td width="50%" valign="top">
+
+### 🌍 In your language
+The whole app **and** its built-in help speak English, Português, Español, 日本語, 한국어, and 中文. Stuck on something? Press **?** for help right where you are.
 
 </td>
 </tr>
@@ -88,24 +88,24 @@ English, Português (BR), Español, 日本語, 한국어, 中文 — UI **and** 
 
 ## 📸 A look inside
 
-<img src="desktop/docs/screenshots/chat.png" alt="Chat with M3 — thinking block streamed alongside the reply" width="100%" />
+<img src="desktop/docs/screenshots/chat.png" alt="Chatting with MiniMax Studio — you can watch it think before it answers" width="100%" />
 
 <table>
 <tr>
-<td><img src="desktop/docs/screenshots/coding.png" alt="Code Agent" /></td>
-<td><img src="desktop/docs/screenshots/image.png" alt="Media Studio — Image" /></td>
+<td><img src="desktop/docs/screenshots/coding.png" alt="The code workspace" /></td>
+<td><img src="desktop/docs/screenshots/image.png" alt="Creating an image" /></td>
 </tr>
 <tr>
-<td align="center"><sub><b>Code Agent</b></sub></td>
-<td align="center"><sub><b>Media Studio</b></sub></td>
+<td align="center"><sub><b>Get things built</b></sub></td>
+<td align="center"><sub><b>Create media</b></sub></td>
 </tr>
 </table>
 
-> 📖 Full walkthroughs of every panel are in the **[User Guide](docs/USER_GUIDE.md)** — generated from the same markdown as the in-app Help, available in all six languages.
+> 📖 Want a tour of everything? The **[User Guide](docs/USER_GUIDE.md)** walks through every part of the app — the same help you'll find inside it, in all six languages.
 
 ## ⚡ Quick Start
 
-You install the app like any other desktop application — there's nothing to compile, no environment to set up, and no CLI to install.
+You install it like any other app — nothing to set up, no command line, no extra software.
 
 ### 1. Download
 
@@ -131,69 +131,34 @@ MiniMax Studio is built for **MiniMax Token Plan** subscribers. The first launch
 
 ### 4. Stay up to date
 
-Future versions roll out automatically — **Settings → About → Check for updates** pulls signed releases from GitHub and prompts a restart. No manual download required.
+When a new version is out, you'll update with **one click** in **Settings → About → Check for updates** — no need to come back here and download again.
 
-## 🏗️ Architecture
+## 🧩 How it works
 
-```
-┌────────────────────────────────────────────────────────────┐
-│                      Tauri shell (Rust)                     │
-│  ┌──────────────────────┐   ┌───────────────────────────┐  │
-│  │   React frontend     │   │   Bundled sidecar         │  │
-│  │   Vite + Tailwind    │◄──┤   FastAPI + Python        │  │
-│  │   (localhost:1420)   │   │   (localhost:8765)        │  │
-│  └──────────────────────┘   └───────────────────────────┘  │
-│          ▲                            ▲                     │
-│          │ tauri-plugin-updater       │ direct HTTP         │
-│          │ (signed GitHub releases)   │ (no CLI)            │
-└────────────────────────────────────────────────────────────┘
-```
+Everything runs inside **one native window** — no command line, no browser tab, no separate server to start. The app ships with its own local engine that talks to MiniMax, launches it automatically when you open the app, and shuts it down when you close it. Your API key and conversations stay **on your machine**.
 
-| Layer | Where | What |
-|---|---|---|
-| **Frontend** | `desktop/src/` | React 18 + Vite + Tailwind, single SPA with tab routing |
-| **Backend** | `web/backend/` | FastAPI + WebSocket streaming; all MiniMax calls via direct HTTP |
-| **Agent** | `mini_agent/` | Async agent loop, tool execution, token summarization |
-| **Sidecar** | `desktop/src-tauri/` | PyInstaller-bundled FastAPI, built per-platform |
+> Building on it or curious about the internals? The technical guide lives in **[AGENTS.md](AGENTS.md)**.
 
-The shell auto-spawns the sidecar on launch; in dev, the Vite proxy forwards `/api` and `/ws` to the local backend.
+## 🗺️ What's new & what's next
 
-## ⚙️ Configuration
+**Just shipped (v0.4.0):**
+Guided first-run setup · pick your assistant's personality · full image / video / music / voice studio (with voice cloning) · one shared composer across chat and code · a task checklist you can follow along · built-in help in 6 languages · one-click installers for Windows, macOS and Linux.
 
-| File | Purpose |
-|---|---|
-| `config/config.yaml` | API key, region, default model, MCP servers, skills dirs (gitignored — secrets stay local) |
-| `desktop/src-tauri/tauri.conf.json` | Window, bundle targets, updater pubkey/endpoints, sidecar path |
-| `desktop/src/i18n/*.json` | The six locale files |
+**Coming next:**
+- [ ] Automatic updates for installed apps
+- [ ] Notarized macOS build (no security warning on first open)
+- [ ] Load your existing project rules at startup
+- [ ] A richer usage & quota dashboard
 
-Environment variables override the config: `MINIMAX_API_KEY` and `MINIMAX_API_BASE`.
+## 📖 Need help?
 
-## 🔄 Updates
-
-A built-in updater (`tauri-plugin-updater`) is wired in: **Settings → About → Check for updates** polls GitHub Releases and, once a newer signed version is published, downloads it in the background and prompts a restart — no manual download. (The update manifest ships from the next release onward; see Roadmap.)
-
-## 🗺️ Roadmap
-
-**Shipped (v0.4.0 — desktop-first):**
-Tauri 2 shell · 6-step first-run onboarding · personality presets (concise / friendly / mentor / expert / creative) · full Speech stack (clone + design) · Settings index rail · live Status Bar · multi-source Skills · Agent Context (`.agent/*.md`) · shared Composer · Task Board · subdirectory hints · bilingual in-app Help · cross-platform signed installers.
-
-**Next:**
-- [ ] Auto-update manifest (`latest.json`) so installed apps self-update from new releases
-- [ ] macOS notarization (signed — no Gatekeeper prompt)
-- [ ] `CLAUDE.md` / `.cursorrules` startup loading
-- [ ] Quota Dashboard refinements
-
-## 📖 Documentation
-
-- **[User Guide](docs/USER_GUIDE.md)** — full walkthrough of every panel, generated from the in-app Help.
-- **In-app Help** — press `F1` or `?` anywhere (when not typing), in any of the six languages.
-- **[AGENTS.md](AGENTS.md)** — the canonical guide for AI agents working on this codebase.
+- **[User Guide](docs/USER_GUIDE.md)** — a friendly walkthrough of every part of the app, in all six languages.
+- **Built-in help** — press **?** anywhere in the app to get help right where you are.
+- **[Report a problem or request a feature](https://github.com/eduardoabreu81/minimax-agent-gui/issues)** — we read every one.
 
 ## 🤝 Contributing
 
-Issues and PRs are welcome at [github.com/eduardoabreu81/minimax-agent-gui/issues](https://github.com/eduardoabreu81/minimax-agent-gui/issues).
-
-Architecture, conventions, and the canonical guide for anyone working on the codebase live in [AGENTS.md](AGENTS.md).
+Issues and pull requests are welcome. If you'd like to build on MiniMax Studio, the technical guide for developers lives in **[AGENTS.md](AGENTS.md)**.
 
 ## 📜 License
 
