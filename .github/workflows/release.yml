@@ -125,6 +125,14 @@ jobs:
           mkdir -p release
           find artifacts -type f \( -name "*.msi" -o -name "*.exe" -o -name "*.dmg" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.sig" \) -exec mv {} release/ \;
 
+      # Delete any existing release for this tag first, so re-running a tag
+      # doesn't pile new assets on top of old ones (softprops appends, it
+      # doesn't replace). The tag itself is kept (no --cleanup-tag).
+      - name: Remove stale release for this tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release delete "${{ github.ref_name }}" --yes --repo "${{ github.repository }}" || true
+
       # Creates a DRAFT release (not public) — review the assets, test the
       # installers, then click "Publish release" in the GitHub UI.
       - name: Create draft GitHub Release
