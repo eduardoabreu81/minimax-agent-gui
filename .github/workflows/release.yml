@@ -1,17 +1,20 @@
 # Release workflow.
 #
-# Builds + signs the desktop app for ubuntu/windows/macos and creates a DRAFT
-# GitHub Release via tauri-action, which also generates the updater manifest
-# (latest.json) and the per-platform updater artifacts (incl. the macOS
-# .app.tar.gz). Review/test the draft, then click "Publish release" — once
-# published it becomes the "latest" release and installed apps auto-update
-# from it (tauri.conf.json plugins.updater endpoint).
+# Builds + signs the desktop app for ubuntu/windows/macos and attaches the
+# installers + updater manifest (latest.json) to a single DRAFT GitHub Release.
+#
+# Why two jobs (create-release → build matrix):
+#   tauri-action with releaseDraft + a build matrix races — each OS job can't
+#   look a *draft* up by tag, so they each create their own draft (you end up
+#   with 2-3 partial drafts, each with an incomplete latest.json). Instead we
+#   create ONE draft up front (create-release), then every matrix job uploads
+#   to that same release id, and tauri-action merges each platform into the
+#   shared latest.json.
 #
 # Required GitHub Secrets:
 #   TAURI_SIGNING_PRIVATE_KEY          — `tauri signer generate` private key
 #   TAURI_SIGNING_PRIVATE_KEY_PASSWORD — its passphrase (if one was set)
-# macOS code-signing is intentionally off (no Apple Developer ID) — unsigned
-# .app/.dmg; users right-click -> Open on first launch.
+# macOS code-signing is intentionally off (no Apple Developer ID).
 
 name: Release desktop
 
@@ -24,8 +27,46 @@ permissions:
   contents: write
 
 jobs:
-  release:
-    name: Build & draft (${{ matrix.os }})
+  create-release:
+    name: Create draft release
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    outputs:
+      release_id: ${{ steps.create.outputs.result }}
+    steps:
+      - name: Create (or recreate) the draft release
+        id: create
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const tag = context.ref.replace('refs/tags/', '');
+            // Delete any existing release(s) for this tag — including drafts,
+            // which can't be found via getReleaseByTag — so re-running a tag
+            // never piles up duplicate drafts.
+            const releases = await github.paginate(github.rest.repos.listReleases, {
+              owner: context.repo.owner, repo: context.repo.repo, per_page: 100,
+            });
+            for (const r of releases) {
+              if (r.tag_name === tag) {
+                await github.rest.repos.deleteRelease({
+                  owner: context.repo.owner, repo: context.repo.repo, release_id: r.id,
+                });
+              }
+            }
+            const { data } = await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: tag,
+              name: tag,
+              body: 'Download the installer for your platform below. macOS builds are unsigned — right-click → Open on first launch.',
+              draft: true,
+              prerelease: false,
+            });
+            return data.id;
+
+  build:
+    name: Build (${{ matrix.os }})
+    needs: create-release
     strategy:
       fail-fast: false
       matrix:
@@ -74,7 +115,6 @@ jobs:
 
       # The FastAPI sidecar (PyInstaller onedir) must exist before tauri-action
       # runs `tauri build`, so tauri.conf.json's bundle.resources can embed it.
-      # Output lands at <repo>/dist/backend/.
       - name: Build backend sidecar
         run: |
           python -m pip install --upgrade pip
@@ -83,21 +123,14 @@ jobs:
           pip install pyinstaller
           pyinstaller desktop/packaging/backend.spec --noconfirm
 
-      - name: Build, sign & draft release (with updater manifest)
+      - name: Build, sign & upload to the draft (with updater manifest)
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Signs every bundle + emits the .sig files and latest.json the
-          # updater verifies against tauri.conf.json plugins.updater.pubkey.
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           projectPath: desktop
-          # Only create a release on a real version tag. A workflow_dispatch run
-          # is a build-only dry run (empty tagName → no release).
-          tagName: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
-          releaseName: ${{ github.ref_name }}
-          releaseBody: 'Download the installer for your platform below. macOS builds are unsigned — right-click → Open on first launch.'
-          releaseDraft: true
-          prerelease: false
+          # Upload into the single draft created above (no per-OS duplicate).
+          releaseId: ${{ needs.create-release.outputs.release_id }}
           includeUpdaterJson: true
