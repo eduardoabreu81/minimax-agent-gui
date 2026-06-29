@@ -5575,9 +5575,9 @@ if __name__ == "__main__":
     if reload:
         # Dev only: hot-reload via StatReload. The "main:app" string
         # form is fine here because dev runs the raw .py from source.
-        uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)
+        uvicorn.run("main:app", host="127.0.0.1", port=port, reload=True)
     else:
         # Production / frozen exe: pass the app object directly so we
         # don't need importlib to find a "main" module (which is
         # renamed/embedded under _internal/ inside a PyInstaller bundle).
-        uvicorn.run(app, host="0.0.0.0", port=port)
+        uvicorn.run(app, host="127.0.0.1", port=port)
