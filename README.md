@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/assets/minimax-agent-gui-banner.png" alt="MiniMax Studio" width="100%" />
+<img src="docs/assets/minimax-studio-banner.png" alt="MiniMax Studio" width="100%" />
 
 # MiniMax Studio ☄
 
