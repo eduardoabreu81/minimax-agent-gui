@@ -404,6 +404,12 @@ class MusicRequest(BaseModel):
                         f"limit for music-cover."
                     )
 
+        # Pydantic v2 mode="after" validators MUST return the instance —
+        # returning None (implicitly) replaces the validated model with None,
+        # which then crashes the route with "'NoneType' object has no
+        # attribute 'audio_setting'".
+        return self
+
 class MCPServerCreate(BaseModel):
     name: str
     transport: str
