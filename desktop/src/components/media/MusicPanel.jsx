@@ -719,15 +719,20 @@ export default function MusicPanel() {
                   onClick={() => setCoverMode('quick')}
                   className={`flex-1 px-3 py-1.5 rounded text-[11.5px] font-medium transition-colors ${coverMode === 'quick' ? 'bg-primary text-white' : 'text-muted-foreground hover:text-foreground'}`}
                 >
-                  {t('music.coverModeQuick') || 'Quick (one-step)'}
+                  {t('music.coverModeQuick') || 'Keep original lyrics'}
                 </button>
                 <button
                   onClick={() => setCoverMode('custom')}
                   className={`flex-1 px-3 py-1.5 rounded text-[11.5px] font-medium transition-colors ${coverMode === 'custom' ? 'bg-primary text-white' : 'text-muted-foreground hover:text-foreground'}`}
                 >
-                  {t('music.coverModeCustom') || 'Custom (two-step)'}
+                  {t('music.coverModeCustom') || 'Rewrite the lyrics'}
                 </button>
               </div>
+              <p className="text-[10px] text-muted-foreground mt-1.5">
+                {coverMode === 'quick'
+                  ? (t('music.coverModeHintQuick') || 'We keep the original lyrics, auto-detected from your audio.')
+                  : (t('music.coverModeHintCustom') || 'We extract the lyrics so you can rewrite them before generating.')}
+              </p>
             </div>
 
             {/* Cover Model picker — both options always visible per the
@@ -842,49 +847,60 @@ export default function MusicPanel() {
                 custom (two-step) flow. In quick mode, the lyrics are
                 optional and auto-extracted via ASR if empty. */}
             <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="text-[11.5px] font-semibold text-muted-foreground flex items-center gap-1.5">
-                  <Music size={12} /> {t('music.lyrics')}
-                </label>
-                {coverMode === 'custom' && (
+              <label className="text-[11.5px] font-semibold text-muted-foreground mb-2 flex items-center gap-1.5">
+                <Music size={12} /> {t('music.lyrics')}
+              </label>
+
+              {/* Two-step "Rewrite" flow: Step 1 is a prominent extract CTA;
+                  the lyrics field stays locked until extraction succeeds. */}
+              {coverMode === 'custom' && !coverFeatureId && (
+                <button
+                  onClick={preprocessAudio}
+                  disabled={preprocessLoading || !referenceUrl}
+                  className="w-full mb-2 px-3 py-2 text-[12px] font-medium bg-primary text-white rounded-lg hover:bg-primary-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+                >
+                  {preprocessLoading
+                    ? <Loader2 size={13} className="animate-spin" />
+                    : <Wand2 size={13} />}
+                  {preprocessLoading
+                    ? (t('music.coverPreprocessLoading') || 'Extracting lyrics…')
+                    : (t('music.coverExtractCta') || 'Step 1 — Extract lyrics from your audio')}
+                </button>
+              )}
+
+              {coverMode === 'custom' && coverFeatureId && (
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-[10px] text-success flex items-center gap-1 min-w-0">
+                    <Check size={10} className="shrink-0" /> {t('music.coverPreprocessSuccess') || 'Lyrics extracted — edit and generate.'}
+                  </p>
                   <button
                     onClick={preprocessAudio}
                     disabled={preprocessLoading || !referenceUrl}
-                    className="px-2.5 py-1 text-[10.5px] font-medium bg-surface border border-border rounded-md text-foreground hover:border-primary disabled:opacity-40 transition-colors flex items-center gap-1.5"
+                    className="px-2 py-0.5 text-[10px] text-muted-foreground hover:text-foreground disabled:opacity-40 transition-colors flex items-center gap-1 shrink-0"
                   >
-                    {preprocessLoading ? (
-                      <Loader2 size={11} className="animate-spin" />
-                    ) : (
-                      <Wand2 size={11} />
-                    )}
-                    {preprocessLoading
-                      ? (t('music.coverPreprocessLoading') || 'Extracting lyrics…')
-                      : (t('music.coverPreprocess') || 'Extract Lyrics')}
+                    {preprocessLoading ? <Loader2 size={10} className="animate-spin" /> : <Wand2 size={10} />}
+                    {t('music.coverReExtract') || 'Re-extract'}
                   </button>
-                )}
-              </div>
-              {coverMode === 'custom' && coverFeatureId && (
-                <p className="text-[10px] text-success flex items-center gap-1 mb-2">
-                  <Check size={10} /> {t('music.coverPreprocessSuccess') || 'Lyrics extracted — review and edit before generating.'}
-                  {featureExpiresAt && (
-                    <span className="text-muted-foreground ml-1">({t('music.coverFeatureCached') || 'cached — re-extract to refresh'})</span>
-                  )}
-                </p>
+                </div>
               )}
+
               <textarea
                 value={lyrics}
                 onChange={(e) => setLyrics(e.target.value.slice(0, 1000))}
+                disabled={coverMode === 'custom' && !coverFeatureId}
                 placeholder={coverMode === 'custom'
-                  ? '[Verse 1]\nFirst line...'
-                  : 'Optional. Leave empty to auto-extract from the reference audio.'}
-                className="w-full bg-card border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:border-primary font-mono"
+                  ? (coverFeatureId
+                      ? '[Verse 1]\nFirst line...'
+                      : (t('music.coverLyricsLocked') || 'Extract the lyrics first to edit them.'))
+                  : (t('music.coverLyricsPlaceholderQuick') || 'Optional. Leave empty to auto-extract from the reference audio.')}
+                className="w-full bg-card border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:border-primary font-mono disabled:opacity-50 disabled:cursor-not-allowed"
                 rows={5}
               />
               <div className="flex items-center justify-between mt-1">
                 <p className="text-[10px] text-muted-foreground">
                   {coverMode === 'custom'
-                    ? (t('music.coverLyricsHintCustom') || '10–1000 characters. Required when using a preprocessed feature.')
-                    : (t('music.coverLyricsHintQuick') || 'Optional. Leave empty to auto-extract lyrics from the reference audio via ASR.')}
+                    ? (t('music.coverLyricsHintCustom') || '10–1000 characters. Required.')
+                    : (t('music.coverLyricsHintQuick') || 'Optional. Leave empty to auto-extract via ASR.')}
                 </p>
                 <p className="text-[10px] text-muted-foreground">{lyrics.length} / 1000</p>
               </div>
