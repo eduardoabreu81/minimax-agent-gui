@@ -4,7 +4,7 @@ import { Music, Loader2, Save, Wand2, Guitar, AudioLines, Check, Coins, FileAudi
 import { useSessionProtection } from '../../hooks/useSessionProtection'
 import RecentGenerations from './RecentGenerations'
 import ModeTabBar from '../shared/ModeTabBar'
-import { apiFetch } from '../../lib/api.js'
+import { apiFetch, assetUrl } from '../../lib/api.js'
 
 // Phase 1: only the two music-2.6 variants. Cover (music-cover / -free)
 // and lyrics generation come in Phase 2/3 and live on separate panels.
@@ -1083,10 +1083,10 @@ export default function MusicPanel() {
                   </div>
                 )}
               </div>
-              <audio controls className="w-full" src={`/api/files/raw?path=${encodeURIComponent(result.file_path)}`} />
+              <audio controls className="w-full" src={assetUrl(`/api/files/raw?path=${encodeURIComponent(result.file_path)}`)} />
               <div className="flex gap-2">
                 <a
-                  href={`/api/files/download?path=${encodeURIComponent(result.file_path)}`}
+                  href={assetUrl(`/api/files/download?path=${encodeURIComponent(result.file_path)}`)}
                   download={result.filename || result.file_path.split('/').pop()}
                   className="px-4 py-2 bg-primary hover:bg-primary-hover text-white text-sm rounded-lg transition-colors flex items-center gap-2"
                 >

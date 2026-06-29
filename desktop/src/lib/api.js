@@ -110,4 +110,27 @@ export async function apiWebSocketUrl(path) {
   return `${wsOrigin}${path}`;
 }
 
+/**
+ * Synchronous backend origin for building media URLs used directly in JSX —
+ * `<img src>`, `<audio src>`, `<video src>`, `<source src>`, download
+ * `<a href>`, and `window.open(...)`. `apiUrl()` is async (it goes through
+ * the Tauri IPC bridge), which can't be used while rendering. The sidecar
+ * port is fixed (BACKEND_PORT in desktop/src-tauri/src/lib.rs), so a constant
+ * origin is reliable. Empty in dev so the Vite proxy handles the relative path.
+ */
+export const BACKEND_ORIGIN = IS_TAURI ? "http://127.0.0.1:8765" : "";
+
+/**
+ * Prefix a relative backend path (e.g. "/api/files/download?path=...") with
+ * the sidecar origin so the asset loads in Tauri production. Absolute URLs
+ * (http/https) and empty values pass through unchanged.
+ *
+ * @param {string} path
+ * @returns {string}
+ */
+export function assetUrl(path) {
+  if (!path || /^https?:\/\//i.test(path)) return path;
+  return `${BACKEND_ORIGIN}${path}`;
+}
+
 export const isTauri = IS_TAURI;

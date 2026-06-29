@@ -1,4 +1,5 @@
 import { RefreshCw, Save, Loader2 } from 'lucide-react'
+import { assetUrl } from '../../lib/api.js'
 
 /**
  * RecentGenerations — reusable history gallery for media panels.
@@ -21,7 +22,7 @@ export default function RecentGenerations({
   onRefresh,
   emptyMessage = 'No recent generations',
 }) {
-  const mediaUrl = (path) => `/api/files/download?path=${encodeURIComponent(path)}`
+  const mediaUrl = (path) => assetUrl(`/api/files/download?path=${encodeURIComponent(path)}`)
 
   const formatSize = (size) => {
     if (!size) return ''

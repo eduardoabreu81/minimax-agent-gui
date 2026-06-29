@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { apiFetch, apiWebSocketUrl } from '../../lib/api.js'
+import { apiFetch, apiWebSocketUrl, assetUrl } from '../../lib/api.js'
 import { useTranslation } from 'react-i18next'
 import {
   Code2, FileCode, Folder, GitBranch, Terminal, Save, RefreshCw,
@@ -1044,7 +1044,7 @@ const sendCodingMessage = useCallback((text, attachment) => {
                     <div className="mt-2 pt-2 border-t border-white/20">
                       {/\.(png|jpg|jpeg|webp|gif)$/i.test(msg.attachment) ? (
                         <img
-                          src={`/api/files/download?path=${encodeURIComponent(msg.attachment)}`}
+                          src={assetUrl(`/api/files/download?path=${encodeURIComponent(msg.attachment)}`)}
                           alt="attachment"
                           className={isAgent ? 'max-w-[240px] max-h-[160px] rounded-lg object-cover' : 'max-w-[180px] max-h-[120px] rounded-lg object-cover'}
                           onError={(e) => { e.target.style.display = 'none' }}
@@ -1122,7 +1122,7 @@ const sendCodingMessage = useCallback((text, attachment) => {
                 ))}
                 {activeFile && getFileType(activeFile) === 'html' && (
                   <button
-                    onClick={() => window.open(`/api/files/raw?path=${encodeURIComponent(activeFile)}`, '_blank')}
+                    onClick={() => window.open(assetUrl(`/api/files/raw?path=${encodeURIComponent(activeFile)}`), '_blank')}
                     className="ml-auto mr-2 px-2 py-1 rounded text-[10px] bg-surface border border-border hover:border-primary text-muted-foreground hover:text-foreground transition-colors"
                     title="Open this HTML file in a new browser tab"
                   >
@@ -1138,7 +1138,7 @@ const sendCodingMessage = useCallback((text, attachment) => {
                 <div className="w-full h-full flex flex-col items-center justify-center p-4">
                   {selectedPreview.type === 'image' && (
                     <img
-                      src={`/api/files/raw?path=${encodeURIComponent(selectedPreview.path)}`}
+                      src={assetUrl(`/api/files/raw?path=${encodeURIComponent(selectedPreview.path)}`)}
                       alt={selectedPreview.name}
                       className="max-w-full max-h-full object-contain rounded-lg"
                       title="Image preview"
@@ -1146,12 +1146,12 @@ const sendCodingMessage = useCallback((text, attachment) => {
                   )}
                   {selectedPreview.type === 'audio' && (
                     <audio controls className="w-full" title="Audio preview">
-                      <source src={`/api/files/raw?path=${encodeURIComponent(selectedPreview.path)}`} />
+                      <source src={assetUrl(`/api/files/raw?path=${encodeURIComponent(selectedPreview.path)}`)} />
                     </audio>
                   )}
                   {selectedPreview.type === 'video' && (
                     <video controls className="max-w-full max-h-full rounded-lg" title="Video preview">
-                      <source src={`/api/files/raw?path=${encodeURIComponent(selectedPreview.path)}`} />
+                      <source src={assetUrl(`/api/files/raw?path=${encodeURIComponent(selectedPreview.path)}`)} />
                     </video>
                   )}
                   {selectedPreview.type === 'unsupported' && (

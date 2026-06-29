@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
-import { apiFetch, apiWebSocketUrl } from '../../lib/api.js'
+import { apiFetch, apiWebSocketUrl, assetUrl } from '../../lib/api.js'
 import { useTranslation } from 'react-i18next'
 import { Plus, User, Bot, Loader2, FileText, MessageSquarePlus, Trash2, ChevronDown, Pencil } from 'lucide-react'
 import { Composer } from './Composer'
@@ -712,7 +712,7 @@ export default function ChatPanel({
                   <div className="mt-2 pt-2 border-t border-white/20">
                     {/\.(png|jpg|jpeg|webp|gif)$/i.test(msg.attachment) ? (
                       <img
-                        src={`/api/files/download?path=${encodeURIComponent(msg.attachment)}`}
+                        src={assetUrl(`/api/files/download?path=${encodeURIComponent(msg.attachment)}`)}
                         alt="attachment"
                         className="max-w-[200px] max-h-[150px] rounded-lg object-cover"
                         onError={(e) => { e.target.style.display = 'none' }}

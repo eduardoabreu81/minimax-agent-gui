@@ -7,7 +7,7 @@ import {
 import { useSessionProtection } from '../../hooks/useSessionProtection'
 import MediaPanelLayout from '../shared/MediaPanelLayout'
 import ModeTabBar from '../shared/ModeTabBar'
-import { apiFetch } from '../../lib/api.js'
+import { apiFetch, assetUrl } from '../../lib/api.js'
 
 // ───────────────────────────────────────────────────────────────────────────
 // Constants — TAURI_SPEC §5b
@@ -395,7 +395,7 @@ function VideoHistory({ history, historyLoading, onRefresh }) {
           {history.slice(0, 6).map(item => (
             <a
               key={item.path}
-              href={`/api/files/content?path=${encodeURIComponent(item.path)}`}
+              href={assetUrl(`/api/files/content?path=${encodeURIComponent(item.path)}`)}
               target="_blank"
               rel="noreferrer"
               style={{ aspectRatio: '16/9', borderRadius: 10, border: '0.5px solid var(--app-border)', background: 'linear-gradient(135deg,#0b1e3a,#1d4ed8 60%,#7c3aed)', position: 'relative', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none' }}

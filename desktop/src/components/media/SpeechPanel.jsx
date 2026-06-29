@@ -8,7 +8,7 @@ import { useSessionProtection } from '../../hooks/useSessionProtection'
 import RecentGenerations from './RecentGenerations'
 import MediaPanelLayout from '../shared/MediaPanelLayout'
 import ModeTabBar from '../shared/ModeTabBar'
-import { apiFetch } from '../../lib/api.js'
+import { apiFetch, assetUrl } from '../../lib/api.js'
 
 // ───────────────────────────────────────────────────────────────────────────
 // Constants — TAURI_SPEC §6b
@@ -1026,9 +1026,9 @@ export default function SpeechPanel() {
           </div>
           {result.file_path && (
             <>
-              <audio controls style={{ width: '100%' }} src={`/api/files/content?path=${encodeURIComponent(result.file_path)}`} />
+              <audio controls style={{ width: '100%' }} src={assetUrl(`/api/files/content?path=${encodeURIComponent(result.file_path)}`)} />
               <a
-                href={`/api/files/content?path=${encodeURIComponent(result.file_path)}`}
+                href={assetUrl(`/api/files/content?path=${encodeURIComponent(result.file_path)}`)}
                 download
                 style={{
                   display: 'inline-flex', alignItems: 'center', gap: 6,
@@ -1507,7 +1507,7 @@ export default function SpeechPanel() {
             </div>
           )}
           {designResult.trial_audio_path && (
-            <audio controls style={{ width: '100%' }} src={`/api/files/content?path=${encodeURIComponent(designResult.trial_audio_path)}`} />
+            <audio controls style={{ width: '100%' }} src={assetUrl(`/api/files/content?path=${encodeURIComponent(designResult.trial_audio_path)}`)} />
           )}
         </div>
       ) : (
