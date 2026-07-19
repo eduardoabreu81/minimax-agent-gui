@@ -11,11 +11,11 @@ import { useLiveTodos } from '../../hooks/useLiveTodos'
 import { LiveTodoProgress } from '../taskboard/LiveTodoProgress'
 
 const TABS = [
-  { id: 'plan', label: 'Plan', icon: Search },
-  { id: 'todos', label: 'Todos', icon: CheckSquare },
-  { id: 'tasks', label: 'Tasks', icon: ListTodo },
-  { id: 'agents', label: 'Agents', icon: Bot },
-];
+  { id: 'plan', labelKey: 'workspaceSidebar.tabs.plan', icon: Search },
+  { id: 'todos', labelKey: 'workspaceSidebar.tabs.todos', icon: CheckSquare },
+  { id: 'tasks', labelKey: 'workspaceSidebar.tabs.tasks', icon: ListTodo },
+  { id: 'agents', labelKey: 'workspaceSidebar.tabs.agents', icon: Bot },
+]
 
 /**
  * @param {Object} props
@@ -48,7 +48,7 @@ export default function WorkspaceSidebar({
       <button
         onClick={() => { onToggle(); activity.acknowledgeActivity() }}
         className="absolute right-0 top-1/2 -translate-y-1/2 z-30 p-1.5 bg-card border border-border border-r-0 rounded-l-lg text-muted-foreground hover:text-foreground hover:bg-surface transition-colors shadow-lg"
-        title="Open sidebar"
+        title={t('workspaceSidebar.open')}
       >
         <PanelRightOpen size={16} />
         {activity.hasNewActivity && (
@@ -76,7 +76,7 @@ export default function WorkspaceSidebar({
               }`}
             >
               <Icon size={13} />
-              <span className="hidden sm:inline">{tab.label}</span>
+              <span className="hidden sm:inline">{t(tab.labelKey)}</span>
               {tab.id === 'tasks' && activity.hasNewActivity && (
                 <span className="w-1.5 h-1.5 bg-primary rounded-full" />
               )}
@@ -86,7 +86,7 @@ export default function WorkspaceSidebar({
         <button
           onClick={onToggle}
           className="px-2 py-2 text-muted-foreground hover:text-foreground hover:bg-surface transition-colors"
-          title="Close sidebar"
+          title={t('workspaceSidebar.close')}
         >
           <PanelRightClose size={14} />
         </button>
@@ -106,6 +106,7 @@ export default function WorkspaceSidebar({
 }
 
 function PlanPanel() {
+  const { t } = useTranslation()
   const activity = useAgentActivity()
   const [editingId, setEditingId] = useState(null)
   const [editingText, setEditingText] = useState('')
@@ -143,32 +144,33 @@ function PlanPanel() {
   }
 
   const hasValidSteps = activity.plan.items.some(item => item.text.trim().length > 0)
+  const newStepKey = t('workspaceSidebar.plan.newStepPlaceholder')
   const lastItemIsEmptyNew = activity.plan.items.length > 0 &&
-    activity.plan.items[activity.plan.items.length - 1].text === 'New step'
+    activity.plan.items[activity.plan.items.length - 1].text === newStepKey
 
   if (activity.plan.items.length === 0) {
     return (
       <div className="space-y-3">
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <Sparkles size={12} />
-          <span>No active plan</span>
+          <span>{t('workspaceSidebar.plan.noActivePlan')}</span>
         </div>
         <p className="text-[11px] text-muted-foreground leading-relaxed">
-          Create a plan before the agent makes changes.
+          {t('workspaceSidebar.plan.noActivePlanDesc')}
         </p>
         <div className="p-3 rounded-lg bg-surface border border-border border-dashed space-y-2">
-          <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">How it works</p>
+          <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">{t('workspaceSidebar.plan.howItWorks')}</p>
           <div className="flex items-start gap-2 text-[11px]">
             <span className="text-primary font-medium shrink-0">1.</span>
-            <span className="text-foreground">Switch the mode button to <strong>Plan</strong></span>
+            <span className="text-foreground">{t('workspaceSidebar.plan.step1')}</span>
           </div>
           <div className="flex items-start gap-2 text-[11px]">
             <span className="text-primary font-medium shrink-0">2.</span>
-            <span className="text-foreground">Describe the change in the code chat</span>
+            <span className="text-foreground">{t('workspaceSidebar.plan.step2')}</span>
           </div>
           <div className="flex items-start gap-2 text-[11px]">
             <span className="text-primary font-medium shrink-0">3.</span>
-            <span className="text-foreground">Review, edit, and approve the draft plan</span>
+            <span className="text-foreground">{t('workspaceSidebar.plan.step3')}</span>
           </div>
         </div>
       </div>
@@ -181,27 +183,27 @@ function PlanPanel() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 text-xs text-foreground font-medium">
           <Sparkles size={12} className="text-primary" />
-          <span>{activity.plan.approved ? 'Approved Plan' : 'Plan Draft'}</span>
+          <span>{activity.plan.approved ? t('workspaceSidebar.plan.approved') : t('workspaceSidebar.plan.draft')}</span>
           <span className="text-[10px] text-muted-foreground bg-surface border border-border rounded-full px-2 py-0.5">
             {activity.plan.items.length}
           </span>
         </div>
         {activity.plan.approved && (
           <span className="text-[10px] text-green-400 bg-green-400/10 border border-green-400/20 rounded-full px-2 py-0.5">
-            Approved
+            {t('workspaceSidebar.plan.request')}
           </span>
         )}
       </div>
 
       {/* Request block */}
       <div className="p-2.5 rounded-lg bg-surface border border-border space-y-1.5">
-        <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Request</p>
+        <p className="text-[10px] text-muted-foreground uppercase tracking-wider">{t('workspaceSidebar.plan.request')}</p>
         <p className="text-[11px] text-foreground line-clamp-4 break-words" title={activity.plan.sourcePrompt}>
           {activity.plan.sourcePrompt}
         </p>
         {activity.plan.sourceAttachment && (
           <p className="text-[10px] text-primary flex items-center gap-1">
-            <span>📎 Attached:</span>
+            <span>{t('workspaceSidebar.plan.attached')}</span>
             <span className="truncate">{activity.plan.sourceAttachment.name || activity.plan.sourceAttachment.path?.split('/').pop()}</span>
           </p>
         )}
@@ -214,7 +216,7 @@ function PlanPanel() {
             <button
               onClick={() => activity.togglePlanItem(item.id)}
               className="mt-0.5 shrink-0"
-              title={item.status === 'done' ? 'Mark pending' : 'Mark done'}
+              title={item.status === 'done' ? t('workspaceSidebar.plan.markPending') : t('workspaceSidebar.plan.markDone')}
             >
               {item.status === 'done' ? (
                 <CheckCircle2 size={14} className="text-green-500" />
@@ -239,7 +241,7 @@ function PlanPanel() {
               <span
                 onClick={() => startEdit(item)}
                 className={`flex-1 text-[11px] cursor-text ${item.status === 'done' ? 'text-muted-foreground line-through' : 'text-foreground'}`}
-                title="Click to edit"
+                title={t('workspaceSidebar.plan.clickToEdit')}
               >
                 {item.text}
               </span>
@@ -248,7 +250,7 @@ function PlanPanel() {
             <button
               onClick={() => activity.removePlanItem(item.id)}
               className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-error/10 text-muted-foreground hover:text-error transition-opacity shrink-0"
-              title="Remove step"
+              title={t('workspaceSidebar.plan.removeStep')}
             >
               <XCircle size={12} />
             </button>
@@ -262,19 +264,19 @@ function PlanPanel() {
           <>
             <button
               onClick={() => {
-                if (!lastItemIsEmptyNew) activity.addPlanItem('New step')
+                if (!lastItemIsEmptyNew) activity.addPlanItem(newStepKey)
               }}
               disabled={lastItemIsEmptyNew}
               className="w-full py-1.5 bg-surface hover:bg-surface/80 border border-border hover:border-primary text-foreground text-[11px] rounded-lg transition-colors flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              <CircleDot size={12} className="text-primary" /> Add step
+              <CircleDot size={12} className="text-primary" /> {t('workspaceSidebar.plan.addStep')}
             </button>
             <button
               onClick={handleApprove}
               disabled={!hasValidSteps}
               className="w-full py-1.5 bg-primary hover:bg-primary-hover disabled:opacity-40 disabled:cursor-not-allowed text-white text-[11px] rounded-lg transition-colors flex items-center justify-center gap-1.5"
             >
-              <CheckSquare size={12} /> Approve & Run
+              <CheckSquare size={12} /> {t('workspaceSidebar.plan.approveAndRun')}
             </button>
           </>
         )}
@@ -282,19 +284,19 @@ function PlanPanel() {
           onClick={() => activity.clearPlan()}
           className="w-full py-1.5 bg-surface hover:bg-error/10 border border-border hover:border-error/30 text-muted-foreground hover:text-error text-[11px] rounded-lg transition-colors flex items-center justify-center gap-1.5"
         >
-          <XCircle size={12} /> Clear plan
+          <XCircle size={12} /> {t('workspaceSidebar.plan.clear')}
         </button>
         <button
           onClick={handleCopy}
           className="w-full py-1.5 bg-surface hover:bg-surface/80 border border-border hover:border-primary text-foreground text-[11px] rounded-lg transition-colors flex items-center justify-center gap-1.5"
         >
-          {copied ? 'Copied' : 'Copy plan'}
+          {copied ? t('workspaceSidebar.plan.copied') : t('workspaceSidebar.plan.copy')}
         </button>
       </div>
 
       {activity.plan.approved && (
         <p className="text-[10px] text-muted-foreground text-center">
-          This plan has been sent to the agent.
+          {t('workspaceSidebar.plan.sentToAgent')}
         </p>
       )}
     </div>
@@ -330,12 +332,10 @@ function TasksPanel() {
     return (
       <div className="space-y-3">
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Loader2 size={12} className="animate-spin" />
-          <span>No active tasks</span>
+          <span>{t('workspaceSidebar.todosNoActive')}</span>
         </div>
         <p className="text-[11px] text-muted-foreground leading-relaxed">
-          Tasks appear here when the agent is working.
-          Each step of the agent loop will show as a task card.
+          {t('workspaceSidebar.tasksEmpty')}
         </p>
       </div>
     )
@@ -346,7 +346,7 @@ function TasksPanel() {
       {/* Steps */}
       {activity.steps.length > 0 && (
         <div className="space-y-2">
-          <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Steps</p>
+          <p className="text-[10px] text-muted-foreground uppercase tracking-wider">{t('workspaceSidebar.plan.steps')}</p>
           {activity.steps.map((step) => (
             <div
               key={step.step}
@@ -365,7 +365,7 @@ function TasksPanel() {
                 <span className={`text-[11px] font-medium ${
                   step.status === 'running' ? 'text-foreground' : 'text-muted-foreground'
                 }`}>
-                  Step {step.step} of {step.maxSteps}
+                  {t('workspaceSidebar.plan.stepNumber', { step: step.step, max: step.maxSteps })}
                 </span>
               </div>
             </div>
@@ -376,7 +376,7 @@ function TasksPanel() {
       {/* Tool Results */}
       {activity.toolResults.length > 0 && (
         <div className="space-y-2">
-          <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Tools</p>
+          <p className="text-[10px] text-muted-foreground uppercase tracking-wider">{t('workspaceSidebar.plan.tools')}</p>
           {activity.toolResults.slice(-10).map((tr, i) => (
             <details key={i} className="group">
               <summary className="flex items-center gap-2 p-2 rounded-lg bg-surface border border-border cursor-pointer hover:bg-surface/80 transition-colors list-none">
@@ -422,20 +422,20 @@ function AgentsPanel() {
           <div className="flex-1 min-w-0">
             <p className="text-[11px] font-medium text-foreground">{selectedModel}</p>
             <p className="text-[10px] text-muted-foreground truncate">
-              {activity.thinking.active ? 'Thinking...' : 'Idle'}
+              {activity.thinking.active ? t('coding.thinking') : t('coding.idle')}
             </p>
           </div>
         </div>
         {activity.thinking.active && activity.thinking.duration > 0 && (
           <div className="flex items-center gap-1.5 mt-2 text-[10px] text-muted-foreground">
             <Clock size={10} />
-            <span>{activity.thinking.duration}s</span>
+            <span>{t('coding.thinkingDuration', { seconds: activity.thinking.duration })}</span>
           </div>
         )}
         {activity.lastTool && (
           <div className="flex items-center gap-1.5 mt-2 text-[10px] text-muted-foreground">
             <Terminal size={10} />
-            <span className="truncate">Last: {activity.lastTool.tool}</span>
+            <span className="truncate">{t('workspaceSidebar.plan.lastTool', { tool: activity.lastTool.tool })}</span>
           </div>
         )}
       </div>
