@@ -7,7 +7,7 @@ import { useSessionProtection } from '../../hooks/useSessionProtection'
 import { useSessionTokens } from '../../context/SessionTokensContext'
 import ThinkingBlock from '../shared/ThinkingBlock'
 import CopyButton from '../shared/CopyButton'
-import MarkdownRenderer from '../MarkdownRenderer'
+import ArtifactViewerModal from '../artifact/ArtifactViewerModal.jsx'
 import ContextWarningBanner from '../shared/ContextWarningBanner'
 import { getCompactThresholds, getContextLimit } from '../../lib/modelLimits'
 
@@ -75,7 +75,7 @@ export default function ChatPanel({
   // Permission request from the agent (shown as an inline modal in the chat).
   // Read-only tools (risk === "low") are auto-approved; medium/high risk
   // surface here so the user can approve or reject.
-  const [permissionRequest, setPermissionRequest] = useState(null)
+  const [artifact, setArtifact] = useState(null)
   const wsRef = useRef(null)
   const scrollRef = useRef(null)
   const convListRef = useRef(null)
@@ -707,7 +707,10 @@ export default function ChatPanel({
                     <CopyButton text={msg.content} />
                   </div>
                 )}
-                <MarkdownRenderer content={msg.content} />
+                <MarkdownRenderer
+                  content={msg.content}
+                  onArtifactOpen={(a) => setArtifact(a)}
+                />
                 {msg.attachment && (
                   <div className="mt-2 pt-2 border-t border-white/20">
                     {/\.(png|jpg|jpeg|webp|gif)$/i.test(msg.attachment) ? (
@@ -729,6 +732,12 @@ export default function ChatPanel({
             </div>
           )
         })}
+        <ArtifactViewerModal
+          open={!!artifact}
+          onOpenChange={(o) => { if (!o) setArtifact(null) }}
+          code={artifact?.code || ''}
+          language={artifact?.language || 'html'}
+        />
 
         {isThinking && (
           <div className="flex gap-3">
