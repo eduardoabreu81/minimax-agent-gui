@@ -7,7 +7,17 @@
   try {
     const React = await import('https://esm.sh/react@18.3.1');
     const mermaid = await import('https://esm.sh/mermaid@11.4.0');
-    parent.postMessage({type:'artifact:ready', react: typeof React.default, mermaid: typeof mermaid.default}, '*');
+    // esm.sh exposes the module as the default export. For React 18 that's
+    // a function (the createElement factory); for Mermaid 11 it's an API
+    // object with an `initialize` method. Either being truthy + the
+    // expected shape means the WebView can fetch and parse the module.
+    const reactReady = !!(React && React.default);
+    const mermaidReady = !!(mermaid && mermaid.default && typeof mermaid.default.initialize === 'function');
+    if (reactReady && mermaidReady) {
+      parent.postMessage({type:'artifact:ready', react: true, mermaid: true}, '*');
+    } else {
+      parent.postMessage({type:'artifact:error', message: 'reactReady='+reactReady+', mermaidReady='+mermaidReady}, '*');
+    }
   } catch (e) {
     parent.postMessage({type:'artifact:error', message: String(e && e.message || e)}, '*');
   }
