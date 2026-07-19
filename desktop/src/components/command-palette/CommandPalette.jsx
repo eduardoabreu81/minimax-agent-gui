@@ -85,7 +85,7 @@ export default function CommandPalette({ isOpen, onClose, onNavigate, onAction, 
         id: `nav-${item.id}`,
         label: t('palette.goTo', { label: t(item.labelKey) }),
         icon: item.icon,
-        keywords: `${item.label} ${item.keywords}`,
+        keywords: item.keywords,
         action: () => onNavigate(item.id),
       })
     })

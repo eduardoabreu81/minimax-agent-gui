@@ -622,7 +622,9 @@
     "refresh": "Refresh",
     "download": "Download",
     "delete": "Delete",
-    "rename": "Rename"
+    "rename": "Rename",
+    "optional": "optional",
+    "browse": "browse"
   },
   "contextWindow": {
     "warnText": "Context at {pct}%. Compact now to free room for the next turn.",
@@ -1001,11 +1003,11 @@
       "robotic": "Robotic"
     },
     "traits": {
-      "warm": "Warm",
-      "calm": "Calm",
-      "energetic": "Energetic",
-      "serious": "Serious",
-      "friendly": "Friendly"
+      "warm": "+ Warm",
+      "energetic": "+ Energetic",
+      "deep": "+ Deep",
+      "youthful": "+ Youthful",
+      "raspy": "+ Raspy"
     },
     "languages": {
       "auto": "Auto",
@@ -1042,7 +1044,32 @@
     "languageLabel": "Language",
     "traitsPrefix": "+ ",
     "sampleUploading": "Uploading…",
-    "deleteFailed": "Delete failed."
+    "deleteFailed": "Delete failed.",
+    "speedLabel": "Speed",
+    "volumeLabel": "Volume",
+    "pitchLabel": "Pitch",
+    "emotionLabel": "Emotion",
+    "voiceEffects": "Voice effects",
+    "traitPresets": "Trait presets",
+    "describeVoice": "Describe the voice",
+    "languageBoost": "Language boost",
+    "sampleAudio": "Sample audio",
+    "accuracyPrompt": "Accuracy prompt",
+    "promptClipHint": "Prompt clip · < 8s",
+    "systemVoices": "System voices",
+    "clonedVoices": "Cloned",
+    "designedVoices": "Designed",
+    "moreResults": "+ {count} more — search to filter",
+    "previewHeader": "Preview",
+    "emptyClone": "Your cloned voice preview will appear here",
+    "designedVoice": "Designed voice",
+    "saveVoice": "Save voice",
+    "emptyDesign": "Your designed voice will appear here",
+    "title": "Speech",
+    "useInSynthesize": "Use in Synthesize",
+    "searchVoices": "Search voices…",
+    "cloneDropOr": "Drop a voice sample or",
+    "cloneSampleHint": "10s–5min · max 20 MB · mp3, m4a, wav"
   },
   "video": {
     "modes": {
@@ -1101,5 +1128,9 @@
   },
   "help": {
     "noContent": "No content available."
+  },
+  "statusBar": {
+    "thinkingOnShort": "Thinking",
+    "thinkingOffShort": "Thinking off"
   }
 }

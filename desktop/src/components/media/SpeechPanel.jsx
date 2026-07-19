@@ -53,16 +53,16 @@ const SOUND_EFFECT_CHIPS = [
 ]
 
 const DESIGN_TRAITS = [
-  { id: 'warm',      label: '+ Warm' },
-  { id: 'energetic', label: '+ Energetic' },
-  { id: 'deep',      label: '+ Deep' },
-  { id: 'youthful',  label: '+ Youthful' },
-  { id: 'raspy',     label: '+ Raspy' },
+  { id: 'warm',      labelKey: 'speech.traits.warm' },
+  { id: 'energetic', labelKey: 'speech.traits.energetic' },
+  { id: 'deep',      labelKey: 'speech.traits.deep' },
+  { id: 'youthful',  labelKey: 'speech.traits.youthful' },
+  { id: 'raspy',     labelKey: 'speech.traits.raspy' },
 ]
 
 const DELIVERY_OPTIONS = [
-  { id: 'standard', label: 'Standard' },
-  { id: 'async',    label: 'Async · long text' },
+  { id: 'standard', labelKey: 'speech.deliveryStandard' },
+  { id: 'async',    labelKey: 'speech.deliveryAsync' },
 ]
 
 const LANGUAGE_BOOST_OPTIONS = [
@@ -536,7 +536,7 @@ export default function SpeechPanel() {
         method: 'POST', body: fd,
       })
       const data = await res.json()
-      if (!res.ok || !data.success) throw new Error(data.detail || data.error || 'Sample upload failed.')
+      if (!res.ok || !data.success) throw new Error(data.detail || data.error || t('speech.uploadFailed'))
       setCloneSample(file)
       setCloneSampleFileId(data.file_id)
       fetchVoices()
@@ -666,7 +666,7 @@ export default function SpeechPanel() {
                 fontSize: 11, fontWeight: 500, cursor: 'pointer',
                 transition: 'background 0.15s',
               }}
-            >{d.label}</button>
+            >{t(d.labelKey)}</button>
           )
         })}
       </div>
@@ -674,7 +674,7 @@ export default function SpeechPanel() {
       {/* Text — mockup L906-913 */}
       <div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 7 }}>
-          <label style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--app-text-2)' }}>Text</label>
+          <label style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--app-text-2)' }}>{t('speech.textLabel')}</label>
           <span style={{ fontSize: 11, color: 'var(--app-text-2)', fontVariantNumeric: 'tabular-nums' }}>
             {text.length.toLocaleString()} / 10000
           </span>
@@ -701,7 +701,7 @@ export default function SpeechPanel() {
       {/* Model — mockup L914-918 */}
       <div>
         <label style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--app-text-2)', display: 'block', marginBottom: 7 }}>
-          Model
+          {t('speech.modelLabel')}
         </label>
         <div style={{ position: 'relative' }}>
           <select
@@ -728,7 +728,7 @@ export default function SpeechPanel() {
       <div ref={voiceDropdownRef} style={{ position: 'relative' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 7 }}>
           <label style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--app-text-2)', display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Mic size={11} /> Voice
+            <Mic size={11} /> {t('speech.voiceLabel')}
           </label>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <LanguageFilter
@@ -845,16 +845,16 @@ export default function SpeechPanel() {
       {/* Speed / Volume / Pitch — mockup L972-986 */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         {[
-          { label: 'Speed',  value: speed, set: setSpeed,  display: `${speed.toFixed(1)}x`, min: 0.5, max: 2.0, step: 0.1 },
-          { label: 'Volume', value: vol,   set: setVol,    display: vol.toFixed(1),        min: 0.1, max: 2.0, step: 0.1 },
-          { label: 'Pitch',  value: pitch, set: setPitch,  display: String(pitch),         min: -12, max: 12,  step: 1   },
+          { labelKey: 'speech.speedLabel',  value: speed, set: setSpeed,  display: `${speed.toFixed(1)}x`, min: 0.5, max: 2.0, step: 0.1 },
+          { labelKey: 'speech.volumeLabel', value: vol,   set: setVol,    display: vol.toFixed(1),        min: 0.1, max: 2.0, step: 0.1 },
+          { labelKey: 'speech.pitchLabel',  value: pitch, set: setPitch,  display: String(pitch),         min: -12, max: 12,  step: 1   },
         ].map(s => (
           <div key={s.label}>
             <div style={{
               display: 'flex', justifyContent: 'space-between', alignItems: 'center',
               fontSize: 11.5, fontWeight: 600, color: 'var(--app-text-2)', marginBottom: 7,
             }}>
-              <span>{s.label}</span>
+              <span>{t(s.labelKey)}</span>
               <span style={{ color: 'var(--app-text)', fontVariantNumeric: 'tabular-nums' }}>{s.display}</span>
             </div>
             <input
@@ -869,7 +869,7 @@ export default function SpeechPanel() {
       {/* Emotion — mockup L987-1005 */}
       <div>
         <label style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--app-text-2)', display: 'block', marginBottom: 7 }}>
-          Emotion
+          {t('speech.emotionLabel')}
         </label>
         <div style={{ position: 'relative' }}>
           <select
@@ -893,7 +893,7 @@ export default function SpeechPanel() {
       {/* Voice effects — mockup L1006-1029 (always open, no (optional)) */}
       <div>
         <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--app-text-2)', marginBottom: 10 }}>
-          Voice effects
+          {t('speech.voiceEffects')}
         </div>
         {[
           { label: 'Pitch',     value: vmPitch,     set: setVmPitch,     lo: 'Deeper',   hi: 'Brighter' },
@@ -941,7 +941,7 @@ export default function SpeechPanel() {
       {/* Language boost — mockup bottom of L972-1029 (NEW) */}
       <div>
         <label style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--app-text-2)', display: 'block', marginBottom: 7 }}>
-          Language boost
+          {t('speech.languageBoost')}
         </label>
         <div style={{ position: 'relative' }}>
           <select
@@ -1086,7 +1086,7 @@ export default function SpeechPanel() {
       {/* Sample audio dropzone */}
       <div>
         <label style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--app-text-2)', display: 'block', marginBottom: 7 }}>
-          Sample audio
+          {t('speech.sampleAudio')}
         </label>
         <div
           onDrop={onDropCloneSample}
@@ -1128,10 +1128,10 @@ export default function SpeechPanel() {
                 <Upload size={19} />
               </div>
               <div style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--app-text)' }}>
-                Drop a voice sample or <span style={{ color: 'hsl(var(--primary))' }}>browse</span>
+                {t('speech.cloneDropOr')} <span style={{ color: 'hsl(var(--primary))' }}>{t('common.browse')}</span>
               </div>
               <div style={{ fontSize: 11, color: 'var(--app-text-2)' }}>
-                10s–5min · max 20 MB · mp3, m4a, wav
+                {t('speech.cloneSampleHint')}
               </div>
             </>
           )}
@@ -1142,7 +1142,7 @@ export default function SpeechPanel() {
       {/* Voice ID */}
       <div>
         <label style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--app-text-2)', display: 'block', marginBottom: 7 }}>
-          Voice ID
+          {t('speech.voiceIdLabel')}
         </label>
         <input
           type="text"
@@ -1179,7 +1179,7 @@ export default function SpeechPanel() {
           <Sparkles size={14} color="hsl(var(--primary))" />
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 12.5, fontWeight: 600 }}>
-              Accuracy prompt <span style={{ fontWeight: 400, color: 'var(--app-text-2)' }}>· optional</span>
+              {t('speech.accuracyPrompt')} <span style={{ fontWeight: 400, color: 'var(--app-text-2)' }}>· {t('common.optional')}</span>
             </div>
             <div style={{ fontSize: 11, color: 'var(--app-text-2)' }}>
               Short clip + transcript boosts similarity
@@ -1220,7 +1220,7 @@ export default function SpeechPanel() {
                 </>
               ) : (
                 <>
-                  <Upload size={14} /> Prompt clip · &lt; 8s
+                  <Upload size={14} /> {t('speech.promptClipHint')}
                 </>
               )}
               <input
@@ -1276,7 +1276,7 @@ export default function SpeechPanel() {
         fontSize: 11, color: 'var(--app-text)', lineHeight: 1.5,
       }}>
         <AlertCircle size={14} color="hsl(43 96% 46%)" style={{ flexShrink: 0, marginTop: 1 }} />
-        <span>A cloned voice is <strong>deleted automatically if unused for 7 days</strong>.</span>
+        <span>{t('speech.cloneSevenDayNotice')}</span>
       </div>
 
       {errorBox}
@@ -1307,7 +1307,7 @@ export default function SpeechPanel() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16, height: '100%' }}>
       {/* Inner canvas header — "Preview" */}
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: 4 }}>
-        <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--app-text)' }}>Preview</span>
+        <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--app-text)' }}>{t('speech.previewHeader')}</span>
       </div>
       {cloneResult ? (
         <div style={{
@@ -1349,7 +1349,7 @@ export default function SpeechPanel() {
           color: 'var(--app-text-2)',
         }}>
           <Mic2 size={32} style={{ opacity: 0.5, marginBottom: 12 }} />
-          <div style={{ fontSize: 12 }}>Your cloned voice preview will appear here</div>
+          <div style={{ fontSize: 12 }}>{t('speech.emptyClone')}</div>
         </div>
       )}
     </div>
@@ -1362,7 +1362,7 @@ export default function SpeechPanel() {
       {/* Describe the voice */}
       <div>
         <label style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--app-text-2)', display: 'block', marginBottom: 7 }}>
-          Describe the voice
+          {t('speech.describeVoice')}
         </label>
         <textarea
           value={designPrompt}
@@ -1383,13 +1383,13 @@ export default function SpeechPanel() {
       {/* Trait presets */}
       <div>
         <label style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--app-text-2)', display: 'block', marginBottom: 7 }}>
-          Trait presets
+          {t('speech.traitPresets')}
         </label>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
           {DESIGN_TRAITS.map(t => (
             <button
               key={t.id}
-              onClick={() => appendTrait(t.label.replace('+ ', ''))}
+              onClick={() => appendTrait(t.labelKey.replace('speech.traits.', ''))}
               style={{
                 padding: '4px 9px', borderRadius: 7,
                 background: 'var(--app-surface)',
@@ -1397,7 +1397,7 @@ export default function SpeechPanel() {
                 color: 'var(--app-text)', fontSize: 11, fontWeight: 500,
                 cursor: 'pointer',
               }}
-            >{t.label}</button>
+            >{t(t.labelKey)}</button>
           ))}
         </div>
       </div>
@@ -1405,7 +1405,7 @@ export default function SpeechPanel() {
       {/* Preview text */}
       <div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 7 }}>
-          <label style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--app-text-2)' }}>Preview text</label>
+          <label style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--app-text-2)' }}>{t('speech.previewTextLabel')}</label>
           <span style={{ fontSize: 11, color: designPreviewText.length > 500 ? 'hsl(var(--error))' : 'var(--app-text-2)', fontVariantNumeric: 'tabular-nums' }}>
             {designPreviewText.length} / 500
           </span>
@@ -1454,7 +1454,7 @@ export default function SpeechPanel() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16, height: '100%' }}>
       {/* Inner canvas header — "Designed voice" + "Save voice" */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-        <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--app-text)' }}>Designed voice</span>
+        <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--app-text)' }}>{t('speech.designedVoice')}</span>
         <button
           onClick={() => {
             if (designResult?.voice_id) {
@@ -1471,7 +1471,7 @@ export default function SpeechPanel() {
             opacity: designResult ? 1 : 0.4,
           }}
         >
-          <Plus size={13} /> Save voice
+          <Plus size={13} /> {t('speech.saveVoice')}
         </button>
       </div>
 
@@ -1517,7 +1517,7 @@ export default function SpeechPanel() {
           color: 'var(--app-text-2)',
         }}>
           <Wand2 size={32} style={{ opacity: 0.5, marginBottom: 12 }} />
-          <div style={{ fontSize: 12 }}>Your designed voice will appear here</div>
+          <div style={{ fontSize: 12 }}>{t('speech.emptyDesign')}</div>
         </div>
       )}
     </div>
@@ -1573,7 +1573,7 @@ export default function SpeechPanel() {
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             flexShrink: 0,
           }}
-          title="Delete voice"
+          title={t('speech.deleteVoice')}
         >
           <Trash2 size={13} />
         </button>
@@ -1590,7 +1590,7 @@ export default function SpeechPanel() {
           type="text"
           value={voiceSearch}
           onChange={(e) => setVoiceSearch(e.target.value)}
-          placeholder="Search voices…"
+          placeholder={t('speech.searchVoices')}
           style={{
             width: '100%',
             background: 'var(--app-surface)',
@@ -1610,9 +1610,9 @@ export default function SpeechPanel() {
       ) : (
         <>
           {[
-            { title: 'System voices', items: systemVoicesFiltered, source: 'system_voice', badge: '40+' },
-            { title: 'Cloned',        items: clonedVoicesFiltered,  source: 'voice_cloning', badge: String(clonedVoicesFiltered.length) },
-            { title: 'Designed',      items: designedVoicesFiltered,source: 'voice_generation', badge: String(designedVoicesFiltered.length) },
+            { titleKey: 'speech.systemVoices', items: systemVoicesFiltered, source: 'system_voice', badge: '40+' },
+            { titleKey: 'speech.clonedVoices', items: clonedVoicesFiltered,  source: 'voice_cloning', badge: String(clonedVoicesFiltered.length) },
+            { titleKey: 'speech.designedVoices', items: designedVoicesFiltered,source: 'voice_generation', badge: String(designedVoicesFiltered.length) },
           ].map(section => {
             if (section.source !== 'system_voice' && section.items.length === 0) return null
             if (section.source === 'system_voice' && section.items.length === 0 && voiceSearch.trim()) return null
@@ -1622,7 +1622,7 @@ export default function SpeechPanel() {
                   display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12,
                 }}>
                   <h4 style={{ fontSize: 12, fontWeight: 600, color: 'var(--app-text)', margin: 0 }}>
-                    {section.title}
+                    {t(section.titleKey)}
                   </h4>
                   <span style={{
                     fontSize: 11, color: 'var(--app-text-2)',
@@ -1645,7 +1645,7 @@ export default function SpeechPanel() {
                 </div>
                 {section.items.length > 12 && (
                   <div style={{ fontSize: 11, color: 'var(--app-text-2)', textAlign: 'center', marginTop: 8 }}>
-                    + {section.items.length - 12} more — search to filter
+                    {t('speech.moreResults', { count: section.items.length - 12 })}
                   </div>
                 )}
               </div>
@@ -1690,7 +1690,7 @@ export default function SpeechPanel() {
               fontSize: 15, fontWeight: 600, color: 'var(--app-text)',
               whiteSpace: 'nowrap',
             }}>
-              Speech
+              {t('speech.title')}
             </span>
           </div>
           {/* Right: sub-mode pills (mockup L886-892) */}

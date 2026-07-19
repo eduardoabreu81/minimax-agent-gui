@@ -622,7 +622,9 @@
     "refresh": "새로고침",
     "download": "다운로드",
     "delete": "삭제",
-    "rename": "이름 변경"
+    "rename": "이름 변경",
+    "optional": "선택",
+    "browse": "찾아보기"
   },
   "agentContext": {
     "roles": {
@@ -1001,11 +1003,11 @@
       "robotic": "로봇"
     },
     "traits": {
-      "warm": "따뜻함",
-      "calm": "차분함",
-      "energetic": "활기",
-      "serious": "진지함",
-      "friendly": "친근함"
+      "warm": "+ 따뜻함",
+      "energetic": "+ 활기",
+      "deep": "+ 깊음",
+      "youthful": "+ 청량",
+      "raspy": "+ 쉬머짐"
     },
     "languages": {
       "auto": "자동",
@@ -1042,7 +1044,32 @@
     "languageLabel": "언어",
     "traitsPrefix": "+ ",
     "sampleUploading": "업로드 중…",
-    "deleteFailed": "삭제 실패."
+    "deleteFailed": "삭제 실패.",
+    "speedLabel": "속도",
+    "volumeLabel": "볼륨",
+    "pitchLabel": "피치",
+    "emotionLabel": "감정",
+    "voiceEffects": "보이스 효과",
+    "traitPresets": "특성 프리셋",
+    "describeVoice": "보이스 설명",
+    "languageBoost": "언어 부스트",
+    "sampleAudio": "샘플 오디오",
+    "accuracyPrompt": "정확도 프롬프트",
+    "promptClipHint": "프롬프트 클립 · 8초 미만",
+    "systemVoices": "시스템 보이스",
+    "clonedVoices": "복제된 보이스",
+    "designedVoices": "디자인한 보이스",
+    "moreResults": "+ {count}개 더 — 검색으로 필터링",
+    "previewHeader": "미리듣기",
+    "emptyClone": "복제한 보이스 미리듣기가 여기에 표시됩니다",
+    "designedVoice": "디자인한 보이스",
+    "saveVoice": "보이스 저장",
+    "emptyDesign": "디자인한 보이스가 여기에 표시됩니다",
+    "title": "음성",
+    "useInSynthesize": "합성에 사용",
+    "searchVoices": "보이스 검색…",
+    "cloneDropOr": "보이스 샘플을 끌어 놓거나",
+    "cloneSampleHint": "10초~5분 · 최대 20 MB · mp3, m4a, wav"
   },
   "video": {
     "modes": {
@@ -1101,5 +1128,9 @@
   },
   "help": {
     "noContent": "콘텐츠가 없습니다."
+  },
+  "statusBar": {
+    "thinkingOnShort": "생각: 켬",
+    "thinkingOffShort": "생각: 끔"
   }
 }

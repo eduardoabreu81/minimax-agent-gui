@@ -85,6 +85,7 @@ function SubjectDropzone({ file, onPick }) {
             onClick={(e) => { e.stopPropagation(); onPick(null) }}
             style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--app-text-2)', display: 'flex' }}
             aria-label={t('image.removeReference')}
+          ><X size={12} /></button>
         </div>
       ) : (
         <>
@@ -94,6 +95,7 @@ function SubjectDropzone({ file, onPick }) {
             <span style={{ fontSize: 10, color: 'var(--app-text-2)', opacity: 0.7 }}>
               {t('image.keepFace')}
             </span>
+          </span>
         </>
       )}
       <input
@@ -284,7 +286,7 @@ export default function ImagePanel() {
             fontSize: 11.5, color: 'var(--app-text-2)',
             whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
           }}>
-            {modeConfig.title} · {modeConfig.model}
+            {t(modeConfig.titleKey)} · {modeConfig.model}
           </div>
         </div>
       </div>
@@ -313,6 +315,7 @@ export default function ImagePanel() {
           <label style={labelStyle}>
             {t('image.reference')}
             <span style={{ fontWeight: 400, color: 'var(--app-text-2)' }}>{t('image.referenceHint')}</span>
+          </label>
           <SubjectDropzone file={referenceImage} onPick={setReferenceImage} />
         </div>
       )}
@@ -519,6 +522,7 @@ export default function ImagePanel() {
         <label style={labelStyle}>
           {t('image.seed')}
           <span style={{ fontWeight: 400, color: 'var(--app-text-2)' }}>{t('image.seedBlank')}</span>
+        </label>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <input
             type="number"
