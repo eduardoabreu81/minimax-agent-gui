@@ -94,7 +94,7 @@
     "settings": "设置",
     "files": "文件",
     "recentCommits": "最近提交",
-    "results": "个结果"
+    "results": "{count} 个结果"
   },
   "coding": {
     "title": "代码工作区",
@@ -270,7 +270,8 @@
     "skills": "技能",
     "personality": {
       "preset": "预设"
-    }
+    },
+    "updateAction": "更新"
   },
   "onboarding": {
     "welcome": "欢迎使用 MiniMax 智能助手",

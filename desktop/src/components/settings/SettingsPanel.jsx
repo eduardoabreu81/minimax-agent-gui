@@ -916,7 +916,7 @@ export default function SettingsPanel({ onRestartSetup }) {
                 disabled={!localSettings.apiKey.trim()}
                 className="h-[40px] px-4 rounded-[9px] border border-border bg-transparent text-foreground text-[12.5px] font-medium hover:border-primary/50 transition-colors disabled:opacity-40"
               >
-                {t('settings.update')}
+                {t('settings.updateAction')}
               </button>
             </div>
             <div className={`flex items-center gap-1.5 mt-3 text-[11.5px] ${localSettings.apiKeyConfigured ? 'text-success' : 'text-muted-foreground'}`}>
@@ -1184,7 +1184,7 @@ export default function SettingsPanel({ onRestartSetup }) {
                   disabled={!mcpForm.name.trim()}
                   className="flex-1 h-[34px] bg-primary hover:bg-primary-hover disabled:opacity-40 text-white text-[12.5px] font-medium rounded-[8px] transition-colors"
                 >
-                  {mcpEditingId ? t('settings.update') : t('settings.save')}
+                  {mcpEditingId ? t('settings.updateAction') : t('settings.save')}
                 </button>
                 <button
                   onClick={resetMcpForm}

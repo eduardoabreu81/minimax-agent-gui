@@ -320,7 +320,7 @@ export default function CommandPalette({ isOpen, onClose, onNavigate, onAction, 
           <span className="flex items-center gap-1">
             <kbd className="px-1 rounded bg-card border border-border font-mono">Esc</kbd> Close
           </span>
-          <span className="ml-auto">{flatItems.length} {t('palette.results')}</span>
+          <span className="ml-auto">{t('palette.results', { count: flatItems.length })}</span>
         </div>
       </div>
     </div>

@@ -94,7 +94,7 @@
     "settings": "설정",
     "files": "파일",
     "recentCommits": "최근 커밋",
-    "results": "개 결과"
+    "results": "결과 {count}개"
   },
   "coding": {
     "title": "코딩 워크스페이스",
@@ -220,7 +220,16 @@
     "apiKeyLabel": "MiniMax API 키",
     "apiKeyPlaceholder": "sk-cp-...",
     "apiKeyPlaceholderMasked": "••••••••••••••••••••••••••••",
-    "update": "업데이트",
+    "update": {
+      "check": "업데이트 확인",
+      "checking": "확인 중…",
+      "upToDate": "최신 버전입니다",
+      "available": "업데이트 사용 가능: v{version}",
+      "download": "다운로드 및 설치",
+      "downloading": "다운로드 중…",
+      "restart": "다시 시작하여 적용",
+      "error": "업데이트를 확인할 수 없습니다"
+    },
     "apiKeyConnected": "연결됨 · config.yaml에 로컬 저장됨",
     "apiKeyNotConfigured": "설정되지 않음 — 에이전트 호출이 실패합니다",
     "interfaceLanguage": "인터페이스 언어",
@@ -270,7 +279,17 @@
     "skills": "스킬",
     "personality": {
       "preset": "프리셋"
-    }
+    },
+    "audio": "오디오",
+    "audioDefaults": "음악 생성 기본값",
+    "audioDefaultsDesc": "이 기본값은 음악 패널의 모든 요청과 함께 전송됩니다. 음악 패널은 마운트 시 이 값을 읽고, 요청에서 생략되면 백엔드가 기본값으로 사용합니다.",
+    "audioSampleRate": "샘플레이트",
+    "audioBitrate": "비트레이트",
+    "audioFormat": "형식",
+    "audioLowBitrateWarn": "낮은 비트레이트({kbps}kbps)를 선택했습니다. 오디오가 눈에 띄게 압축되어 들릴 수 있으므로 음악에는 128kbps 이상을 권장합니다.",
+    "audioHighBitrateHint": "선택한 프리셋: {khz}kHz · {kbps}kbps · {format}. 비트레이트가 높을수록 파일은 커지지만 더 많은 디테일을 유지합니다.",
+    "audioSaved": "오디오 설정이 저장되었습니다.",
+    "updateAction": "업데이트"
   },
   "onboarding": {
     "welcome": "MiniMax 에이전트에 오신 것을 환영합니다",
@@ -387,7 +406,8 @@
     "roles": {
       "eng": "엔지니어링 파트너",
       "reviewer": "코드 리뷰어",
-      "pm": "프로젝트 매니저"
+      "pm": "프로젝트 매니저",
+      "custom": "사용자 지정"
     },
     "presetDesc": {
       "concise": "직접적이고 간결함. 형식보다 본질.",
@@ -395,6 +415,110 @@
       "mentor": "인내심 있음. 방법보다 이유를 먼저 설명.",
       "expert": "밀도 높고 기술적. 트레이드오프와 엣지 케이스를 언급.",
       "creative": "여러 선택지를 만들고 예상치 못한 관점을 탐색."
+    },
+    "title": "에이전트 컨텍스트",
+    "contextLabel": "컨텍스트",
+    "subtitle": "5개의 파일이 이 워크스페이스에서 에이전트의 동작 방식을 정의합니다.",
+    "userOnly": "사용자 전용",
+    "youAndAgent": "사용자 + 에이전트",
+    "agentAppends": "에이전트 자동 추가",
+    "slot1": "슬롯 #1",
+    "charCount": "{used} / {limit}자",
+    "percent": "{pct}% 사용",
+    "gracefulDegradation": "파일이 비어 있어도 어떤 조합이든 사용할 수 있습니다. 필수 정보가 빠지면 에이전트는 가능한 범위에서 동작하고 배너로 알려줍니다.",
+    "banner": {
+      "incomplete": "에이전트 컨텍스트가 완전하지 않습니다",
+      "missingFile": "{file} 파일이 없어 에이전트가 사용자에 대해 제한된 정보만 알고 있습니다.",
+      "setUpNow": "지금 설정",
+      "openSettings": "설정 열기",
+      "dismiss": "닫기"
+    },
+    "wizard": {
+      "title": "MiniMax Studio 설정을 시작합니다",
+      "subtitle": "간단한 4단계입니다. 건너뛰고 나중에 설정할 수도 있습니다.",
+      "step": {
+        "about": "사용자 정보",
+        "personality": "성격",
+        "identity": "역할",
+        "review": "검토"
+      },
+      "skip": "건너뛰기",
+      "back": "뒤로",
+      "next": "다음",
+      "create": "파일 {n}개 만들기",
+      "name": "어떻게 불러드릴까요?",
+      "namePh": "에이전트가 사용할 호칭을 입력하세요",
+      "timezone": "시간대",
+      "level": "기술 수준",
+      "personalityQ": "어떤 말투로 답할까요?",
+      "identityQ": "이 워크스페이스에서 에이전트의 기본 역할은 무엇인가요?",
+      "reviewQ": "생성할 파일을 확인하세요",
+      "levelBeginner": "초급",
+      "levelMid": "중급",
+      "levelSenior": "고급"
+    },
+    "personality": {
+      "preset": "프리셋",
+      "reset": "기본값으로 재설정",
+      "customPlaceholder": "사용자 지정 성격…",
+      "customOption": "사용자 지정(직접 편집)",
+      "choosePreset": "프리셋을 선택하거나 자유롭게 편집하세요",
+      "appliedHint": "프리셋이 적용되었습니다. 저장을 눌러 유지하세요."
+    },
+    "identity": {
+      "quickSwitch": "빠른 전환",
+      "customPlaceholder": "사용자 지정 역할 설명…"
+    },
+    "memory": {
+      "view": "보기",
+      "edit": "편집",
+      "revert": "템플릿으로 되돌리기"
+    },
+    "daily": {
+      "empty": "아직 로그가 없습니다.",
+      "today": "오늘",
+      "yesterday": "어제",
+      "turns": "{n}턴"
+    },
+    "viewer": {
+      "memory": {
+        "title": "에이전트 메모리",
+        "usageHeader": "MEMORY(에이전트 메모) · {pct}% — {used}/{limit}자",
+        "empty": "비어 있습니다. 작업하면서 에이전트가 내용을 채웁니다.",
+        "appendOnly": "추가 전용 · 에이전트가 업데이트"
+      },
+      "daily": {
+        "title": "{date} 로그",
+        "appendOnly": "추가 전용 · 에이전트가 매 턴 생성"
+      }
+    },
+    "rerunOnboarding": "온보딩 다시 실행",
+    "common": {
+      "save": "저장",
+      "cancel": "취소",
+      "delete": "삭제"
+    },
+    "presets": {
+      "concise": "간결함",
+      "friendly": "친근함",
+      "mentor": "멘토",
+      "expert": "전문가",
+      "creative": "창의적"
+    },
+    "file": {
+      "soul": "성격",
+      "identity": "현재 역할",
+      "user": "사용자 프로필",
+      "memory": "프로젝트 메모리",
+      "daily": "일일 로그"
     }
+  },
+  "contextWindow": {
+    "warnText": "컨텍스트 사용량이 {pct}%입니다. 다음 턴을 위한 공간을 확보하려면 지금 압축하세요.",
+    "autoText": "컨텍스트 사용량이 {pct}%입니다. 대화를 계속할 수 있도록 자동으로 압축합니다.",
+    "maxText": "컨텍스트 사용량이 {pct}%입니다. 강제로 압축하며, 90% 아래로 내려가면 턴 입력을 재개합니다.",
+    "compactNow": "지금 압축",
+    "compacting": "압축 중…",
+    "dismiss": "닫기"
   }
 }

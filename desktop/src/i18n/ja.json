@@ -94,7 +94,7 @@
     "settings": "設定",
     "files": "ファイル",
     "recentCommits": "最近のコミット",
-    "results": "件の結果"
+    "results": "結果 {count} 件"
   },
   "coding": {
     "title": "コーディングワークスペース",
@@ -270,7 +270,8 @@
     "skills": "スキル",
     "personality": {
       "preset": "プリセット"
-    }
+    },
+    "updateAction": "更新"
   },
   "onboarding": {
     "welcome": "MiniMax エージェントへようこそ",

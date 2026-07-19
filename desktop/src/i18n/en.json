@@ -94,7 +94,7 @@
     "settings": "Settings",
     "files": "Files",
     "recentCommits": "Recent Commits",
-    "results": "results"
+    "results": "{count} results"
   },
   "coding": {
     "title": "Agent Coding Workspace",
@@ -288,7 +288,8 @@
     "skills": "Skills",
     "personality": {
       "preset": "Preset"
-    }
+    },
+    "updateAction": "Update"
   },
   "onboarding": {
     "welcome": "Welcome to MiniMax Studio",

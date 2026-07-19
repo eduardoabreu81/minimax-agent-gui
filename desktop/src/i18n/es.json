@@ -94,7 +94,7 @@
     "settings": "Configuración",
     "files": "Archivos",
     "recentCommits": "Commits Recientes",
-    "results": "resultados"
+    "results": "{count} resultados"
   },
   "coding": {
     "title": "Workspace de Código",
@@ -270,7 +270,8 @@
     "skills": "Skills",
     "personality": {
       "preset": "Preajuste"
-    }
+    },
+    "updateAction": "Actualizar"
   },
   "onboarding": {
     "welcome": "Bienvenido a MiniMax Studio",
