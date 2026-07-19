@@ -352,6 +352,13 @@ function AppShell() {
     <SessionTokensProvider>
       <AgentActivityProvider>
         <div className="flex flex-col h-screen w-screen bg-background text-foreground overflow-hidden relative">
+          {import.meta.env.DEV && (
+            <iframe
+              src="/src/components/artifact/__spike__/webview-esm.html"
+              style={{display: 'none'}}
+              data-testid="webview-spike"
+            />
+          )}
           {theme === 'matrix' && matrixEffect && <MatrixRain />}
           <Titlebar onOpenPalette={() => setPaletteOpen(true)} />
           <div className="flex flex-1 min-h-0">
