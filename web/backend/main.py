@@ -1219,6 +1219,24 @@ Be concise, friendly, and helpful."""
         # actual rendering.
         system_prompt += _build_mcp_section(mcp_tools or [])
 
+        # Artifact rules (v0.5).
+        system_prompt += (
+            "\n\n## Artifacts\n"
+            "When the user asks for UI, a button/component, a diagram, a chart, an SVG illustration, "
+            "or any self-contained visual artifact, ALWAYS respond with a single fenced code block:\n"
+            "- HTML page → ```html\n"
+            "- SVG illustration → ```svg\n"
+            "- Mermaid diagram (flowchart, sequence, ER, gantt, class) → ```mermaid\n"
+            "- Single-file React component (no JSX/TSX) → ```reactjs\n"
+            "\n"
+            "Write the code so it is self-contained: inline CSS, pinned `esm.sh` URLs for any runtime "
+            "(e.g. `react@18.3.1`, `mermaid@11.4.0`). No external assets, no multi-file project, no build step. "
+            "Keep the code in ONE fence per artifact; the desktop app will render it in a sandboxed preview. "
+            "For React, export a top-level `function App()` (or `const App = () => …`) and freely use "
+            "`useState`, `useEffect`, `useRef`, `useMemo`, `useCallback`, `useContext`, `useReducer` — "
+            "they are all available without import."
+        )
+
         # Stash the context on the SessionManager so /api/config can expose
         # the missing/corrupt flags → banner + wizard triggers on frontend.
         self.last_context = ctx
