@@ -24,19 +24,19 @@
 
 ## Phase 0 — WebView Spike (gate)
 
-### Task 0: WebView ESM spike page
+The spike is split into two tasks because the verification step (running `npm run tauri:dev` and reading DevTools) cannot be executed in a headless agent session. **Task 0a** is agent-implementable (file + App.jsx mount + revert). **Task 0b** is a manual user checkpoint that the agent PAUSES for before starting Task 2 (fallback narrowing) and Task 9 (system prompt prompt-only adjustments). Task 1 (useArtifact.js) starts in parallel with the optimistic 4-language default; if the user reports failure, Task 2 becomes a 1-line narrowing edit, not a re-implementation.
+
+### Task 0a: Spike file + temporary mount (agent)
 
 **Files:**
 - Create: `desktop/src/components/artifact/__spike__/webview-esm.html`
-- Modify: `desktop/src/App.jsx:14` (temporary — revert after spike completes)
+- Modify: `desktop/src/App.jsx` (temporary — reverted in Step 5 of this task)
 
-**Interfaces:**
-- Consumes: nothing
-- Produces: a `postMessage` event from the iframe reporting `{type:'artifact:ready', react: 'object', mermaid: 'function'}` or `{type:'artifact:error', message}`.
+**Interfaces:** none in/out of app code; the spike is self-contained HTML.
 
 - [ ] **Step 1: Create the spike HTML file**
 
-Write `desktop/src/components/artifact/__spike__/webview-esm.html` with this content (single file, no test):
+Write `desktop/src/components/artifact/__spike__/webview-esm.html` (single file, no test):
 
 ```html
 <!doctype html>
@@ -60,10 +60,6 @@ Write `desktop/src/components/artifact/__spike__/webview-esm.html` with this con
     document.getElementById('log').textContent = JSON.stringify(e.data);
     console.log('[spike]', e.data);
   });
-  // Expose for headless inspection
-  window.__spikeResult = new Promise((resolve) => {
-    window.addEventListener('message', (e) => resolve(e.data), { once: true });
-  });
 </script>
 </body>
 </html>
@@ -71,7 +67,7 @@ Write `desktop/src/components/artifact/__spike__/webview-esm.html` with this con
 
 - [ ] **Step 2: Mount the spike in App.jsx temporarily**
 
-In `desktop/src/App.jsx` add a one-shot render at the very top of `AppShell()` return tree (find the outermost `<div>` and prepend):
+In `desktop/src/App.jsx` find `function AppShell()` and at the very top of its return tree (the outermost `<div>` in the JSX), prepend:
 
 ```jsx
 {import.meta.env.DEV && (
@@ -83,43 +79,85 @@ In `desktop/src/App.jsx` add a one-shot render at the very top of `AppShell()` r
 )}
 ```
 
-- [ ] **Step 3: Run spike on the current OS**
-
-```bash
-cd desktop && npm run tauri:dev
-```
-
-Open the desktop window. Press F12 → DevTools console. Expected one of:
-- `[spike] {type:'artifact:ready', react:'object', mermaid:'function'}` → spike PASSED for this OS.
-- `[spike] {type:'artifact:error', message: '...'}` → spike FAILED for this OS. Note the message.
-
-- [ ] **Step 4: Record result in spec**
-
-Append to `docs/superpowers/specs/2026-07-19-artifact-feature-design.md` under a new `## Phase 0 Spike Result` section:
-
-- macOS (Apple M4 / WebKit): PASS / FAIL — <message>
-- Windows (WebView2): <not tested on this machine>
-- Linux (WebKitGTK): <not tested on this machine>
-
-- [ ] **Step 5: Apply fallback if any OS failed**
-
-If macOS (the only OS we can test here) FAILED:
-- Edit `desktop/src/components/artifact/useArtifact.js` to return `isArtifactLanguage = ['html','svg'].includes(lang?.toLowerCase())`. (Will be added in Task 1 — apply this when editing Task 1.)
-- Edit `desktop/src/components/artifact/artifactTemplates.js` `buildSrcDoc` to throw on `mermaid` / `reactjs` (will be added in Task 3 — apply there).
-- Edit `web/backend/main.py` `ARTIFACT_RULES` to drop the `mermaid` and `reactjs` bullets (will be added in Task 8 — apply there).
-
-If macOS PASSED, do nothing — keep all four languages.
-
-- [ ] **Step 6: Revert App.jsx spike mount**
-
-In `desktop/src/App.jsx` remove the `{import.meta.env.DEV && (<iframe … />)}` block added in Step 2.
-
-- [ ] **Step 7: Commit spike**
+- [ ] **Step 3: Commit the spike artifacts**
 
 ```bash
 cd /Volumes/MERCURY/PROJECTS/minimax-agent-gui
-git add desktop/src/components/artifact/__spike__/webview-esm.html docs/superpowers/specs/2026-07-19-artifact-feature-design.md
-git -c user.email="agent@local" -c user.name="oh-my-pi" commit -m "chore(artifact): webview-esm spike + result"
+git add desktop/src/components/artifact/__spike__/webview-esm.html desktop/src/App.jsx
+git -c user.email="agent@local" -c user.name="oh-my-pi" commit -m "chore(artifact): webview-esm spike page + temporary App.jsx mount"
+```
+
+- [ ] **Step 4: Hand off to user (manual checkpoint — Task 0b)**
+
+Print the following to the user verbatim and PAUSE for the response:
+
+> **Manual checkpoint (Task 0b — WebView spike)**
+>
+> The spike is committed on the current branch. Please run:
+>
+> ```bash
+> cd desktop && npm run tauri:dev
+> ```
+>
+> Wait for the desktop window to open, then press F12 to open DevTools and look at the Console. Report back ONE of:
+>
+> 1. **PASS** — the console shows `[spike] {type:'artifact:ready', react:'object', mermaid:'function'}` → all 4 artifact languages (html, svg, mermaid, reactjs) ship in v0.5.
+> 2. **FAIL** — the console shows `[spike] {type:'artifact:error', message: '…'}` or no spike message at all → only `html` and `svg` ship in v0.5. Copy the error message.
+>
+> After you report, I will (a) record the result in the spec, (b) apply the narrowing edit to `useArtifact.js` if FAIL, (c) adjust `artifactTemplates.js` and the system prompt if FAIL, (d) revert the temporary App.jsx mount, and (e) continue with Task 2 and onward.
+
+DO NOT proceed to Task 0a Step 5, Task 0a Step 6, Task 2, or Task 3 Step 5 until the user responds.
+
+- [ ] **Step 5: After user reports PASS — revert App.jsx mount**
+
+In `desktop/src/App.jsx` remove the `{import.meta.env.DEV && (<iframe … />)}` block added in Step 2.
+
+- [ ] **Step 6: After user reports FAIL — apply fallback before reverting**
+
+If the user reported FAIL:
+
+1. Edit `desktop/src/components/artifact/useArtifact.js` (created by Task 1) to change `isArtifactLanguage` to:
+
+```js
+export function isArtifactLanguage(lang) {
+  if (!lang) return false;
+  const l = String(lang).toLowerCase();
+  // Phase 0 spike (Task 0b) reported FAILED on this OS — narrow to
+  // languages with no external ESM import. mermaid/reactjs ship in v0.6.
+  return ['html', 'svg'].includes(l);
+}
+```
+
+2. Edit `desktop/src/components/artifact/artifactTemplates.js` (created by Task 3) to drop the mermaid and reactjs cases — make `buildSrcDoc` throw for them. Replace the two cases:
+
+```js
+    // case 'mermaid': return buildMermaidDoc(code);   // spike-failed OS: deferred to v0.6
+    // case 'reactjs': return buildReactDoc(code);     // spike-failed OS: deferred to v0.6
+```
+
+(Keep `buildMermaidDoc` and `buildReactDoc` defined for v0.6 reuse.)
+
+3. Edit `desktop/src/components/artifact/__tests__/artifactTemplates.test.js` (created by Task 3) — change the two `describe('buildSrcDoc — mermaid', …)` and `describe('buildSrcDoc — reactjs', …)` blocks to `describe.skip` (still asserts the case is "unsupported" on spike-failed OS).
+
+4. Then revert the App.jsx mount (Step 5 of this task).
+
+- [ ] **Step 7: Record the result in the spec**
+
+Append to `docs/superpowers/specs/2026-07-19-artifact-feature-design.md` under a new `## Phase 0 Spike Result` section:
+
+```
+- macOS (Apple M4 / WKWebView): <PASS|FAIL> — <message or "ready {react:'object', mermaid:'function'}">
+- Windows (WebView2): not tested on this machine
+- Linux (WebKitGTK): not tested on this machine
+- Languages shipping in v0.5: <html, svg[, mermaid, reactjs]>
+```
+
+- [ ] **Step 8: Commit result + revert + (if FAIL) fallback edits**
+
+```bash
+cd /Volumes/MERCURY/PROJECTS/minimax-agent-gui
+git add desktop/src/App.jsx desktop/src/components/artifact/useArtifact.js desktop/src/components/artifact/artifactTemplates.js desktop/src/components/artifact/__tests__/artifactTemplates.test.js docs/superpowers/specs/2026-07-19-artifact-feature-design.md
+git -c user.email="agent@local" -c user.name="oh-my-pi" commit -m "chore(artifact): spike result + fallback narrowing (or revert-only)"
 ```
 
 ---
