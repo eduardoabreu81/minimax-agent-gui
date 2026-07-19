@@ -412,7 +412,7 @@
     "customSize": "사용자 지정 크기",
     "sizeRange": "512-2048, 8의 배수",
     "batchCount": "배치 수",
-    "seed": "시드(선택)",
+    "seed": "시드",
     "seedPlaceholder": "무작위",
     "promptOptimizer": "프롬프트 최적화",
     "aigcWatermark": "AIGC 워터마크",
@@ -448,7 +448,12 @@
     "pickReference": "캐릭터 참조 이미지를 먼저 선택하세요.",
     "dropZone": "캐릭터 사진을 끌어 놓거나 찾아보기",
     "keepFace": "생성 전반에 동일한 얼굴 유지",
-    "savedTo": "workspace/generations/images/에 저장됨"
+    "savedTo": "workspace/generations/images/에 저장됨",
+    "reference": "캐릭터 참조",
+    "referenceHint": " · 얼굴 1개",
+    "imagesLabel": "이미지 수 · n",
+    "seedBlank": " · 비워두면 무작위",
+    "promptOptimizerHint": "생성 전에 프롬프트 강화"
   },
   "music": {
     "title": "음악 생성",
@@ -601,7 +606,10 @@
       "channels": "채널",
       "bitrate": "비트레이트",
       "size": "크기"
-    }
+    },
+    "coverStylePlaceholder": "Jazz, 매끄러운, 늦은 밤 라운지, 색소폰",
+    "tracksTitle": "트랙",
+    "tracksSavedTo": "workspace/generations/music/에 저장됨"
   },
   "common": {
     "statusSummary": "대기: {pending} · 진행: {progress} · 검토: {review} · 완료: {done}",

@@ -412,7 +412,7 @@
     "customSize": "Custom Size",
     "sizeRange": "512-2048, multiple of 8",
     "batchCount": "Batch Count",
-    "seed": "Seed (optional)",
+    "seed": "Seed",
     "seedPlaceholder": "Random",
     "promptOptimizer": "Prompt Optimizer",
     "aigcWatermark": "AIGC Watermark",
@@ -448,7 +448,12 @@
     "pickReference": "Pick a character reference image first.",
     "dropZone": "Drop a character photo or browse",
     "keepFace": "Keeps the same face across generations",
-    "savedTo": "Saved to workspace/generations/images/"
+    "savedTo": "Saved to workspace/generations/images/",
+    "reference": "Character reference",
+    "referenceHint": " · single face",
+    "imagesLabel": "Images · n",
+    "seedBlank": " · blank = random",
+    "promptOptimizerHint": "Enhance prompt before generating"
   },
   "music": {
     "title": "Music Generation",
@@ -601,7 +606,10 @@
       "channels": "Channels",
       "bitrate": "Bitrate",
       "size": "Size"
-    }
+    },
+    "coverStylePlaceholder": "Jazz, smooth, late night lounge, saxophone",
+    "tracksTitle": "Tracks",
+    "tracksSavedTo": "Saved to workspace/generations/music/"
   },
   "common": {
     "statusSummary": "Pending: {pending} · In Progress: {progress} · Review: {review} · Done: {done}",

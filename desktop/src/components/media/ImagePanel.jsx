@@ -14,24 +14,19 @@ import { apiFetch } from '../../lib/api.js'
 
 // ── Aspect ratios — match MiniMax `image-01` official resolutions (mockup L182-189)
 const ASPECT_RATIOS = [
-  { label: 'Square',      value: '1:1',  shapeW: 22, shapeH: 22, res: '1024 × 1024' },
-  { label: 'Widescreen',  value: '16:9', shapeW: 26, shapeH: 15, res: '1280 × 720'  },
-  { label: 'Vertical',    value: '9:16', shapeW: 15, shapeH: 26, res: '720 × 1280'  },
-  { label: 'Standard',    value: '4:3',  shapeW: 24, shapeH: 18, res: '1152 × 864'  },
-  { label: 'Portrait',    value: '3:4',  shapeW: 18, shapeH: 24, res: '864 × 1152'  },
-  { label: 'Photo',       value: '3:2',  shapeW: 26, shapeH: 17, res: '1248 × 832'  },
-  { label: 'Photo tall',  value: '2:3',  shapeW: 17, shapeH: 26, res: '832 × 1248'  },
-  { label: 'Cinematic',   value: '21:9', shapeW: 28, shapeH: 12, res: '1344 × 576'  },
+  { labelKey: 'image.aspectRatios.square',     value: '1:1',  shapeW: 22, shapeH: 22, res: '1024 × 1024' },
+  { labelKey: 'image.aspectRatios.widescreen', value: '16:9', shapeW: 26, shapeH: 15, res: '1280 × 720'  },
+  { labelKey: 'image.aspectRatios.vertical',   value: '9:16', shapeW: 15, shapeH: 26, res: '720 × 1280'  },
+  { labelKey: 'image.aspectRatios.standard',   value: '4:3',  shapeW: 24, shapeH: 18, res: '1152 × 864'  },
+  { labelKey: 'image.aspectRatios.portrait',   value: '3:4',  shapeW: 18, shapeH: 24, res: '864 × 1152'  },
+  { labelKey: 'image.aspectRatios.photo',      value: '3:2',  shapeW: 26, shapeH: 17, res: '1248 × 832'  },
+  { labelKey: 'image.aspectRatios.photoTall',  value: '2:3',  shapeW: 17, shapeH: 26, res: '832 × 1248'  },
+  { labelKey: 'image.aspectRatios.cinematic',  value: '21:9', shapeW: 28, shapeH: 12, res: '1344 × 576'  },
 ]
 
-// ── Sub-modes — both hit the same endpoint, model swaps automatically.
-// `image-01`      → T2I (text prompt only)
-// `image-01-live` → i2i via `subject_reference` (character/face photo)
-// `label` is the pill text. `title` shows up in the top-bar subtitle
-// with the active model name so the user always knows what's being called.
 const IMAGE_MODES = [
-  { id: 'text',    label: 'Text to image',  title: 'Text to image',  model: 'image-01'      },
-  { id: 'subject', label: 'Image to image', title: 'Image to image', model: 'image-01-live' },
+  { id: 'text',    labelKey: 'image.modes.text',    titleKey: 'image.modes.text',    model: 'image-01'      },
+  { id: 'subject', labelKey: 'image.modes.subject', titleKey: 'image.modes.subject', model: 'image-01-live' },
 ]
 
 const PROMPT_MAX = 1500   // image_generation prompt cap (mockup §6)
@@ -49,6 +44,7 @@ const labelStyle = {
 // Character / subject dropzone — same UX as VideoPanel's FrameDropzone but
 // tuned for a single image-01-live subject reference. Click or drag/drop.
 function SubjectDropzone({ file, onPick }) {
+  const { t } = useTranslation()
   const inputRef = useRef(null)
   const onDrop = (e) => {
     e.preventDefault()
@@ -88,18 +84,16 @@ function SubjectDropzone({ file, onPick }) {
             type="button"
             onClick={(e) => { e.stopPropagation(); onPick(null) }}
             style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--app-text-2)', display: 'flex' }}
-            aria-label="Remove reference image"
-          ><X size={12} /></button>
+            aria-label={t('image.removeReference')}
         </div>
       ) : (
         <>
           <Upload size={20} />
           <span style={{ fontSize: 11, textAlign: 'center', lineHeight: 1.4 }}>
-            Drop a character photo or <span style={{ color: 'hsl(var(--primary))' }}>browse</span>
-          </span>
-          <span style={{ fontSize: 10, color: 'var(--app-text-2)', opacity: 0.7 }}>
-            Keeps the same face across generations
-          </span>
+            {t('image.dropZone')}
+            <span style={{ fontSize: 10, color: 'var(--app-text-2)', opacity: 0.7 }}>
+              {t('image.keepFace')}
+            </span>
         </>
       )}
       <input
@@ -203,7 +197,7 @@ export default function ImagePanel() {
   const generate = async () => {
     if (!prompt.trim()) return
     if (mode === 'subject' && !referenceImage) {
-      setError('Pick a character reference image first.')
+      setError(t('image.pickReference'))
       return
     }
     setLoading(true)
@@ -304,7 +298,7 @@ export default function ImagePanel() {
   const galleryHeader = (
     <GalleryHeader
       title={t('image.recentGenerations')}
-      subtitle="Saved to workspace/generations/images/"
+      subtitle={t('image.savedTo')}
     />
   )
 
@@ -317,9 +311,8 @@ export default function ImagePanel() {
       {mode === 'subject' && (
         <div>
           <label style={labelStyle}>
-            Character reference
-            <span style={{ fontWeight: 400, color: 'var(--app-text-2)' }}> · single face</span>
-          </label>
+            {t('image.reference')}
+            <span style={{ fontWeight: 400, color: 'var(--app-text-2)' }}>{t('image.referenceHint')}</span>
           <SubjectDropzone file={referenceImage} onPick={setReferenceImage} />
         </div>
       )}
@@ -443,7 +436,7 @@ export default function ImagePanel() {
                   <span style={{ flex: 1, minWidth: 0 }}>
                     <span style={{ fontSize: 12.5, fontWeight: 600 }}>
                       {ar.value}
-                      <span style={{ fontWeight: 400, color: 'var(--app-text-2)' }}> · {ar.label}</span>
+                      <span style={{ fontWeight: 400, color: 'var(--app-text-2)' }}> · {ar.labelKey ? t(ar.labelKey) : ar.label}</span>
                     </span>
                     <div style={{ fontSize: 11, color: 'var(--app-text-2)', fontVariantNumeric: 'tabular-nums' }}>
                       {ar.res}
@@ -465,13 +458,13 @@ export default function ImagePanel() {
           Replaces the old 4-pill row with a compact − / value / + that
           clamps to the 1-9 range the image_generation endpoint accepts. */}
       <div>
-        <label style={labelStyle}>Images · n</label>
+        <label style={labelStyle}>{t('image.imagesLabel')}</label>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <button
             type="button"
             onClick={decN}
             disabled={batchCount <= N_MIN}
-            aria-label="Decrease n"
+            aria-label={t('image.decreaseCount')}
             style={{
               width: 32, height: 32,
               borderRadius: 8,
@@ -501,7 +494,7 @@ export default function ImagePanel() {
             type="button"
             onClick={incN}
             disabled={batchCount >= N_MAX}
-            aria-label="Increase n"
+            aria-label={t('image.increaseCount')}
             style={{
               width: 32, height: 32,
               borderRadius: 8,
@@ -524,15 +517,14 @@ export default function ImagePanel() {
           fills with a 9-digit value so the user can reproduce a result. */}
       <div>
         <label style={labelStyle}>
-          Seed
-          <span style={{ fontWeight: 400, color: 'var(--app-text-2)' }}> · blank = random</span>
-        </label>
+          {t('image.seed')}
+          <span style={{ fontWeight: 400, color: 'var(--app-text-2)' }}>{t('image.seedBlank')}</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <input
             type="number"
             value={seed}
             onChange={(e) => setSeed(e.target.value)}
-            placeholder="Random"
+            placeholder={t('image.seedPlaceholder')}
             style={{
               flex: 1, height: 32,
               background: 'var(--app-surface)',
@@ -549,8 +541,8 @@ export default function ImagePanel() {
           <button
             type="button"
             onClick={randomSeed}
-            title="Randomize seed"
-            aria-label="Randomize seed"
+            title={t('image.randomizeSeed')}
+            aria-label={t('image.randomizeSeed')}
             style={{
               width: 32, height: 32,
               background: 'var(--app-surface)',
@@ -580,7 +572,7 @@ export default function ImagePanel() {
             {t('image.promptOptimizer')}
           </div>
           <div style={{ fontSize: 11, color: 'var(--app-text-2)' }}>
-            Enhance prompt before generating
+            {t('image.promptOptimizerHint')}
           </div>
         </div>
         <button

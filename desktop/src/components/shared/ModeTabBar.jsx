@@ -1,25 +1,15 @@
 // desktop/src/components/shared/ModeTabBar.jsx
-//
+
+import { useTranslation } from 'react-i18next'
+
 // Pill-style tab bar rendered as a fixed top bar (between the panel header
 // and the two-column body) when a panel exposes multiple sub-modes that
 // rewire BOTH columns below. Used by Speech (4 modes) and Music (3 modes).
 //
-// Visual target — mockup lines 621-634 (Music) and 886-892 (Speech):
-//
-//   ┌──────────────────────────────────────────────────────┐
-//   │ Compose   Cover   Lyrics                             │
-//   └──────────────────────────────────────────────────────┘
-//
-// Mockup has compact text-only pills (no per-button icons, tight padding).
-// That keeps the bar narrow enough to sit alongside the panel title in
-// a 400px controls column without squeezing the title off-screen.
-//
-// • Container: surface bg, 0.5px border, 3px padding, 9px radius
-// • Active pill: primary bg, white text
-// • Inactive: transparent bg, muted-foreground text
-// • Label only (text), font 12px / 600
-
+// Modes expose `labelKey` for i18n; the bar resolves it via `useTranslation`.
+// Callers that want a literal label can pass `label` instead.
 export default function ModeTabBar({ modes, active, onChange }) {
+  const { t } = useTranslation()
   return (
     <div
       style={{
@@ -51,7 +41,7 @@ export default function ModeTabBar({ modes, active, onChange }) {
               whiteSpace: 'nowrap',
             }}
           >
-            {m.label}
+            {m.labelKey ? t(m.labelKey) : m.label}
           </button>
         )
       })}

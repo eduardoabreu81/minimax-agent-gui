@@ -11,9 +11,9 @@ import { apiFetch, assetUrl } from '../../lib/api.js'
 // Dropdown keeps the row compact — see how the chat model picker is
 // laid out in SettingsPanel.
 const MUSIC_MODES = [
-  { id: 'generate', label: 'Compose', icon: Music },
-  { id: 'cover',    label: 'Cover',   icon: Disc3 },
-  { id: 'lyrics',   label: 'Lyrics',  icon: NotebookPen },
+  { id: 'generate', labelKey: 'music.modeGenerate', icon: Music },
+  { id: 'cover',    labelKey: 'music.modeCover',   icon: Disc3 },
+  { id: 'lyrics',   labelKey: 'music.modeLyrics',  icon: NotebookPen },
 ]
 
 const MUSIC_MODELS = [
@@ -761,7 +761,7 @@ export default function MusicPanel() {
                 external URLs are passed through and the API validates. */}
             <div>
               <label className="text-[11.5px] font-semibold text-muted-foreground mb-[7px] flex items-center gap-1.5">
-                <Mic size={12} /> {t('music.coverReferenceAudio') || 'Reference Audio'}
+                <Mic size={12} /> {t('music.coverReferenceAudio')}
               </label>
               <div
                 onDragOver={(e) => e.preventDefault()}
@@ -830,7 +830,7 @@ export default function MusicPanel() {
               <textarea
                 value={coverPrompt}
                 onChange={(e) => setCoverPrompt(e.target.value.slice(0, 300))}
-                placeholder="Jazz, smooth, late night lounge, saxophone"
+                placeholder={t('music.coverStylePlaceholder')}
                 className="w-full bg-card border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:border-primary"
                 rows={2}
               />
@@ -1015,7 +1015,7 @@ export default function MusicPanel() {
                     onClick={useLyricsInCompose}
                     className="px-3 py-1.5 bg-primary hover:bg-primary-hover text-white rounded text-[11px] font-medium transition-colors flex items-center gap-1.5"
                   >
-                    <Sparkles size={12} /> {t('music.lyricsUseInCompose') || 'Use in Compose'}
+                    <Sparkles size={12} /> {t('music.lyricsUseInCompose')}
                   </button>
                 </div>
               </div>
@@ -1068,8 +1068,8 @@ export default function MusicPanel() {
       <div className="flex-1 min-w-0 flex flex-col">
         {/* Header bar — 52px, "Tracks" + "Saved to..." */}
         <div className="h-[52px] flex-none flex items-center justify-between px-6 border-b border-border bg-surface/30">
-          <span className="text-[13px] font-semibold">Tracks</span>
-          <span className="text-[11.5px] text-muted-foreground">Saved to workspace/generations/music/</span>
+          <span className="text-[13px] font-semibold">{t('music.tracksTitle')}</span>
+          <span className="text-[11.5px] text-muted-foreground">{t('music.tracksSavedTo')}</span>
         </div>
 
         {/* Body — scrollable. Order: error → current result → history */}
