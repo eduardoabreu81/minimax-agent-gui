@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { Search } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { useAgentActivity } from '../../context/AgentActivityContext'
 
 // Agent status surfaced in the titlebar chip. Bound to AgentActivityContext
@@ -7,12 +8,13 @@ import { useAgentActivity } from '../../context/AgentActivityContext'
 // this matches the mockup's "Agent running" semantics and reads identically
 // regardless of which panel is open.
 const STATUS = {
-  idle:    { hsl: '215 18% 68%',     label: 'Agent idle',    pulse: false },
-  running: { hsl: '142 71% 45%',     label: 'Agent running', pulse: true  },
-  error:   { hsl: '0 63% 51%',       label: 'Agent error',   pulse: false },
+  idle:    { hsl: '215 18% 68%',     labelKey: 'titlebar.status.idle',    pulse: false },
+  running: { hsl: '142 71% 45%',     labelKey: 'titlebar.status.running', pulse: true  },
+  error:   { hsl: '0 63% 51%',       labelKey: 'titlebar.status.error',   pulse: false },
 }
 
 export default function Titlebar({ onOpenPalette }) {
+  const { t } = useTranslation()
   const { thinking, steps, toolResults } = useAgentActivity()
 
   // Derived status: thinking or any running step → running; recent failed
@@ -70,7 +72,7 @@ export default function Titlebar({ onOpenPalette }) {
           className="flex items-center gap-2.5 w-[min(440px,46%)] min-w-[280px] h-7 px-3 rounded-lg border border-border bg-background/60 text-muted-foreground text-[12.5px] hover:border-primary/50 transition-colors"
         >
           <Search size={14} aria-hidden="true" />
-          <span className="flex-1 text-left truncate">Search or run a command</span>
+          <span className="flex-1 text-left truncate">{t('titlebar.search')}</span>
           <span className="flex items-center gap-0.5 text-[10.5px] font-semibold">
             <kbd className="px-[5px] py-px rounded bg-secondary border border-border">Ctrl</kbd>
             <kbd className="px-[5px] py-px rounded bg-secondary border border-border">K</kbd>
@@ -89,7 +91,7 @@ export default function Titlebar({ onOpenPalette }) {
             style={{ backgroundColor: `hsl(${s.hsl})` }}
           />
           <span className="text-[11.5px] font-medium" style={{ color: `hsl(${s.hsl})` }}>
-            {s.label}
+            {t(s.labelKey)}
           </span>
         </div>
 
@@ -98,8 +100,8 @@ export default function Titlebar({ onOpenPalette }) {
         <div className="flex items-center h-11">
           <button
             onClick={() => winAction('min')}
-            title="Minimize"
-            aria-label="Minimize"
+            title={t('titlebar.minimize')}
+            aria-label={t('titlebar.minimize')}
             className="w-[46px] h-11 flex items-center justify-center text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
           >
             {/* Mockup L74: horizontal bar inside 12×12 viewBox */}
@@ -109,8 +111,8 @@ export default function Titlebar({ onOpenPalette }) {
           </button>
           <button
             onClick={() => winAction('max')}
-            title="Maximize"
-            aria-label="Maximize"
+            title={t('titlebar.maximize')}
+            aria-label={t('titlebar.maximize')}
             className="w-[46px] h-11 flex items-center justify-center text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
           >
             {/* Mockup L77: outlined square inside 11×11 viewBox */}
@@ -120,8 +122,8 @@ export default function Titlebar({ onOpenPalette }) {
           </button>
           <button
             onClick={() => winAction('close')}
-            title="Close"
-            aria-label="Close"
+            title={t('titlebar.close')}
+            aria-label={t('titlebar.close')}
             className="w-[46px] h-11 flex items-center justify-center text-muted-foreground transition-colors hover:bg-[#e81123] hover:text-white"
           >
             {/* Mockup L80: X strokes inside 12×12 viewBox */}

@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Check, Copy } from 'lucide-react'
 
 /**
@@ -8,14 +9,11 @@ import { Check, Copy } from 'lucide-react'
  * Used on chat/code assistant messages (and can be used on user
  * messages too) so the user can grab the response as Markdown
  * source and paste it into a doc, chat, or other tool.
- *
- * Props:
- *   - text: the text to copy
- *   - label: optional accessible label (defaults to "Copy message")
- *   - className: extra Tailwind classes to merge
  */
-export default function CopyButton({ text, label = 'Copy message', className = '' }) {
+export default function CopyButton({ text, label, className = '' }) {
+  const { t } = useTranslation()
   const [copied, setCopied] = useState(false)
+  const effectiveLabel = label || t('common.copyMessage')
 
   const handleCopy = useCallback(async () => {
     if (!text) return
@@ -31,6 +29,7 @@ export default function CopyButton({ text, label = 'Copy message', className = '
         ta.style.opacity = '0'
         document.body.appendChild(ta)
         ta.select()
+        ta.setSelectionRange(0, ta.value.length)
         document.execCommand('copy')
         document.body.removeChild(ta)
       }
@@ -47,8 +46,8 @@ export default function CopyButton({ text, label = 'Copy message', className = '
     <button
       type="button"
       onClick={handleCopy}
-      title={copied ? 'Copied!' : label}
-      aria-label={label}
+      title={copied ? t('common.copied') : effectiveLabel}
+      aria-label={effectiveLabel}
       className={`flex items-center gap-1 px-1.5 py-0.5 rounded
                   text-muted-foreground hover:text-foreground hover:bg-surface
                   transition-colors
@@ -57,7 +56,7 @@ export default function CopyButton({ text, label = 'Copy message', className = '
       {copied ? (
         <>
           <Check size={11} className="text-success" />
-          <span className="text-[10px] font-medium text-success">Copied</span>
+          <span className="text-[10px] font-medium text-success">{t('common.copied')}</span>
         </>
       ) : (
         <Copy size={11} />

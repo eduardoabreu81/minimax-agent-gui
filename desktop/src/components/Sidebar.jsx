@@ -73,7 +73,7 @@ export default function Sidebar({ activeTab, onTabChange }) {
     { id: 'image', label: t('nav.image'), icon: Image },
     { id: 'video', label: t('nav.video'), icon: Video },
     { id: 'music', label: t('nav.music'), icon: Music },
-    { id: 'tts', label: 'Speech', icon: Volume2 },
+    { id: 'tts', label: t('nav.tts'), icon: Volume2 },
     { id: 'tasks', label: t('nav.tasks'), icon: Layout },
   ]
 

@@ -166,7 +166,7 @@ export function Composer({
           const body = await res.json();
           if (body.refused) {
             // Hard limit — refuse the send and surface the reason.
-            alert(`Context too large to send: ${body.refusal_reason}`);
+            alert(t('chat.contextTooLarge', { reason: body.refusal_reason }));
             return;
           }
           attached = buildAttachedContext(body);
@@ -309,7 +309,7 @@ export function Composer({
             <button
               onClick={() => setAttachment(null)}
               className="text-primary hover:text-primary/70"
-              aria-label="Remove attachment"
+              aria-label={t('common.removeAttachment')}
             >
               <X size={12} />
             </button>
@@ -348,7 +348,7 @@ export function Composer({
               variant="ghost"
               size="icon"
               className="h-8 w-8"
-              aria-label="Attach file"
+              aria-label={t('common.attachFile')}
               disabled={disabled}
               onClick={() => fileInputRef.current?.click()}
               data-testid="composer-paperclip"
@@ -386,7 +386,7 @@ export function Composer({
                   // popover is open.
                   handleKeyDown(e);
                 }}
-                placeholder={isBusy ? `Waiting for ${expertLabel}…` : t("chat.placeholder")}
+                placeholder={isBusy ? t('chat.busyPlaceholder', { expert: expertLabel }) : t('chat.placeholder')}
                 disabled={disabled}
                 rows={2}
                 data-testid="composer-textarea"
@@ -408,7 +408,7 @@ export function Composer({
               className="h-8 w-8"
               disabled={sendDisabled}
               onClick={submit}
-              aria-label="Send"
+              aria-label={t('common.send')}
               data-testid="composer-send"
             >
               {isBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
@@ -422,7 +422,7 @@ export function Composer({
           </p>
         )}
         <p className="mt-2 text-center text-[10px] text-muted-foreground">
-          Enter to send · Shift+Enter for new line · / for skills · @ for context
+          {t('chat.keyboardHint')}
         </p>
       </div>
     </div>

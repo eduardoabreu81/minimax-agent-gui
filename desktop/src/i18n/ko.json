@@ -83,18 +83,56 @@
     "emptySubtitle": "Powered by MiniMax-M3",
     "thinking": "생각 중...",
     "newChat": "새 채팅",
-    "clearHistory": "기록 지우기"
+    "clearHistory": "기록 지우기",
+    "renameConversation": "대화 이름 변경",
+    "deleteConversation": "대화 삭제",
+    "noConversations": "이전 대화가 없습니다",
+    "messageCount": "메시지 {count}개",
+    "busyPlaceholder": "{expert} 응답 대기 중…",
+    "contextTooLarge": "컨텍스트가 너무 큽니다: {reason}",
+    "keyboardHint": "Enter: 전송 · Shift+Enter: 새 줄 · /: 스킬 · @: 컨텍스트",
+    "permissions": {
+      "title": "도구 권한 필요",
+      "tool": "도구",
+      "category": "분류",
+      "risk": "위험도",
+      "reason": "사유",
+      "approve": "승인",
+      "reject": "거부"
+    }
   },
   "palette": {
     "placeholder": "무엇이든 검색...",
     "noResults": "결과를 찾을 수 없음",
     "navigate": "탐색",
-    "actions": "작업",
+    "actions": {
+      "newChat": "새 채팅 시작",
+      "clearChat": "채팅 기록 지우기",
+      "toggleTheme": "라이트/다크 테마 전환",
+      "openTaskBoard": "작업 보드 열기",
+      "openQuickSettings": "빠른 설정 열기"
+    },
     "git": "Git",
-    "settings": "설정",
+    "settings": {
+      "api": "설정: API 키",
+      "model": "설정: 모델 선택",
+      "theme": "설정: 외관"
+    },
     "files": "파일",
     "recentCommits": "최근 커밋",
-    "results": "결과 {count}개"
+    "results": "결과 {count}개",
+    "nav": {
+      "chat": "채팅",
+      "tts": "텍스트 음성 변환",
+      "image": "이미지 생성",
+      "music": "음악 생성",
+      "video": "비디오 생성",
+      "code": "코딩 워크스페이스",
+      "tasks": "작업 보드"
+    },
+    "goTo": "{label}(으)로 이동",
+    "currentBranch": "현재 브랜치: {branch}",
+    "noResultsFor": "\"{query}\"에 대한 결과가 없습니다"
   },
   "coding": {
     "title": "코딩 워크스페이스",
@@ -104,8 +142,8 @@
     "terminal": "터미널",
     "git": "Git",
     "selectFile": "탐색기에서 파일 선택",
-    "selectFileHint": "또는 Ctrl+K 로 명령 팔레트 열기",
-    "changes": "변경사항",
+    "selectFileHint": "탐색기에서 파일 선택",
+    "changes": "변경 사항",
     "history": "기록",
     "branches": "브랜치",
     "commit": "커밋",
@@ -116,14 +154,40 @@
     "cancel": "취소",
     "workingTreeClean": "작업 트리가 깨끗함",
     "noCommits": "커밋이 없습니다",
-    "workspace": {
-      "openFolder": "폴더 열기…",
-      "pickFolder": "에이전트가 읽고 쓸 프로젝트 폴더 선택",
-      "changeFolder": "폴더 변경…",
-      "opening": "여는 중…",
-      "recent": "최근 사용",
-      "removeFromRecent": "최근 사용에서 제거"
-    }
+    "workspace": "워크스페이스",
+    "planItems": {
+      "understand": "요청 이해",
+      "inspect": "관련 파일 검토",
+      "implement": "변경 사항 구현",
+      "validate": "검증 실행",
+      "summarize": "결과 요약",
+      "reviewCurrentFile": "현재 파일 검토: {file}",
+      "checkGit": "편집 전 현재 git 변경 사항 확인"
+    },
+    "modeLabel": "모드: {mode} — 클릭하여 전환",
+    "modes": {
+      "plan": "계획",
+      "agent": "에이전트",
+      "yolo": "요로(YOLO)"
+    },
+    "noResults": "결과 없음",
+    "noPreviousChats": "이전 코드 채팅 없음",
+    "unknownError": "알 수 없는 오류",
+    "previewUnsupported": "이 파일 형식은 아직 미리보기를 지원하지 않습니다.",
+    "previewHint": "다운로드하거나 워크스페이스 폴더에서 열 수 있습니다.",
+    "registerThinking": "에이전트가 생각 중",
+    "registerPermission": "도구 권한 요청 대기 중",
+    "registerUnsaved": "저장되지 않은 파일 변경",
+    "registerPlanDraft": "승인되지 않은 계획 초안",
+    "openInBrowser": "브라우저에서 열기",
+    "imagePreview": "이미지 미리보기",
+    "audioPreview": "오디오 미리보기",
+    "videoPreview": "비디오 미리보기",
+    "askAboutCode": "코드 관련 질문을 해주세요",
+    "askAboutCodeHint": "현재 열린 파일을 보고 있습니다",
+    "goToRoot": "워크스페이스 루트로 이동",
+    "goUp": "상위로 이동",
+    "viewGitChanges": "워크스페이스 Git 변경 보기"
   },
   "tasks": {
     "title": "작업 보드",
@@ -307,7 +371,8 @@
     "skip": "투어 건너뛰기",
     "next": "다음",
     "back": "뒤로",
-    "getStarted": "시작하기"
+    "getStarted": "시작하기",
+    "wizardClose": "닫기"
   },
   "session": {
     "active": "세션 진행 중",
@@ -358,7 +423,29 @@
     "recentGenerations": "최근 생성",
     "noGenerated": "아직 생성된 이미지가 없습니다",
     "pleaseUpload": "참조 이미지를 업로드하거나 URL을 제공하세요",
-    "failed": "이미지 생성 실패"
+    "failed": "이미지 생성 실패",
+    "modes": {
+      "text": "텍스트 → 이미지",
+      "subject": "이미지 → 이미지"
+    },
+    "aspectRatios": {
+      "square": "정사각형",
+      "widescreen": "와이드스크린",
+      "vertical": "세로",
+      "standard": "표준",
+      "portrait": "세로형",
+      "photo": "사진",
+      "photoTall": "사진(세로)",
+      "cinematic": "시네마틱"
+    },
+    "randomizeSeed": "시드 무작위화",
+    "increaseCount": "개수 늘리기",
+    "decreaseCount": "개수 줄이기",
+    "removeReference": "참조 이미지 제거",
+    "pickReference": "캐릭터 참조 이미지를 먼저 선택하세요.",
+    "dropZone": "캐릭터 사진을 끌어 놓거나 찾아보기",
+    "keepFace": "생성 전반에 동일한 얼굴 유지",
+    "savedTo": "workspace/generations/images/에 저장됨"
   },
   "music": {
     "title": "음악 생성",
@@ -514,7 +601,17 @@
     }
   },
   "common": {
-    "statusSummary": "대기: {pending} · 진행: {progress} · 검토: {review} · 완료: {done}"
+    "statusSummary": "대기: {pending} · 진행: {progress} · 검토: {review} · 완료: {done}",
+    "copyMessage": "메시지 복사",
+    "copy": "복사",
+    "copied": "복사됨!",
+    "retry": "다시 시도",
+    "cancel": "취소",
+    "remove": "제거",
+    "refresh": "새로고침",
+    "download": "다운로드",
+    "delete": "삭제",
+    "rename": "이름 변경"
   },
   "agentContext": {
     "roles": {
@@ -634,5 +731,300 @@
     "compactNow": "지금 압축",
     "compacting": "압축 중…",
     "dismiss": "닫기"
+  },
+  "backend": {
+    "startingUp": "시작하는 중…",
+    "failedToStart": "백엔드를 시작하지 못했습니다",
+    "connecting": "로컬 엔진에 연결 중",
+    "attempt": "{attempt}번째 시도",
+    "retry": "다시 시도"
+  },
+  "titlebar": {
+    "search": "검색 또는 명령 실행",
+    "minimize": "최소화",
+    "maximize": "최대화",
+    "close": "닫기",
+    "status": {
+      "idle": "에이전트 대기 중",
+      "running": "에이전트 실행 중",
+      "error": "에이전트 오류"
+    }
+  },
+  "thinking": {
+    "label": "생각 중",
+    "streaming": "생각 중…"
+  },
+  "markdown": {
+    "copyToClipboard": "클립보드에 복사"
+  },
+  "quota": {
+    "available": "사용 가능",
+    "limitReached": "한도 도달",
+    "noQuotaData": "사용량 데이터 없음",
+    "refresh": "새로고침",
+    "tokenPlan": "Token Plan",
+    "tokenPlanUsage": "Token Plan 사용량",
+    "textGeneration": "텍스트 생성",
+    "dailyQuota": "일일 한도",
+    "fiveHourLimit": "5시간 한도",
+    "weekly": "주간",
+    "resetsIn": "다음 리셋까지",
+    "contextAndPlan": "컨텍스트 창과 플랜",
+    "contextWindow": "컨텍스트 창",
+    "planUsage": "플랜 사용량",
+    "connectingToPlan": "Token Plan에 연결 중…",
+    "planUnavailable": "플랜 데이터를 가져올 수 없습니다",
+    "weeklyAllModels": "주간 · 전체 모델",
+    "hideBreakdown": "세부 내역 숨기기",
+    "showBreakdown": "세부 내역 보기",
+    "tokens": "토큰",
+    "selectChatModel": "채팅 모델 선택",
+    "thinkingOn": "생각: 켬",
+    "thinkingOff": "생각: 끔",
+    "thinkingToggleOn": "생각 모드 켜기",
+    "thinkingToggleOff": "생각 모드 끄기",
+    "agentIdle": "에이전트 대기",
+    "agentRunning": "에이전트 실행 중",
+    "agentProcessing": "에이전트 처리 중",
+    "breakdown": {
+      "messages": "메시지",
+      "skills": "스킬",
+      "memoryFiles": "메모리 파일",
+      "customAgents": "커스텀 에이전트",
+      "systemPrompt": "시스템 프롬프트",
+      "mcpTools": "MCP 도구"
+    },
+    "models": {
+      "m3": "MiniMax M3",
+      "m27": "MiniMax M2.7",
+      "m27Highspeed": "MiniMax M2.7 Highspeed",
+      "general": "텍스트(M 시리즈)",
+      "image": "Image-01",
+      "speech": "Speech 2.8",
+      "music": "Music-2.6",
+      "video": "Hailuo Video"
+    },
+    "modelDesc": {
+      "m3": "1M 컨텍스트 · 에이전트 · 멀티모달",
+      "m27": "218k 컨텍스트 · 균형 잡힌",
+      "m27Highspeed": "M2.7 · 더 빠른 응답",
+      "general": "채팅",
+      "image": "이미지 생성",
+      "speech": "TTS",
+      "music": "음악 생성",
+      "video": "비디오 생성"
+    },
+    "regions": {
+      "global": "글로벌 · api.minimax.io",
+      "china": "중국 · api.minimaxi.com"
+    },
+    "regionDesc": {
+      "global": "가장 가까운 지역으로 요청 라우팅",
+      "china": "중국 본토 서버 엔드포인트"
+    }
+  },
+  "skills": {
+    "sources": "스킬 출처",
+    "source": "출처",
+    "rescan": "다시 검색",
+    "rescanned": "{count}개의 스킬을 다시 검색했습니다.",
+    "addPath": "경로 추가",
+    "search": "스킬 검색…",
+    "pathPlaceholder": "~/my-team-skills 또는 C:/path/to/skills",
+    "importFromGithub": "GitHub에서 가져오기",
+    "confirmDelete": "스킬 \"{name}\"을(를) 삭제할까요? 스킬 디렉터리가 제거됩니다.",
+    "toastDeleted": "스킬 \"{name}\"이(가) 삭제되었습니다.",
+    "toastImported": "스킬 \"{name}\"이(를) 사용자 디렉터리로 가져왔습니다.",
+    "readOnly": "읽기 전용 출처",
+    "removePath": "이 사용자 경로를 제거",
+    "createDescription": "스킬이 제공하는 동작 설명을 입력하세요.",
+    "license": "라이선스",
+    "compatibility": "호환성"
+  },
+  "skillSources": {
+    "builtin": "기본 제공",
+    "user": "사용자",
+    "extra": "추가",
+    "claude": "Claude",
+    "codex": "Codex",
+    "gemini": "Gemini",
+    "generic": "일반",
+    "desc": "기본 제공 + 사용자 + 추가 + 외부 브랜드 디렉터리(Claude / Codex / Gemini). 충돌 시 사용자 디렉터리가 우선합니다."
+  },
+  "workspaceSidebar": {
+    "tabs": {
+      "plan": "계획",
+      "todos": "할 일",
+      "tasks": "작업",
+      "agents": "에이전트"
+    },
+    "open": "사이드바 열기",
+    "close": "사이드바 닫기",
+    "plan": {
+      "noActivePlan": "활성 계획 없음",
+      "noActivePlanDesc": "에이전트가 변경하기 전에 계획을 만드세요.",
+      "howItWorks": "작동 방식",
+      "step1": "1. 모드 버튼을 계획으로 전환",
+      "step2": "2. 코드 채팅에서 변경 사항 설명",
+      "step3": "3. 초안 계획을 검토·편집·승인",
+      "approved": "승인된 계획",
+      "draft": "계획 초안",
+      "request": "요청",
+      "attached": "첨부:",
+      "markPending": "대기 중으로 표시",
+      "markDone": "완료로 표시",
+      "clickToEdit": "클릭하여 편집",
+      "removeStep": "단계 제거",
+      "newStepPlaceholder": "새 단계",
+      "addStep": "단계 추가",
+      "approveAndRun": "승인 후 실행",
+      "clear": "계획 지우기",
+      "copy": "계획 복사",
+      "copied": "복사됨",
+      "sentToAgent": "이 계획이 에이전트에게 전송되었습니다."
+    },
+    "todosNoActive": "활성 작업 없음",
+    "tasksEmpty": "에이전트가 작업 중일 때 여기에 표시됩니다."
+  },
+  "terminal": {
+    "connecting": "연결 중…",
+    "disconnected": "연결 해제됨",
+    "connect": "연결",
+    "restart": "재시작",
+    "overlayDisconnected": "터미널 연결 해제됨"
+  },
+  "agentChat": {
+    "codeChat": "코드 채팅",
+    "newCodeChat": "새 코드 채팅",
+    "noPrevious": "이전 코드 채팅 없음",
+    "editor": "에디터",
+    "attachFile": "파일 또는 이미지 첨부",
+    "enterToSend": "Enter로 전송 · Shift+Enter로 새 줄",
+    "selectFile": "편집할 파일 선택",
+    "commit": "커밋",
+    "commitMessagePlaceholder": "커밋 메시지...",
+    "workingTreeClean": "작업 트리가 깨끗함"
+  },
+  "liveTodo": {
+    "empty": "작업이 없습니다"
+  },
+  "contextRef": {
+    "types": {
+      "file": "파일",
+      "folder": "폴더",
+      "diff": "차이(스테이지 안 됨)",
+      "staged": "차이(스테이지 됨)",
+      "git": "최근 커밋",
+      "url": "URL"
+    },
+    "desc": {
+      "file": "파일 내용 삽입",
+      "folder": "디렉터리 트리 삽입",
+      "diff": "git diff(작업 트리)",
+      "staged": "git diff --staged",
+      "git": "최근 N개 커밋(1~10)",
+      "url": "웹 페이지 내용 가져오기"
+    },
+    "groups": {
+      "folders": "폴더",
+      "files": "파일"
+    },
+    "emptyNoQuery": "파일 검색어를 입력하세요…",
+    "emptyNoMatches": "\"{query}\"와 일치하는 항목이 없습니다",
+    "pending": "대기 중…",
+    "expanding": "확장 중…",
+    "error": "오류",
+    "bytes": "{count}바이트",
+    "keyboardHint": "↑↓ 이동 · ↵ 선택 · Esc 닫기"
+  },
+  "speech": {
+    "textRequired": "텍스트를 입력하세요.",
+    "textTooLong": "텍스트가 10,000자를 초과했습니다.",
+    "cloneSampleRequired": "먼저 샘플을 업로드하세요.",
+    "cloneVoiceIdLength": "Voice ID는 8~256자여야 합니다.",
+    "cloneVoiceIdStart": "Voice ID는 문자로 시작해야 합니다.",
+    "designDescRequired": "보이스 설명을 입력하세요.",
+    "designPreviewRequired": "미리듣기 텍스트를 입력하세요.",
+    "designPreviewTooLong": "미리듣기 텍스트는 500자 이하여야 합니다.",
+    "synthesizePlaceholder": "텍스트 입력… (최대 10,000자)",
+    "cloneVoiceIdPlaceholder": "my-narrator-01",
+    "clonePromptPlaceholder": "이 보이스는 자연스럽고 편안합니다.",
+    "designPromptPlaceholder": "예: 차분한 영국 억양의 따뜻한 중년 남성 내레이터.",
+    "designPreviewPlaceholder": "옛날 옛적에…",
+    "voicesSearchPlaceholder": "보이스 검색…",
+    "voicesReload": "보이스 새로 고침",
+    "voicesUseInSynthesize": "합성에 사용",
+    "voicesDelete": "보이스 삭제",
+    "voicesEmptyLoading": "불러오는 중…",
+    "voicesEmptyNone": "이 언어에는 보이스가 없습니다",
+    "modes": {
+      "synthesize": "합성",
+      "clone": "복제",
+      "design": "디자인",
+      "voices": "보이스"
+    },
+    "emotions": {
+      "happy": "기쁨",
+      "sad": "슬픔",
+      "angry": "분노",
+      "neutral": "중립",
+      "auto": "자동"
+    },
+    "effects": {
+      "spaciousEcho": "넓은 에코",
+      "auditorium": "강당",
+      "loFiPhone": "Lo-fi 전화",
+      "robotic": "로봇"
+    },
+    "traits": {
+      "warm": "따뜻함",
+      "calm": "차분함",
+      "energetic": "활기",
+      "serious": "진지함",
+      "friendly": "친근함"
+    },
+    "languages": {
+      "auto": "자동",
+      "english": "영어",
+      "chinese": "중국어",
+      "japanese": "일본어",
+      "korean": "한국어"
+    }
+  },
+  "video": {
+    "modes": {
+      "text": "텍스트",
+      "image": "이미지",
+      "frames": "프레임",
+      "subject": "피사체"
+    },
+    "failed": "비디오 생성 실패",
+    "searchCommands": "명령 검색…",
+    "promptPlaceholder": "비 내리는 네온 거리 위로 드론 샷 [Push in], 영화 같은 분위기.",
+    "cameraCommandsLabel": "카메라 명령 · 프롬프트에 삽입",
+    "cameraCommandsPlaceholder": "카메라 명령 선택…",
+    "cameraCommandsNoMatches": "일치 항목 없음",
+    "frameDrop": "이미지를 끌어 놓거나 찾아보기"
+  },
+  "commonActions": {
+    "deleteTask": "작업을 삭제할까요?"
+  },
+  "settingsActions": {
+    "systemMode": "시스템",
+    "skillsSection": "스킬 출처",
+    "audioBitrateWarn": "낮은 비트레이트({kbps} kbps)를 선택했습니다. 음질이 압축되어 들릴 수 있으므로 음악에는 128 kbps 이상을 권장합니다.",
+    "audioHighBitrateHint": "선택한 프리셋: {khz} kHz · {kbps} kbps · {format}. 비트레이트가 높을수록 파일은 커지지만 더 많은 디테일을 유지합니다."
+  },
+  "quickSettings": {
+    "clickToToggle": "클릭하여 전환"
+  },
+  "agentContextUi": {
+    "loading": "불러오는 중…"
+  },
+  "wizard": {
+    "failedToCreate": "파일 생성 실패"
+  },
+  "help": {
+    "noContent": "콘텐츠가 없습니다."
   }
 }

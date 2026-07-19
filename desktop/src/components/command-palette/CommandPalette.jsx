@@ -8,27 +8,27 @@ import {
 import { apiFetch, apiWebSocketUrl } from '../../lib/api.js'
 
 const NAV_ITEMS = [
-  { id: 'chat', label: 'Chat', icon: MessageSquare, keywords: 'chat conversation messages agent' },
-  { id: 'tts', label: 'Text to Speech', icon: Volume2, keywords: 'tts voice audio speech' },
-  { id: 'image', label: 'Image Generation', icon: Image, keywords: 'image picture photo generate' },
-  { id: 'music', label: 'Music Generation', icon: Music, keywords: 'music song audio generate' },
-  { id: 'video', label: 'Video Generation', icon: Video, keywords: 'video hailuo generate' },
-  { id: 'code', label: 'Coding Workspace', icon: Code2, keywords: 'code editor files terminal git' },
-  { id: 'tasks', label: 'Task Board', icon: Layout, keywords: 'tasks kanban board project management' },
+  { id: 'chat', labelKey: 'palette.nav.chat', icon: MessageSquare, keywords: 'chat conversation messages agent' },
+  { id: 'tts', labelKey: 'palette.nav.tts', icon: Volume2, keywords: 'tts voice audio speech' },
+  { id: 'image', labelKey: 'palette.nav.image', icon: Image, keywords: 'image picture photo generate' },
+  { id: 'music', labelKey: 'palette.nav.music', icon: Music, keywords: 'music song audio generate' },
+  { id: 'video', labelKey: 'palette.nav.video', icon: Video, keywords: 'video hailuo generate' },
+  { id: 'code', labelKey: 'palette.nav.code', icon: Code2, keywords: 'code editor files terminal git' },
+  { id: 'tasks', labelKey: 'palette.nav.tasks', icon: Layout, keywords: 'tasks kanban board project management' },
 ]
 
 const ACTION_ITEMS = [
-  { id: 'new-chat', label: 'Start New Chat', icon: Sparkles, action: 'new-chat', keywords: 'new chat conversation start' },
-  { id: 'clear-chat', label: 'Clear Chat History', icon: X, action: 'clear-chat', keywords: 'clear reset chat history' },
-  { id: 'toggle-theme', label: 'Toggle Light/Dark Theme', icon: Sun, action: 'toggle-theme', keywords: 'theme dark light mode' },
-  { id: 'open-task-board', label: 'Open Task Board', icon: Layout, action: 'open-task-board', keywords: 'task kanban board project management' },
-  { id: 'open-settings', label: 'Open Quick Settings', icon: Settings, action: 'open-settings', keywords: 'settings configuration preferences' },
+  { id: 'new-chat', labelKey: 'palette.actions.newChat', icon: Sparkles, action: 'new-chat', keywords: 'new chat conversation start' },
+  { id: 'clear-chat', labelKey: 'palette.actions.clearChat', icon: X, action: 'clear-chat', keywords: 'clear reset chat history' },
+  { id: 'toggle-theme', labelKey: 'palette.actions.toggleTheme', icon: Sun, action: 'toggle-theme', keywords: 'theme dark light mode' },
+  { id: 'open-task-board', labelKey: 'palette.actions.openTaskBoard', icon: Layout, action: 'open-task-board', keywords: 'task kanban board project management' },
+  { id: 'open-settings', labelKey: 'palette.actions.openQuickSettings', icon: Settings, action: 'open-settings', keywords: 'settings configuration preferences' },
 ]
 
 const SETTINGS_ITEMS = [
-  { id: 'settings-api', label: 'Settings: API Keys', icon: Settings, action: 'settings-api', keywords: 'settings api key minimax token' },
-  { id: 'settings-model', label: 'Settings: Model Selection', icon: Settings, action: 'settings-model', keywords: 'settings model m2.7 hailuo' },
-  { id: 'settings-theme', label: 'Settings: Appearance', icon: Settings, action: 'settings-theme', keywords: 'settings theme appearance color' },
+  { id: 'settings-api', labelKey: 'palette.settings.api', icon: Settings, action: 'settings-api', keywords: 'settings api key minimax token' },
+  { id: 'settings-model', labelKey: 'palette.settings.model', icon: Settings, action: 'settings-model', keywords: 'settings model m2.7 hailuo' },
+  { id: 'settings-theme', labelKey: 'palette.settings.theme', icon: Settings, action: 'settings-theme', keywords: 'settings theme appearance color' },
 ]
 
 function fuzzyMatch(text, query) {
@@ -83,7 +83,7 @@ export default function CommandPalette({ isOpen, onClose, onNavigate, onAction, 
         group: 'Navigate',
         groupOrder: 1,
         id: `nav-${item.id}`,
-        label: `Go to ${item.label}`,
+        label: t('palette.goTo', { label: t(item.labelKey) }),
         icon: item.icon,
         keywords: `${item.label} ${item.keywords}`,
         action: () => onNavigate(item.id),
@@ -96,7 +96,7 @@ export default function CommandPalette({ isOpen, onClose, onNavigate, onAction, 
         group: 'Actions',
         groupOrder: 2,
         id: item.id,
-        label: item.label,
+        label: t(item.labelKey),
         icon: item.icon,
         keywords: item.keywords,
         action: () => {
@@ -112,7 +112,7 @@ export default function CommandPalette({ isOpen, onClose, onNavigate, onAction, 
         group: 'Settings',
         groupOrder: 4,
         id: item.id,
-        label: item.label,
+        label: t(item.labelKey),
         icon: item.icon,
         keywords: item.keywords,
         action: () => onAction(item.action),
@@ -143,7 +143,7 @@ export default function CommandPalette({ isOpen, onClose, onNavigate, onAction, 
         group: 'Git',
         groupOrder: 3,
         id: 'git-current-branch',
-        label: `Current Branch: ${gitStatus.branch}`,
+        label: t('palette.currentBranch', { branch: gitStatus.branch }),
         icon: GitBranch,
         keywords: `branch ${gitStatus.branch}`,
         action: () => onNavigate('code'),
@@ -262,7 +262,7 @@ export default function CommandPalette({ isOpen, onClose, onNavigate, onAction, 
         <div ref={listRef} className="flex-1 overflow-y-auto py-2">
           {flatItems.length === 0 && (
             <div className="px-4 py-8 text-center text-muted-foreground text-sm">
-              No results found for "{query}"
+              {t('palette.noResultsFor', { query })}
             </div>
           )}
 

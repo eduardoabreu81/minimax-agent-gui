@@ -1,4 +1,5 @@
 import { Brain, Loader2 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 /**
  * ThinkingBlock — renders a model's reasoning above the assistant's response.
@@ -6,15 +7,9 @@ import { Brain, Loader2 } from 'lucide-react'
  * Used in both ChatPanel and CodingPanel. The block is always visible
  * (per user preference) and styled to be visually distinct from the
  * final response without distracting from it.
- *
- * Props:
- *   - thinking: the reasoning text (string or null/undefined)
- *   - compact: smaller padding for tight spaces (e.g. CodingPanel)
- *   - streaming: true while chunks are still arriving; shows a
- *                spinner instead of a static Brain icon
- *   - className: extra Tailwind classes to merge
  */
 export default function ThinkingBlock({ thinking, compact = false, streaming = false, className = '' }) {
+  const { t } = useTranslation()
   if (!thinking) return null
 
   const padding = compact ? 'px-2 py-1.5' : 'px-3 py-2'
@@ -30,7 +25,7 @@ export default function ThinkingBlock({ thinking, compact = false, streaming = f
     >
       <div className="flex items-center gap-1.5 mb-1 text-primary/80 font-semibold">
         {streaming ? <Loader2 size={11} className="animate-spin" /> : <Brain size={11} />}
-        <span>Thinking{streaming ? '...' : ''}</span>
+        <span>{streaming ? t('thinking.streaming') : t('thinking.label')}</span>
       </div>
       <div className="leading-relaxed">{thinking}</div>
     </div>

@@ -144,7 +144,7 @@ describe("Composer — context-refs integration", () => {
     await waitFor(() => {
       expect(mockAlert).toHaveBeenCalled();
     });
-    expect(mockAlert.mock.calls[0][0]).toContain("Context too large to send");
+    expect(mockAlert.mock.calls[0][0]).toContain('chat.contextTooLarge');
   });
 
   it("disables send when expand reports refused (after a debounced call)", async () => {
@@ -427,7 +427,7 @@ describe("Composer — attachment (paperclip)", () => {
     await waitFor(() => {
       expect(screen.getByTestId("composer-attachment-chip")).toBeInTheDocument();
     });
-    await u.click(screen.getByLabelText("Remove attachment"));
+    await u.click(screen.getByLabelText('common.removeAttachment'));
     expect(screen.queryByTestId("composer-attachment-chip")).not.toBeInTheDocument();
   });
 

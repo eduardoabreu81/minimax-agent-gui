@@ -83,18 +83,56 @@
     "emptySubtitle": "Powered by MiniMax-M3",
     "thinking": "thinking...",
     "newChat": "New Chat",
-    "clearHistory": "Clear History"
+    "clearHistory": "Clear History",
+    "renameConversation": "Rename conversation",
+    "deleteConversation": "Delete conversation",
+    "noConversations": "No previous conversations",
+    "messageCount": "{count} messages",
+    "busyPlaceholder": "Waiting for {expert}…",
+    "contextTooLarge": "Context too large to send: {reason}",
+    "keyboardHint": "Enter to send · Shift+Enter for new line · / for skills · @ for context",
+    "permissions": {
+      "title": "Tool Permission Required",
+      "tool": "Tool",
+      "category": "Category",
+      "risk": "Risk",
+      "reason": "Reason",
+      "approve": "Approve",
+      "reject": "Reject"
+    }
   },
   "palette": {
     "placeholder": "Type to search anything...",
     "noResults": "No results found",
     "navigate": "Navigate",
-    "actions": "Actions",
+    "actions": {
+      "newChat": "Start New Chat",
+      "clearChat": "Clear Chat History",
+      "toggleTheme": "Toggle Light/Dark Theme",
+      "openTaskBoard": "Open Task Board",
+      "openQuickSettings": "Open Quick Settings"
+    },
     "git": "Git",
-    "settings": "Settings",
+    "settings": {
+      "api": "Settings: API Keys",
+      "model": "Settings: Model Selection",
+      "theme": "Settings: Appearance"
+    },
     "files": "Files",
     "recentCommits": "Recent Commits",
-    "results": "{count} results"
+    "results": "{count} results",
+    "nav": {
+      "chat": "Chat",
+      "tts": "Text to Speech",
+      "image": "Image Generation",
+      "music": "Music Generation",
+      "video": "Video Generation",
+      "code": "Coding Workspace",
+      "tasks": "Task Board"
+    },
+    "goTo": "Go to {label}",
+    "currentBranch": "Current Branch: {branch}",
+    "noResultsFor": "No results found for \"{query}\""
   },
   "coding": {
     "title": "Agent Coding Workspace",
@@ -104,7 +142,7 @@
     "terminal": "Terminal",
     "git": "Git",
     "selectFile": "Select a file from the explorer",
-    "selectFileHint": "Or use Ctrl+K to open Command Palette",
+    "selectFileHint": "Select a file from the explorer",
     "changes": "Changes",
     "history": "History",
     "branches": "Branches",
@@ -116,14 +154,40 @@
     "cancel": "Cancel",
     "workingTreeClean": "Working tree clean",
     "noCommits": "No commits yet",
-    "workspace": {
-      "openFolder": "Open folder…",
-      "pickFolder": "Pick the project folder the agent will read/write",
-      "changeFolder": "Change folder…",
-      "opening": "Opening…",
-      "recent": "Recent",
-      "removeFromRecent": "Remove from recent"
-    }
+    "workspace": "Workspace",
+    "planItems": {
+      "understand": "Understand the request",
+      "inspect": "Inspect relevant files",
+      "implement": "Implement the change",
+      "validate": "Run validation",
+      "summarize": "Summarize results",
+      "reviewCurrentFile": "Review current file: {file}",
+      "checkGit": "Check current git changes before editing"
+    },
+    "modeLabel": "Mode: {mode} — click to cycle",
+    "modes": {
+      "plan": "Plan",
+      "agent": "Agent",
+      "yolo": "YOLO"
+    },
+    "noResults": "No results found",
+    "noPreviousChats": "No previous code chats",
+    "unknownError": "Unknown error",
+    "previewUnsupported": "This file type cannot be previewed yet.",
+    "previewHint": "You can download it or open it from the workspace folder.",
+    "registerThinking": "Agent is thinking",
+    "registerPermission": "Pending tool permission request",
+    "registerUnsaved": "Unsaved file changes",
+    "registerPlanDraft": "Unapproved plan draft",
+    "openInBrowser": "Open in Browser",
+    "imagePreview": "Image preview",
+    "audioPreview": "Audio preview",
+    "videoPreview": "Video preview",
+    "askAboutCode": "Ask me about your code",
+    "askAboutCodeHint": "I can see the file you have open",
+    "goToRoot": "Go to workspace root",
+    "goUp": "Go up",
+    "viewGitChanges": "View workspace Git changes"
   },
   "tasks": {
     "title": "Task Board",
@@ -307,7 +371,8 @@
     "skip": "Skip tour",
     "next": "Next",
     "back": "Back",
-    "getStarted": "Get Started"
+    "getStarted": "Get Started",
+    "wizardClose": "Close"
   },
   "session": {
     "active": "Session Active",
@@ -358,7 +423,29 @@
     "recentGenerations": "Recent Generations",
     "noGenerated": "No generated images yet",
     "pleaseUpload": "Please upload a reference image or provide a URL",
-    "failed": "Image generation failed"
+    "failed": "Image generation failed",
+    "modes": {
+      "text": "Text to image",
+      "subject": "Image to image"
+    },
+    "aspectRatios": {
+      "square": "Square",
+      "widescreen": "Widescreen",
+      "vertical": "Vertical",
+      "standard": "Standard",
+      "portrait": "Portrait",
+      "photo": "Photo",
+      "photoTall": "Photo (Tall)",
+      "cinematic": "Cinematic"
+    },
+    "randomizeSeed": "Randomize seed",
+    "increaseCount": "Increase n",
+    "decreaseCount": "Decrease n",
+    "removeReference": "Remove reference image",
+    "pickReference": "Pick a character reference image first.",
+    "dropZone": "Drop a character photo or browse",
+    "keepFace": "Keeps the same face across generations",
+    "savedTo": "Saved to workspace/generations/images/"
   },
   "music": {
     "title": "Music Generation",
@@ -514,7 +601,17 @@
     }
   },
   "common": {
-    "statusSummary": "Pending: {pending} · In Progress: {progress} · Review: {review} · Done: {done}"
+    "statusSummary": "Pending: {pending} · In Progress: {progress} · Review: {review} · Done: {done}",
+    "copyMessage": "Copy message",
+    "copy": "Copy",
+    "copied": "Copied!",
+    "retry": "Retry",
+    "cancel": "Cancel",
+    "remove": "Remove",
+    "refresh": "Refresh",
+    "download": "Download",
+    "delete": "Delete",
+    "rename": "Rename"
   },
   "contextWindow": {
     "warnText": "Context at {pct}%. Compact now to free room for the next turn.",
@@ -634,5 +731,300 @@
       "expert": "Dense and technical. Cites trade-offs and edge cases.",
       "creative": "Generates options, explores unexpected angles."
     }
+  },
+  "backend": {
+    "startingUp": "Starting up…",
+    "failedToStart": "Backend failed to start",
+    "connecting": "Connecting to the local engine",
+    "attempt": "attempt {attempt}",
+    "retry": "Retry"
+  },
+  "titlebar": {
+    "search": "Search or run a command",
+    "minimize": "Minimize",
+    "maximize": "Maximize",
+    "close": "Close",
+    "status": {
+      "idle": "Agent idle",
+      "running": "Agent running",
+      "error": "Agent error"
+    }
+  },
+  "thinking": {
+    "label": "Thinking",
+    "streaming": "Thinking…"
+  },
+  "markdown": {
+    "copyToClipboard": "Copy to clipboard"
+  },
+  "quota": {
+    "available": "Available",
+    "limitReached": "Limit reached",
+    "noQuotaData": "No quota data",
+    "refresh": "Refresh",
+    "tokenPlan": "Token Plan",
+    "tokenPlanUsage": "Token Plan Usage",
+    "textGeneration": "Text Generation",
+    "dailyQuota": "Daily Quota",
+    "fiveHourLimit": "5-hour limit",
+    "weekly": "Weekly",
+    "resetsIn": "Resets in",
+    "contextAndPlan": "Context window & plan",
+    "contextWindow": "Context window",
+    "planUsage": "Plan usage",
+    "connectingToPlan": "Connecting to Token Plan…",
+    "planUnavailable": "Plan data unavailable",
+    "weeklyAllModels": "Weekly · all models",
+    "hideBreakdown": "Hide breakdown",
+    "showBreakdown": "Show breakdown",
+    "tokens": "tokens",
+    "selectChatModel": "Select chat model",
+    "thinkingOn": "Thinking: ON",
+    "thinkingOff": "Thinking: OFF",
+    "thinkingToggleOn": "Turn on thinking",
+    "thinkingToggleOff": "Turn off thinking",
+    "agentIdle": "Agent idle",
+    "agentRunning": "Agent running",
+    "agentProcessing": "Agent is processing",
+    "breakdown": {
+      "messages": "Messages",
+      "skills": "Skills",
+      "memoryFiles": "Memory files",
+      "customAgents": "Custom agents",
+      "systemPrompt": "System prompt",
+      "mcpTools": "MCP tools"
+    },
+    "models": {
+      "m3": "MiniMax M3",
+      "m27": "MiniMax M2.7",
+      "m27Highspeed": "MiniMax M2.7 Highspeed",
+      "general": "Text (M-series)",
+      "image": "Image-01",
+      "speech": "Speech 2.8",
+      "music": "Music-2.6",
+      "video": "Hailuo Video"
+    },
+    "modelDesc": {
+      "m3": "1M context · agentic · multimodal",
+      "m27": "218k context · balanced",
+      "m27Highspeed": "M2.7 · faster throughput",
+      "general": "Chat",
+      "image": "Image gen",
+      "speech": "TTS",
+      "music": "Music gen",
+      "video": "Video gen"
+    },
+    "regions": {
+      "global": "Global · api.minimax.io",
+      "china": "China · api.minimaxi.com"
+    },
+    "regionDesc": {
+      "global": "Route requests to the nearest region",
+      "china": "China-mainland server endpoint"
+    }
+  },
+  "skills": {
+    "sources": "Skill sources",
+    "source": "Source",
+    "rescan": "Rescan",
+    "rescanned": "Rescanned {count} skills.",
+    "addPath": "Add path",
+    "search": "Search skills…",
+    "pathPlaceholder": "~/my-team-skills or C:/path/to/skills",
+    "importFromGithub": "Import from GitHub",
+    "confirmDelete": "Delete skill \"{name}\"? This removes the skill directory.",
+    "toastDeleted": "Skill \"{name}\" deleted.",
+    "toastImported": "Skill \"{name}\" imported to user dir.",
+    "readOnly": "Read-only source",
+    "removePath": "Remove this custom path",
+    "createDescription": "Describe what the skill provides.",
+    "license": "License",
+    "compatibility": "Compatibility"
+  },
+  "skillSources": {
+    "builtin": "Built-in",
+    "user": "User",
+    "extra": "Extra",
+    "claude": "Claude",
+    "codex": "Codex",
+    "gemini": "Gemini",
+    "generic": "Generic",
+    "desc": "Built-in + User + Extra + external brand dirs (Claude / Codex / Gemini). User wins on conflict."
+  },
+  "workspaceSidebar": {
+    "tabs": {
+      "plan": "Plan",
+      "todos": "Todos",
+      "tasks": "Tasks",
+      "agents": "Agents"
+    },
+    "open": "Open sidebar",
+    "close": "Close sidebar",
+    "plan": {
+      "noActivePlan": "No active plan",
+      "noActivePlanDesc": "Create a plan before the agent makes changes.",
+      "howItWorks": "How it works",
+      "step1": "1. Switch the mode button to Plan",
+      "step2": "2. Describe the change in the code chat",
+      "step3": "3. Review, edit, and approve the draft plan",
+      "approved": "Approved Plan",
+      "draft": "Plan Draft",
+      "request": "Request",
+      "attached": "Attached:",
+      "markPending": "Mark pending",
+      "markDone": "Mark done",
+      "clickToEdit": "Click to edit",
+      "removeStep": "Remove step",
+      "newStepPlaceholder": "New step",
+      "addStep": "Add step",
+      "approveAndRun": "Approve & Run",
+      "clear": "Clear plan",
+      "copy": "Copy plan",
+      "copied": "Copied",
+      "sentToAgent": "This plan has been sent to the agent."
+    },
+    "todosNoActive": "No active tasks",
+    "tasksEmpty": "Tasks appear here when the agent is working."
+  },
+  "terminal": {
+    "connecting": "Connecting…",
+    "disconnected": "Disconnected",
+    "connect": "Connect",
+    "restart": "Restart",
+    "overlayDisconnected": "Terminal disconnected"
+  },
+  "agentChat": {
+    "codeChat": "Code Chat",
+    "newCodeChat": "New Code Chat",
+    "noPrevious": "No previous code chats",
+    "editor": "Editor",
+    "attachFile": "Attach file or image",
+    "enterToSend": "Enter to send · Shift+Enter for new line",
+    "selectFile": "Select a file to edit",
+    "commit": "Commit",
+    "commitMessagePlaceholder": "Commit message...",
+    "workingTreeClean": "Working tree clean"
+  },
+  "liveTodo": {
+    "empty": "No tasks yet"
+  },
+  "contextRef": {
+    "types": {
+      "file": "File",
+      "folder": "Folder",
+      "diff": "Diff (unstaged)",
+      "staged": "Diff (staged)",
+      "git": "Recent commits",
+      "url": "URL"
+    },
+    "desc": {
+      "file": "Inject file contents",
+      "folder": "Inject directory tree",
+      "diff": "git diff (working tree)",
+      "staged": "git diff --staged",
+      "git": "Last N commits (1-10)",
+      "url": "Fetch web page content"
+    },
+    "groups": {
+      "folders": "Folders",
+      "files": "Files"
+    },
+    "emptyNoQuery": "Type to search files…",
+    "emptyNoMatches": "No matches for \"{query}\"",
+    "pending": "Pending…",
+    "expanding": "expanding…",
+    "error": "Error",
+    "bytes": "{count} bytes",
+    "keyboardHint": "↑↓ navigate · ↵ select · Esc close"
+  },
+  "speech": {
+    "textRequired": "Text is required.",
+    "textTooLong": "Text exceeds 10000 characters.",
+    "cloneSampleRequired": "Upload a sample first.",
+    "cloneVoiceIdLength": "Voice ID must be 8–256 characters.",
+    "cloneVoiceIdStart": "Voice ID must start with a letter.",
+    "designDescRequired": "Voice description is required.",
+    "designPreviewRequired": "Preview text is required.",
+    "designPreviewTooLong": "Preview text must be ≤500 chars.",
+    "synthesizePlaceholder": "Enter text… (up to 10,000 characters)",
+    "cloneVoiceIdPlaceholder": "my-narrator-01",
+    "clonePromptPlaceholder": "This voice sounds natural and pleasant.",
+    "designPromptPlaceholder": "e.g. A warm, middle-aged male narrator with a calm British accent.",
+    "designPreviewPlaceholder": "Once upon a time…",
+    "voicesSearchPlaceholder": "Search voices…",
+    "voicesReload": "Reload voices",
+    "voicesUseInSynthesize": "Use in Synthesize",
+    "voicesDelete": "Delete voice",
+    "voicesEmptyLoading": "Loading…",
+    "voicesEmptyNone": "No voices in this language",
+    "modes": {
+      "synthesize": "Synthesize",
+      "clone": "Clone",
+      "design": "Design",
+      "voices": "Voices"
+    },
+    "emotions": {
+      "happy": "Happy",
+      "sad": "Sad",
+      "angry": "Angry",
+      "neutral": "Neutral",
+      "auto": "Auto"
+    },
+    "effects": {
+      "spaciousEcho": "Spacious echo",
+      "auditorium": "Auditorium",
+      "loFiPhone": "Lo-fi phone",
+      "robotic": "Robotic"
+    },
+    "traits": {
+      "warm": "Warm",
+      "calm": "Calm",
+      "energetic": "Energetic",
+      "serious": "Serious",
+      "friendly": "Friendly"
+    },
+    "languages": {
+      "auto": "Auto",
+      "english": "English",
+      "chinese": "Chinese",
+      "japanese": "Japanese",
+      "korean": "Korean"
+    }
+  },
+  "video": {
+    "modes": {
+      "text": "Text",
+      "image": "Image",
+      "frames": "Frames",
+      "subject": "Subject"
+    },
+    "failed": "Video generation failed",
+    "searchCommands": "Search commands…",
+    "promptPlaceholder": "Drone shot flying over neon-lit streets at night [Push in], rain reflections, cinematic.",
+    "cameraCommandsLabel": "Camera commands · insert into prompt",
+    "cameraCommandsPlaceholder": "Pick camera commands…",
+    "cameraCommandsNoMatches": "No matches",
+    "frameDrop": "Drop an image or browse"
+  },
+  "commonActions": {
+    "deleteTask": "Delete task?"
+  },
+  "settingsActions": {
+    "systemMode": "System",
+    "skillsSection": "Skill sources",
+    "audioBitrateWarn": "Low bitrate selected ({kbps} kbps). Audio may sound noticeably compressed — consider 128 kbps or higher for music.",
+    "audioHighBitrateHint": "Selected preset: {khz} kHz · {kbps} kbps · {format}. Higher bitrates produce larger files but preserve more detail."
+  },
+  "quickSettings": {
+    "clickToToggle": "Click to toggle"
+  },
+  "agentContextUi": {
+    "loading": "Loading…"
+  },
+  "wizard": {
+    "failedToCreate": "Failed to create files"
+  },
+  "help": {
+    "noContent": "No content available."
   }
 }

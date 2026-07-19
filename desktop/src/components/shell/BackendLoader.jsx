@@ -10,8 +10,10 @@
 // adapts to the active theme, primary-tinted spinner, muted secondary text.
 
 import { AlertCircle, Loader2, RefreshCw, Sparkles } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 export default function BackendLoader({ status, error, attempt, onRetry }) {
+  const { t } = useTranslation()
   const isError = status === 'error'
 
   return (
@@ -43,7 +45,7 @@ export default function BackendLoader({ status, error, attempt, onRetry }) {
               <Loader2 className="h-4 w-4 text-primary animate-spin shrink-0" />
             )}
             <span className="text-sm font-medium">
-              {isError ? 'Backend failed to start' : 'Starting up…'}
+              {isError ? t('backend.failedToStart') : t('backend.startingUp')}
             </span>
           </div>
 
@@ -53,9 +55,9 @@ export default function BackendLoader({ status, error, attempt, onRetry }) {
             </p>
           ) : (
             <p className="text-xs text-muted-foreground/70">
-              Connecting to the local engine
+              {t('backend.connecting')}
               {attempt > 1 && (
-                <span className="text-muted-foreground/50"> · attempt {attempt}</span>
+                <span className="text-muted-foreground/50"> · {t('backend.attempt', { attempt })}</span>
               )}
             </p>
           )}
@@ -68,7 +70,7 @@ export default function BackendLoader({ status, error, attempt, onRetry }) {
             className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary-hover text-white rounded-lg text-sm font-medium transition-colors"
           >
             <RefreshCw className="h-4 w-4" />
-            Retry
+            {t('backend.retry')}
           </button>
         )}
       </div>
