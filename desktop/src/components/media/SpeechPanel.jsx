@@ -15,10 +15,10 @@ import { apiFetch, assetUrl } from '../../lib/api.js'
 // ───────────────────────────────────────────────────────────────────────────
 
 const SPEECH_MODES = [
-  { id: 'synthesize', label: 'Synthesize', icon: Volume2 },
-  { id: 'clone',      label: 'Clone',      icon: Mic2 },
-  { id: 'design',     label: 'Design',     icon: Wand2 },
-  { id: 'voices',     label: 'Voices',     icon: AudioLines },
+  { id: 'synthesize', labelKey: 'speech.modes.synthesize', icon: Volume2 },
+  { id: 'clone',      labelKey: 'speech.modes.clone',      icon: Mic2 },
+  { id: 'design',     labelKey: 'speech.modes.design',     icon: Wand2 },
+  { id: 'voices',     labelKey: 'speech.modes.voices',     icon: AudioLines },
 ]
 
 const SPEECH_MODELS = [
@@ -488,8 +488,8 @@ export default function SpeechPanel() {
   }
 
   const synthesizeNow = async () => {
-    if (!text.trim()) { setError('Text is required.'); return }
-    if (text.length > 10000) { setError('Text exceeds 10000 characters.'); return }
+    if (!text.trim()) { setError(t('speech.textRequired')); return }
+    if (text.length > 10000) { setError(t('speech.textTooLong')); return }
     setLoading(true); setError(null); setResult(null); setCost(null)
     try {
       const body = {
@@ -564,10 +564,10 @@ export default function SpeechPanel() {
 
   const submitClone = async () => {
     setError(null); setCloneResult(null)
-    if (!cloneSampleFileId) { setError('Upload a sample first.'); return }
+    if (!cloneSampleFileId) { setError(t('speech.cloneSampleRequired')); return }
     const v = cloneVoiceId.trim()
-    if (v.length < 8 || v.length > 256) { setError('Voice ID must be 8–256 characters.'); return }
-    if (!/^[A-Za-z]/.test(v)) { setError('Voice ID must start with a letter.'); return }
+    if (v.length < 8 || v.length > 256) { setError(t('speech.cloneVoiceIdLength')); return }
+    if (!/^[A-Za-z]/.test(v)) { setError(t('speech.cloneVoiceIdStart')); return }
     setCloneRunning(true)
     try {
       const body = {
@@ -597,9 +597,9 @@ export default function SpeechPanel() {
 
   const submitDesign = async () => {
     setError(null); setDesignResult(null)
-    if (!designPrompt.trim()) { setError('Voice description is required.'); return }
-    if (!designPreviewText.trim()) { setError('Preview text is required.'); return }
-    if (designPreviewText.length > 500) { setError('Preview text must be ≤500 chars.'); return }
+    if (!designPrompt.trim()) { setError(t('speech.designDescRequired')); return }
+    if (!designPreviewText.trim()) { setError(t('speech.designPreviewRequired')); return }
+    if (designPreviewText.length > 500) { setError(t('speech.designPreviewTooLong')); return }
     setDesignRunning(true)
     try {
       const body = { prompt: designPrompt, preview_text: designPreviewText }
@@ -626,7 +626,7 @@ export default function SpeechPanel() {
   }
 
   const deleteVoice = async (type, vid, vname) => {
-    if (!window.confirm(`Delete voice "${vname || vid}"? This cannot be undone.`)) return
+    if (!window.confirm(t('speech.confirmDeleteVoice', { name: vname || vid }))) return
     setError(null)
     try {
       const res = await apiFetch(`/api/minimax/speech/voices/${type}/${encodeURIComponent(vid)}`, { method: 'DELETE' })
@@ -682,7 +682,7 @@ export default function SpeechPanel() {
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder="Enter text… (up to 10,000 characters)"
+          placeholder={t('speech.synthesizePlaceholder')}
           rows={5}
           style={{
             width: '100%',
@@ -740,7 +740,7 @@ export default function SpeechPanel() {
             />
             <button
               onClick={fetchVoices}
-              title="Reload voices"
+              title={t('speech.voicesReload')}
               style={{
                 width: 24, height: 24, flexShrink: 0,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -780,7 +780,7 @@ export default function SpeechPanel() {
             </>
           ) : (
             <div style={{ flex: 1, textAlign: 'left', fontSize: 12, color: 'var(--app-text-2)' }}>
-              {voicesLoading ? 'Loading voices…' : 'Select a voice'}
+              {voicesLoading ? t('speech.loadingVoices') : t('speech.placeholderVoice')}
             </div>
           )}
           <ChevronDown size={14} color="var(--app-text-2)" />
@@ -796,7 +796,7 @@ export default function SpeechPanel() {
           }}>
             {voicesByLanguageFiltered.length === 0 && (
               <div style={{ padding: 16, fontSize: 12, color: 'var(--app-text-2)', textAlign: 'center' }}>
-                {voicesLoading ? 'Loading…' : 'No voices in this language'}
+                {voicesLoading ? t('speech.voicesEmptyLoading') : t('speech.voicesEmptyNone')}
               </div>
             )}
             {voicesByLanguageFiltered.map(([lang, list]) => (
@@ -979,8 +979,8 @@ export default function SpeechPanel() {
         }}
       >
         {loading
-          ? <><Loader2 size={14} className="animate-spin" /> Generating…</>
-          : <><Volume2 size={16} /> Synthesize Speech</>}
+          ? <><Loader2 size={14} className="animate-spin" /> {t('speech.generating')}</>
+          : <><Volume2 size={16} /> {t('speech.synthesizeButton')}</>
       </button>
     </>
   )
@@ -994,9 +994,9 @@ export default function SpeechPanel() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16, height: '100%' }}>
       {/* Inner canvas header — "History" + "Saved to..." */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-        <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--app-text)' }}>History</span>
+        <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--app-text)' }}>{t('speech.historyTitle')}</span>
         <span style={{ fontSize: 11.5, color: 'var(--app-text-2)' }}>
-          Saved to workspace/generations/tts/
+          {t('speech.historySavedTo')}
         </span>
       </div>
       {result ? (
@@ -1006,7 +1006,7 @@ export default function SpeechPanel() {
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
             <p style={{ fontSize: 13, color: 'var(--app-text-2)', display: 'flex', alignItems: 'center', gap: 6, margin: 0 }}>
-              <Check size={14} color="hsl(var(--success, #10b981))" /> Audio generated
+              <Check size={14} color="hsl(var(--success, #10b981))" /> {t('speech.audioGenerated')}
             </p>
             {cost && (
               <div style={{
@@ -1039,7 +1039,7 @@ export default function SpeechPanel() {
                   width: 'fit-content',
                 }}
               >
-                <Save size={14} /> Download
+                <Save size={14} /> {t('speech.download')}
               </a>
             </>
           )}
@@ -1061,7 +1061,7 @@ export default function SpeechPanel() {
             {SPEECH_MODELS.find(m => m.id === model)?.label || model}
           </div>
           <div style={{ fontSize: 11, color: 'var(--app-text-2)', marginTop: 4 }}>
-            Your generated audio will appear here
+            {t('speech.emptyAudio')}
           </div>
         </div>
       )}
@@ -1069,12 +1069,12 @@ export default function SpeechPanel() {
       <div style={{ height: 1, background: 'var(--app-border)' }} />
 
       <RecentGenerations
-        title="Recent generations"
+        title={t('speech.recentGenerations')}
         type="tts"
         items={history}
         loading={historyLoading}
         onRefresh={fetchHistory}
-        emptyMessage="No generated speech yet"
+        emptyMessage={t('speech.emptyRecentSpeech')}
       />
     </div>
   )
@@ -1102,7 +1102,7 @@ export default function SpeechPanel() {
         >
           {cloneUploading ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--app-text-2)' }}>
-              <Loader2 size={14} className="animate-spin" /> Uploading…
+              <Loader2 size={14} className="animate-spin" /> {t('speech.sampleUploading')}
             </div>
           ) : cloneSample ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--app-text)' }}>
@@ -1142,13 +1142,13 @@ export default function SpeechPanel() {
       {/* Voice ID */}
       <div>
         <label style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--app-text-2)', display: 'block', marginBottom: 7 }}>
-          Voice ID
+          {t('speech.voiceIdLabel')}
         </label>
         <input
           type="text"
           value={cloneVoiceId}
           onChange={(e) => setCloneVoiceId(e.target.value)}
-          placeholder="my-narrator-01"
+          placeholder={t('speech.voiceIdPlaceholder')}
           style={{
             width: '100%',
             background: 'var(--app-surface)',
@@ -1235,7 +1235,7 @@ export default function SpeechPanel() {
               type="text"
               value={clonePromptText}
               onChange={(e) => setClonePromptText(e.target.value)}
-              placeholder="This voice sounds natural and pleasant."
+              placeholder={t('speech.clonePromptPlaceholder')}
               style={{
                 width: '100%',
                 background: 'var(--app-surface)',
@@ -1276,7 +1276,7 @@ export default function SpeechPanel() {
         fontSize: 11, color: 'var(--app-text)', lineHeight: 1.5,
       }}>
         <AlertCircle size={14} color="hsl(43 96% 46%)" style={{ flexShrink: 0, marginTop: 1 }} />
-        <span>A cloned voice is <strong>deleted automatically if unused for 7 days</strong>.</span>
+        <span>{t('speech.cloneSevenDayNotice')}</span>
       </div>
 
       {errorBox}

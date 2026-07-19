@@ -14,10 +14,10 @@ import { apiFetch, assetUrl } from '../../lib/api.js'
 // ───────────────────────────────────────────────────────────────────────────
 
 const VIDEO_MODES = [
-  { id: 'text2video',  label: 'Text',    title: 'Text to Video' },
-  { id: 'image2video', label: 'Image',   title: 'Image to Video' },
-  { id: 'sef',         label: 'Frames',  title: 'Start-End Frames' },
-  { id: 's2v',         label: 'Subject', title: 'Subject to Video' },
+  { id: 'text2video',  labelKey: 'video.modes.text',    titleKey: 'video.modes.text' },
+  { id: 'image2video', labelKey: 'video.modes.image',   titleKey: 'video.modes.image' },
+  { id: 'sef',         labelKey: 'video.modes.frames',  titleKey: 'video.modes.frames' },
+  { id: 's2v',         labelKey: 'video.modes.subject', titleKey: 'video.modes.subject' },
 ]
 
 const VIDEO_MODELS = [
