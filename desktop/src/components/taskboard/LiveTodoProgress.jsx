@@ -23,6 +23,7 @@
 // - Sorted by order then created_at (matches TaskBoard)
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from 'react-i18next'
 import { ChevronDown, ChevronRight, Circle, CircleDashed, CheckCircle2, ListTodo } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -41,6 +42,7 @@ export function LiveTodoProgress({
   onCollapsedChange,
   className,
 }) {
+  const { t } = useTranslation()
   // Sort: order asc, then created_at asc (matches TaskBoard).
   const sorted = useMemo(() => {
     return [...tasks].sort((a, b) => {
@@ -87,7 +89,7 @@ export function LiveTodoProgress({
         )}
       >
         <ListTodo className="h-3 w-3" />
-        <span>No tasks yet</span>
+        <span>{t('liveTodo.empty')}</span>
       </div>
     );
   }
@@ -114,7 +116,7 @@ export function LiveTodoProgress({
           ? <ChevronRight className="h-3 w-3 text-muted-foreground" />
           : <ChevronDown className="h-3 w-3 text-muted-foreground" />}
         <ListTodo className="h-3 w-3 text-muted-foreground" />
-        <span className="font-semibold text-foreground">Tasks</span>
+        <span className="font-semibold text-foreground">{t('liveTodo.title')}</span>
         <span
           className="ml-auto text-[10px] tabular-nums text-muted-foreground"
           data-testid="live-todo-counter"
@@ -129,21 +131,21 @@ export function LiveTodoProgress({
           className="px-2 pb-2 space-y-0.5"
           data-testid="live-todo-list"
         >
-          {sorted.map((t) => {
-            const cfg = STATUSES[t.status] || STATUSES.pending;
+          {sorted.map((task) => {
+            const cfg = STATUSES[task.status] || STATUSES.pending;
             const { Icon } = cfg;
-            const isDone = t.status === "done";
-            const isInProgress = t.status === "in-progress";
+            const isDone = task.status === "done";
+            const isInProgress = task.status === "in-progress";
+
             return (
               <li
-                key={t.id}
-                data-testid={`live-todo-item-${t.status}`}
+                key={task.id}
+                data-testid={`live-todo-item-${task.status}`}
                 className="flex items-start gap-1.5 text-[11px] leading-tight"
               >
                 <Icon
                   className={cn(
                     "h-3 w-3 mt-0.5 shrink-0",
-                    isDone && "text-emerald-500",
                     isInProgress && "text-amber-500 animate-pulse",
                     !isDone && !isInProgress && "text-muted-foreground"
                   )}
@@ -153,9 +155,9 @@ export function LiveTodoProgress({
                     "flex-1",
                     isDone && "line-through text-muted-foreground"
                   )}
-                  title={t.title}
+                  title={task.title}
                 >
-                  {t.title}
+                  {task.title}
                 </span>
               </li>
             );

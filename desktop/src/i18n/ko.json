@@ -187,7 +187,10 @@
     "askAboutCodeHint": "현재 열린 파일을 보고 있습니다",
     "goToRoot": "워크스페이스 루트로 이동",
     "goUp": "상위로 이동",
-    "viewGitChanges": "워크스페이스 Git 변경 보기"
+    "viewGitChanges": "워크스페이스 Git 변경 보기",
+    "thinking": "생각 중…",
+    "idle": "대기 중",
+    "thinkingDuration": "{seconds}초"
   },
   "tasks": {
     "title": "작업 보드",
@@ -881,7 +884,11 @@
       "clear": "계획 지우기",
       "copy": "계획 복사",
       "copied": "복사됨",
-      "sentToAgent": "이 계획이 에이전트에게 전송되었습니다."
+      "sentToAgent": "이 계획이 에이전트에게 전송되었습니다.",
+      "steps": "단계",
+      "tools": "도구",
+      "stepNumber": "{max}단계 중 {step}단계",
+      "lastTool": "최근 도구: {tool}"
     },
     "todosNoActive": "활성 작업 없음",
     "tasksEmpty": "에이전트가 작업 중일 때 여기에 표시됩니다."
@@ -906,7 +913,8 @@
     "workingTreeClean": "작업 트리가 깨끗함"
   },
   "liveTodo": {
-    "empty": "작업이 없습니다"
+    "empty": "작업이 없습니다",
+    "title": "작업"
   },
   "contextRef": {
     "types": {

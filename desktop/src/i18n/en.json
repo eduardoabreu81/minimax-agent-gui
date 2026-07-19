@@ -187,7 +187,10 @@
     "askAboutCodeHint": "I can see the file you have open",
     "goToRoot": "Go to workspace root",
     "goUp": "Go up",
-    "viewGitChanges": "View workspace Git changes"
+    "viewGitChanges": "View workspace Git changes",
+    "thinking": "Thinking...",
+    "idle": "Idle",
+    "thinkingDuration": "{seconds}s"
   },
   "tasks": {
     "title": "Task Board",
@@ -881,7 +884,11 @@
       "clear": "Clear plan",
       "copy": "Copy plan",
       "copied": "Copied",
-      "sentToAgent": "This plan has been sent to the agent."
+      "sentToAgent": "This plan has been sent to the agent.",
+      "steps": "Steps",
+      "tools": "Tools",
+      "stepNumber": "Step {step} of {max}",
+      "lastTool": "Last: {tool}"
     },
     "todosNoActive": "No active tasks",
     "tasksEmpty": "Tasks appear here when the agent is working."
@@ -906,7 +913,8 @@
     "workingTreeClean": "Working tree clean"
   },
   "liveTodo": {
-    "empty": "No tasks yet"
+    "empty": "No tasks yet",
+    "title": "Tasks"
   },
   "contextRef": {
     "types": {

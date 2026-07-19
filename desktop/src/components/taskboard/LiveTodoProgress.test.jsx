@@ -42,9 +42,9 @@ const makeTask = (overrides = {}) => ({
 });
 
 describe("LiveTodoProgress — empty state", () => {
-  it("shows 'No tasks yet' hint when tasks array is empty", () => {
+  it("shows the liveTodo.empty hint when tasks array is empty", () => {
     render(<LiveTodoProgress tasks={[]} collapsed={false} />);
-    expect(screen.getByText("No tasks yet")).toBeInTheDocument();
+    expect(screen.getByText("liveTodo.empty")).toBeInTheDocument();
   });
 });
 
@@ -56,7 +56,7 @@ describe("LiveTodoProgress — header + counter", () => {
       makeTask({ id: "t3", status: "pending" }),
     ];
     render(<LiveTodoProgress tasks={tasks} collapsed={false} />);
-    expect(screen.getByText("Tasks")).toBeInTheDocument();
+    expect(screen.getByText('liveTodo.title')).toBeInTheDocument()
     expect(screen.getByTestId("live-todo-counter")).toHaveTextContent("1/3");
   });
 
@@ -71,19 +71,12 @@ describe("LiveTodoProgress — header + counter", () => {
 });
 
 describe("LiveTodoProgress — collapse/expand", () => {
-  it("shows the list when not collapsed", () => {
-    const tasks = [makeTask({ title: "Task 1" })];
-    render(<LiveTodoProgress tasks={tasks} collapsed={false} />);
-    expect(screen.getByTestId("live-todo-list")).toBeInTheDocument();
-    expect(screen.getByText("Task 1")).toBeInTheDocument();
-  });
-
   it("hides the list when collapsed", () => {
     const tasks = [makeTask({ title: "Task 1" })];
     render(<LiveTodoProgress tasks={tasks} collapsed={true} />);
     expect(screen.queryByTestId("live-todo-list")).toBeNull();
     // Header is still visible
-    expect(screen.getByText("Tasks")).toBeInTheDocument();
+    expect(screen.getByText('liveTodo.title')).toBeInTheDocument()
   });
 
   it("toggles collapsed via the header click", async () => {

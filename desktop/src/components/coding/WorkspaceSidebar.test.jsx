@@ -81,9 +81,9 @@ describe("WorkspaceSidebar — Live Todo integration", () => {
       />
     );
     // Default tab is "tasks" — switch to "todos"
-    fireEvent.click(screen.getByRole("button", { name: /Todos/ }));
+    fireEvent.click(screen.getByRole('button', { name: /workspaceSidebar\.tabs\.todos/ }));
     // LiveTodoProgress is rendered with the "No tasks yet" hint
-    expect(screen.getByText("No tasks yet")).toBeInTheDocument();
+    expect(screen.getByText('liveTodo.empty')).toBeInTheDocument()
   });
 
   it("passes websocket + sessionId to useLiveTodos", () => {
@@ -101,7 +101,7 @@ describe("WorkspaceSidebar — Live Todo integration", () => {
         sessionId="coding-xyz"
       />
     );
-    fireEvent.click(screen.getByRole("button", { name: /Todos/ }));
+    fireEvent.click(screen.getByRole('button', { name: /workspaceSidebar\.tabs\.todos/ }))
     // Verify the hook was called with the right args
     expect(mockUseLiveTodos).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -128,7 +128,7 @@ describe("WorkspaceSidebar — Live Todo integration", () => {
         sessionId="coding-abc"
       />
     );
-    fireEvent.click(screen.getByRole("button", { name: /Todos/ }));
+    fireEvent.click(screen.getByRole('button', { name: /workspaceSidebar\.tabs\.todos/ }))
     expect(screen.getByText("First")).toBeInTheDocument();
     expect(screen.getByText("Second")).toBeInTheDocument();
     // Counter reflects 0/2 (no done tasks)
@@ -153,7 +153,7 @@ describe("WorkspaceSidebar — Live Todo integration", () => {
         sessionId="coding-abc"
       />
     );
-    fireEvent.click(screen.getByRole("button", { name: /Todos/ }));
+    fireEvent.click(screen.getByRole('button', { name: /workspaceSidebar\.tabs\.todos/ }))
     expect(screen.getByTestId("live-todo-counter")).toHaveTextContent("2/3");
   });
 
@@ -171,7 +171,7 @@ describe("WorkspaceSidebar — Live Todo integration", () => {
         sessionId={null}
       />
     );
-    fireEvent.click(screen.getByRole("button", { name: /Todos/ }));
+    fireEvent.click(screen.getByRole('button', { name: /workspaceSidebar\.tabs\.todos/ }))
     // skipFetch is true so the hook won't try to fetch
     expect(mockUseLiveTodos).toHaveBeenCalledWith(
       expect.objectContaining({ sessionId: null, skipFetch: true })

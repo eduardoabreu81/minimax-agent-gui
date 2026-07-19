@@ -326,6 +326,7 @@ function TodosPanel({ websocket, sessionId }) {
 }
 
 function TasksPanel() {
+  const { t } = useTranslation()
   const activity = useAgentActivity()
 
   if (activity.steps.length === 0 && activity.toolResults.length === 0) {
@@ -408,6 +409,7 @@ function TasksPanel() {
 }
 
 function AgentsPanel() {
+  const { t } = useTranslation()
   const activity = useAgentActivity()
   const { model: selectedModel } = useSelectedModel({ fallback: 'MiniMax-M3' })
 
