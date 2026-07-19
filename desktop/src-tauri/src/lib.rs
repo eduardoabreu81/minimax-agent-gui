@@ -410,6 +410,22 @@ fn auto_start_backend(app: &AppHandle) {
                     }
                     Err(hc_err) => {
                         eprintln!("[minimax-desktop] healthcheck failed: {}", hc_err);
+                        // The spawn succeeded but the backend never bound the
+                        // port within HEALTHCHECK_TIMEOUT. Drop our reference
+                        // to the dead/dying child + best-effort kill it so:
+                        //  1) the next UI "Start Backend" press can succeed
+                        //     (otherwise "Backend already running" blocks it),
+                        //  2) we don't leak the zombie child until the next
+                        //     backend_status() call tries to reap it.
+                        // State lock is re-acquired (start_backend released it
+                        // before returning Ok to the caller) so this is safe.
+                        let proc_state = app_handle.state::<BackendProcess>();
+                        if let Ok(mut guard) = proc_state.0.lock() {
+                            if let Some(mut child) = guard.take() {
+                                let _ = child.kill();
+                                let _ = child.wait();
+                            }
+                        }
                         let _ = app_handle.emit(
                             "backend-status",
                             serde_json::json!({

@@ -2993,13 +2993,58 @@ async def chat_websocket(websocket: WebSocket, session_id: str):
     register_ws(session_id, websocket)
     _logger.info(f"WebSocket connected: {session_id}")
 
+    # Tracks whether the underlying WebSocket has been closed by the client.
+    # Set inside _safe_send on the first failed send; flipped to True even
+    # before cancel_event exists, so the setup-phase guard below can bail
+    # out without touching an undefined event.
+    client_disconnected = False
+    # Cancellation signal handed to agent.run — set by _safe_send on a
+    # failed send so multi-step runs stop at the next step boundary
+    # (Agent._check_cancelled runs at the start of every step and before/
+    # after each tool call). Without this, a client that closes mid-run
+    # keeps burning LLM tokens and tool executions until the loop finishes.
+    cancel_event = asyncio.Event()
+
+    async def _safe_send(payload: dict) -> bool:
+        """Best-effort JSON send. Returns False (and sets cancel_event +
+        client_disconnected) on the first send failure so the surrounding
+        code can short-circuit. Never raises.
+        """
+        nonlocal client_disconnected
+        if client_disconnected:
+            return False
+        try:
+            await websocket.send_json(payload)
+            return True
+        except Exception as send_err:
+            _logger.info(f"WebSocket send failed (client gone?): {send_err}")
+            client_disconnected = True
+            cancel_event.set()
+            return False
+
     try:
-        agent = await session_manager.get_or_create_agent(session_id)
+        try:
+            agent = await session_manager.get_or_create_agent(session_id)
+        except Exception as setup_err:
+            # Setup-phase failure (agent construction, model init, etc.).
+            # Without this, the outer except below would just log + close
+            # silently — surface an explicit error frame so the frontend can
+            # show a toast instead of "disconnected with no reason".
+            _logger.error(f"WebSocket setup error: {setup_err}")
+            await _safe_send({
+                "type": "error",
+                "content": f"Session init failed: {setup_err}",
+            })
+            try:
+                await websocket.close(code=1011, reason="setup_failed")
+            except Exception:
+                pass
+            return
 
         # Load existing conversation and send history to client
         conv = load_conversation(session_id)
         if conv and conv.get("messages"):
-            await websocket.send_json({
+            await _safe_send({
                 "type": "history",
                 "messages": [
                     {
@@ -3014,20 +3059,36 @@ async def chat_websocket(websocket: WebSocket, session_id: str):
                     for msg in conv["messages"]
                 ]
             })
+            if client_disconnected:
+                return
 
         # Coding sessions: tell the frontend which workspace this
         # conversation belongs to so the header picker can light up
         # with the right path. Locked sessions get the lock icon.
         if session_id.startswith("coding-"):
             ws = _load_coding_workspace_for_session(session_id)
-            await websocket.send_json({
+            await _safe_send({
                 "type": "session_workspace",
                 "workspace_dir": ws,
                 "locked": bool(_coding_sessions.get(session_id, {}).get("locked")),
             })
+            if client_disconnected:
+                return
+
+
+        # Per-session buffer for messages received during a permission
+        # prompt that aren't the permission_response we're waiting for.
+        # Drained at the top of each iteration before reading from the
+        # WebSocket so user-typed messages mid-prompt aren't dropped.
+        # Declared in the outer handler scope so permission_callback
+        # (defined per-iteration) can extend it via closure.
+        _deferred_messages: list[dict] = []
 
         while True:
-            data = await websocket.receive_json()
+            if _deferred_messages:
+                data = _deferred_messages.pop(0)
+            else:
+                data = await websocket.receive_json()
 
             # Handle manual context-compact request from the frontend
             # (triggered by the [Compact] button in the warning banner).
@@ -3060,7 +3121,7 @@ async def chat_websocket(websocket: WebSocket, session_id: str):
                     await agent._summarize_messages()
                     after = agent.api_total_tokens or 0
                     pct_after = after / limit if limit > 0 else 0
-                    await websocket.send_json({
+                    await _safe_send({
                         "type": "compact_done",
                         "compact_id": compact_id,
                         "before_tokens": before,
@@ -3084,7 +3145,7 @@ async def chat_websocket(websocket: WebSocket, session_id: str):
                         }
                         if compact_by_source is not None:
                             payload["by_source"] = compact_by_source
-                        await websocket.send_json(payload)
+                        await _safe_send(payload)
                     _log_compact_event({
                         "event": "completed",
                         "compact_id": compact_id,
@@ -3110,7 +3171,7 @@ async def chat_websocket(websocket: WebSocket, session_id: str):
                         "error": str(compact_err),
                         "error_type": type(compact_err).__name__,
                     })
-                    await websocket.send_json({
+                    await _safe_send({
                         "type": "compact_failed",
                         "compact_id": compact_id,
                         "detail": str(compact_err),
@@ -3134,13 +3195,13 @@ async def chat_websocket(websocket: WebSocket, session_id: str):
                     # Inject skill content into messages as a system context update
                     skill_prompt = skill.to_prompt()
                     agent.messages.append(Message(role="user", content=f"[Skill Activated: {skill_name}]\n\n{skill_prompt}"))
-                    await websocket.send_json({
+                    await _safe_send({
                         "type": "skill_activated",
                         "skill": skill_name,
                         "source": skill.source.value,
                     })
                 else:
-                    await websocket.send_json({
+                    await _safe_send({
                         "type": "skill_activate_failed",
                         "skill": skill_name,
                         "detail": f"Skill '{skill_name}' not found.",
@@ -3224,7 +3285,7 @@ async def chat_websocket(websocket: WebSocket, session_id: str):
                 if not sess.get("locked"):
                     if sess.get("workspace_dir"):
                         sess["locked"] = True
-                        await websocket.send_json({
+                        await _safe_send({
                             "type": "session_workspace",
                             "workspace_dir": sess["workspace_dir"],
                             "locked": True,
@@ -3232,15 +3293,14 @@ async def chat_websocket(websocket: WebSocket, session_id: str):
                     else:
                         # No workspace picked yet — refuse the message
                         # so the frontend can show the picker.
-                        await websocket.send_json({
+                        await _safe_send({
                             "type": "error",
                             "content": "Pick a workspace folder in the Coding header before sending your first message.",
                         })
-                        continue
 
             # Send user message back as confirmation
             display_content = message or "📎 Attachment sent"
-            await websocket.send_json({
+            await _safe_send({
                 "type": "user",
                 "content": display_content,
                 "attachment": attachment,
@@ -3267,7 +3327,7 @@ async def chat_websocket(websocket: WebSocket, session_id: str):
                     # filename (YYYY-MM-DD.md) so the client can match the
                     # exact doc it's displaying.
                     if daily_path and daily_path.name:
-                        await websocket.send_json({
+                        await _safe_send({
                             "type": "daily_updated",
                             "date": daily_path.stem,
                             "path": str(daily_path),
@@ -3281,7 +3341,7 @@ async def chat_websocket(websocket: WebSocket, session_id: str):
             save_conversation(session_id, conv.get("title", get_conversation_title(conv["messages"])), conv["messages"])
 
             # Run agent and stream response
-            await websocket.send_json({"type": "status", "content": "thinking..."})
+            await _safe_send({"type": "status", "content": "thinking..."})
 
             # Accumulate the model's reasoning across all agent-loop steps so
             # we can include the full thinking block in the final assistant
@@ -3296,8 +3356,14 @@ async def chat_websocket(websocket: WebSocket, session_id: str):
             # whenever streaming has already covered the ground.
             streamed_deltas = False
 
+
             try:
                 async def tool_callback(tool_name, arguments, result):
+                    # Short-circuit on dead client — agent.run will see the
+                    # cancel_event at the next step boundary anyway, but
+                    # bailing early avoids pointless work for tool-only runs.
+                    if client_disconnected:
+                        return
                     if tool_name == "__thinking__":
                         # If the per-delta stream already delivered the
                         # reasoning to the client, skip the redundant
@@ -3312,23 +3378,23 @@ async def chat_websocket(websocket: WebSocket, session_id: str):
                         thinking_text = arguments.get("thinking", "")
                         if thinking_text:
                             accumulated_thinking.append(thinking_text)
-                        await websocket.send_json({
+                        await _safe_send({
                             "type": "thinking",
                             "content": thinking_text,
                         })
                     elif tool_name == "__tool_calls__":
-                        await websocket.send_json({
+                        await _safe_send({
                             "type": "tool_calls",
                             "tools": arguments.get("tool_calls", []),
                         })
                     elif tool_name == "__step_start__":
-                        await websocket.send_json({
+                        await _safe_send({
                             "type": "step_start",
                             "step": arguments.get("step"),
                             "max_steps": arguments.get("max_steps"),
                         })
                     elif result:
-                        await websocket.send_json({
+                        await _safe_send({
                             "type": "tool_result",
                             "tool": tool_name,
                             "arguments": arguments,
@@ -3338,28 +3404,55 @@ async def chat_websocket(websocket: WebSocket, session_id: str):
                         })
 
                 async def permission_callback(request):
+                    # `client_disconnected` is rebound below in the
+                    # WebSocketDisconnect branch; without `nonlocal`,
+                    # Python treats the read at the top of this function
+                    # as referencing an uninitialized local — which
+                    # raises UnboundLocalError on every permission prompt
+                    # even when the client is alive.
+                    nonlocal client_disconnected
                     req_id = str(uuid.uuid4())
-                    await websocket.send_json({
+                    sent = await _safe_send({
                         "type": "permission_request",
                         "request_id": req_id,
                         "tool_name": request["tool_name"],
                         "arguments": request["arguments"],
                         "classification": request["classification"],
                     })
-                    # Wait for response with timeout
+                    # If the client already vanished, deny immediately —
+                    # the agent will see cancel_event at the next boundary.
+                    if not sent or client_disconnected:
+                        return "rejected"
+                    deferred: list[dict] = []
                     try:
                         while True:
-                            resp = await asyncio.wait_for(
-                                websocket.receive_json(), timeout=120
-                            )
+                            try:
+                                resp = await asyncio.wait_for(
+                                    websocket.receive_json(), timeout=120
+                                )
+                            except asyncio.TimeoutError:
+                                _logger.warning(f"Permission request {req_id} timed out")
+                                _deferred_messages.extend(deferred)
+                                return "rejected"
                             if resp.get("type") == "permission_response" and resp.get("request_id") == req_id:
+                                # Hand any unrelated messages back to the
+                                # outer loop so they aren't silently dropped.
+                                _deferred_messages.extend(deferred)
                                 return "approved" if resp.get("approved") else "rejected"
-                            # Ignore unrelated messages
-                    except asyncio.TimeoutError:
-                        _logger.warning(f"Permission request {req_id} timed out")
-                        return "rejected"
+                            # Buffer chat / compact / skill / anything else
+                            # so the user-typed message can still reach the
+                            # agent after the tool finishes.
+                            deferred.append(resp)
                     except Exception as e:
+                        # Malformed JSON / disconnect mid-prompt: return
+                        # whatever we buffered to the outer loop, then deny
+                        # the tool so the run can short-circuit.
                         _logger.warning(f"Permission request {req_id} error: {e}")
+                        _deferred_messages.extend(deferred)
+                        # Client gone → flip the global flag too.
+                        if isinstance(e, WebSocketDisconnect):
+                            client_disconnected = True
+                            cancel_event.set()
                         return "rejected"
 
                 async def stream_callback(kind: str, content: str) -> None:
@@ -3372,18 +3465,16 @@ async def chat_websocket(websocket: WebSocket, session_id: str):
                     """
                     nonlocal streamed_deltas
                     streamed_deltas = True
-                    try:
-                        await websocket.send_json({
-                            "type": f"{kind}_delta",
-                            "content": content,
-                        })
-                    except Exception:
-                        # Client disconnected mid-stream — let the
-                        # agent.run loop fail naturally on the next
-                        # send. Don't raise from the callback.
-                        pass
+                    # Use _safe_send so a dead client sets cancel_event —
+                    # without this, a text-only stream keeps burning tokens
+                    # for a vanished client until the model finishes.
+                    await _safe_send({
+                        "type": f"{kind}_delta",
+                        "content": content,
+                    })
 
                 result = await agent.run(
+                    cancel_event=cancel_event,
                     tool_callback=tool_callback,
                     permission_mode=permission_mode,
                     permission_callback=permission_callback,
@@ -3422,9 +3513,9 @@ async def chat_websocket(websocket: WebSocket, session_id: str):
                     }
                     if by_source is not None:
                         payload["by_source"] = by_source
-                    await websocket.send_json(payload)
+                    await _safe_send(payload)
 
-                await websocket.send_json({
+                await _safe_send({
                     "type": "assistant",
                     "content": result,
                     "thinking": full_thinking,
@@ -3466,7 +3557,7 @@ async def chat_websocket(websocket: WebSocket, session_id: str):
                         # Companion event to the user-block emit above.
                         # Frontend coalesces the two into a single refresh.
                         if daily_path and daily_path.name:
-                            await websocket.send_json({
+                            await _safe_send({
                                 "type": "daily_updated",
                                 "date": daily_path.stem,
                                 "path": str(daily_path),
@@ -3475,7 +3566,7 @@ async def chat_websocket(websocket: WebSocket, session_id: str):
                     _logger.warning(f"Daily append (assistant) failed: {e}")
             except Exception as e:
                 _logger.error(f"Agent error: {e}")
-                await websocket.send_json({
+                await _safe_send({
                     "type": "error",
                     "content": str(e),
                 })
@@ -3484,6 +3575,18 @@ async def chat_websocket(websocket: WebSocket, session_id: str):
         _logger.info(f"WebSocket disconnected: {session_id}")
     except Exception as e:
         _logger.error(f"WebSocket error: {e}")
+        # Try to surface the failure to the client before disconnecting.
+        # Without this the frontend just sees a socket close with no
+        # reason and has to guess. _safe_send swallows send failures
+        # silently so this is always safe to call.
+        await _safe_send({
+            "type": "error",
+            "content": f"WebSocket error: {e}",
+        })
+        try:
+            await websocket.close(code=1011, reason="server_error")
+        except Exception:
+            pass
     finally:
         # Always unregister, even on exception. Prevents the
         # registry from accumulating dead WebSocket refs.
