@@ -43,8 +43,7 @@ export default function IncompleteContextBanner({
   // missing files is rare (all-or-nothing for the wizard flow) and
   // the banner copy says "context is incomplete" which covers it.
   const firstMissing = status.missing[0]
-  const fileLabel = t(`agentContext.banner.file.${firstMissing}`) ||
-    firstMissing
+  const fileLabel = t(`agentContext.file.${firstMissing}`) || firstMissing
 
   return (
     <div

@@ -147,7 +147,7 @@ describe('StatusBar ContextChip — gradient + plan bar', () => {
     render(<StatusBar model="MiniMax-M3" setModel={vi.fn()} thinkingEnabled={false} setThinkingEnabled={vi.fn()} supportsThinking={true} />)
 
     // Open the popover by clicking the chip
-    const chip = screen.getByTitle('Context window & plan')
+    const chip = screen.getByTitle('statusBar.contextAndPlan')
     chip.click()
 
     // The bar follows the active theme's accent color (default theme =
@@ -168,7 +168,7 @@ describe('StatusBar ContextChip — gradient + plan bar', () => {
     render(<StatusBar model="MiniMax-M3" setModel={vi.fn()} thinkingEnabled={false} setThinkingEnabled={vi.fn()} supportsThinking={true} />)
 
     // The chip is rendered even with no data
-    expect(screen.getByTitle('Context window & plan')).toBeInTheDocument()
+    expect(screen.getByTitle('statusBar.contextAndPlan')).toBeInTheDocument()
   })
 
   it('keeps the chip compact (no "tokens" unit suffix on the bar)', () => {
@@ -192,7 +192,7 @@ describe('StatusBar ContextChip — gradient + plan bar', () => {
       activeSessionId: 'sess-1',
     })
     render(<StatusBar model="MiniMax-M3" setModel={vi.fn()} thinkingEnabled={false} setThinkingEnabled={vi.fn()} supportsThinking={true} />)
-    const chip = screen.getByTitle('Context window & plan')
+    const chip = screen.getByTitle('statusBar.contextAndPlan')
     // Ratio + percent present
     expect(chip.textContent).toMatch(/[\d.]+[kM]\s*\/\s*[\d.]+[kM]\s*\(\d+%\)/)
     // But the literal word "tokens" is NOT on the chip — only the
@@ -214,10 +214,10 @@ describe('StatusBar ContextChip — gradient + plan bar', () => {
       activeSessionId: 'sess-1',
     })
     render(<StatusBar model="MiniMax-M3" setModel={vi.fn()} thinkingEnabled={false} setThinkingEnabled={vi.fn()} supportsThinking={true} />)
-    screen.getByTitle('Context window & plan').click()
-    await screen.findByText('Plan usage')
+    screen.getByTitle('statusBar.contextAndPlan').click()
+    await screen.findByText('statusBar.planUsage')
     // The popover's "Context window" header has a token count
-    expect(screen.getByText(/Context window/)).toBeInTheDocument()
+    expect(screen.getByText(/statusBar\.contextWindow/)).toBeInTheDocument()
     // And the suffix should appear there too
     expect(screen.getByText(/tokens\s*\(\d+%\)/)).toBeInTheDocument()
   })
@@ -263,12 +263,12 @@ describe('StatusBar ContextChip — simplified 6-row breakdown', () => {
       activeSessionId: 'sess-1',
     })
     render(<StatusBar model="MiniMax-M3" setModel={vi.fn()} thinkingEnabled={false} setThinkingEnabled={vi.fn()} supportsThinking={true} />)
-    screen.getByTitle('Context window & plan').click()
-    await screen.findByText('Plan usage')
+    screen.getByTitle('statusBar.contextAndPlan').click()
+    await screen.findByText('statusBar.planUsage')
     // No breakdown rows rendered when no by_source data
-    expect(screen.queryByText('Skills')).toBeNull()
-    expect(screen.queryByText('Memory files')).toBeNull()
-    expect(screen.queryByText('Custom agents')).toBeNull()
+    expect(screen.queryByText('statusBar.breakdown.skills')).toBeNull()
+    expect(screen.queryByText('statusBar.breakdown.memoryFiles')).toBeNull()
+    expect(screen.queryByText('statusBar.breakdown.customAgents')).toBeNull()
   })
 
   it('renders exactly 6 rows directly under "Context window"', async () => {
@@ -293,15 +293,15 @@ describe('StatusBar ContextChip — simplified 6-row breakdown', () => {
       activeSessionId: 'sess-1',
     })
     render(<StatusBar model="MiniMax-M3" setModel={vi.fn()} thinkingEnabled={false} setThinkingEnabled={vi.fn()} supportsThinking={true} />)
-    screen.getByTitle('Context window & plan').click()
-    await screen.findByText('Plan usage')
+    screen.getByTitle('statusBar.contextAndPlan').click()
+    await screen.findByText('statusBar.planUsage')
     // 6 row labels visible
-    expect(screen.getByText('Messages')).toBeInTheDocument()
-    expect(screen.getByText('Skills')).toBeInTheDocument()
-    expect(screen.getByText('Memory files')).toBeInTheDocument()
-    expect(screen.getByText('Custom agents')).toBeInTheDocument()
-    expect(screen.getByText('System prompt')).toBeInTheDocument()
-    expect(screen.getByText('MCP tools')).toBeInTheDocument()
+    expect(screen.getByText('statusBar.breakdown.messages')).toBeInTheDocument()
+    expect(screen.getByText('statusBar.breakdown.skills')).toBeInTheDocument()
+    expect(screen.getByText('statusBar.breakdown.memoryFiles')).toBeInTheDocument()
+    expect(screen.getByText('statusBar.breakdown.customAgents')).toBeInTheDocument()
+    expect(screen.getByText('statusBar.breakdown.systemPrompt')).toBeInTheDocument()
+    expect(screen.getByText('statusBar.breakdown.mcpTools')).toBeInTheDocument()
     // The 2 deferred buckets are NOT rendered
     expect(screen.queryByText(/deferred/)).toBeNull()
     expect(screen.queryByText('Free space')).toBeNull()
@@ -330,8 +330,8 @@ describe('StatusBar ContextChip — simplified 6-row breakdown', () => {
       activeSessionId: 'sess-1',
     })
     render(<StatusBar model="MiniMax-M3" setModel={vi.fn()} thinkingEnabled={false} setThinkingEnabled={vi.fn()} supportsThinking={true} />)
-    screen.getByTitle('Context window & plan').click()
-    await screen.findByText('Plan usage')
+    screen.getByTitle('statusBar.contextAndPlan').click()
+    await screen.findByText('statusBar.planUsage')
     // The Messages row should show the byte size, not 3720.
     // 14,960 bytes → "14.6KB" via formatByteCount (1024-based)
     expect(screen.getByText('14.6KB')).toBeInTheDocument()
@@ -359,8 +359,8 @@ describe('StatusBar ContextChip — simplified 6-row breakdown', () => {
       activeSessionId: 'sess-1',
     })
     render(<StatusBar model="MiniMax-M3" setModel={vi.fn()} thinkingEnabled={false} setThinkingEnabled={vi.fn()} supportsThinking={true} />)
-    screen.getByTitle('Context window & plan').click()
-    await screen.findByText('Plan usage')
+    screen.getByTitle('statusBar.contextAndPlan').click()
+    await screen.findByText('statusBar.planUsage')
     // Decimal format for k values — matches the user's screenshot
     // "7.4k" / "5.1k" / "2.8k" / "30.0k" / "167"
     //
@@ -402,13 +402,13 @@ describe('StatusBar ContextChip — simplified 6-row breakdown', () => {
     const { default: user } = await import('@testing-library/user-event')
     const u = user.setup({ delay: null })
     render(<StatusBar model="MiniMax-M3" setModel={vi.fn()} thinkingEnabled={false} setThinkingEnabled={vi.fn()} supportsThinking={true} />)
-    await u.click(screen.getByTitle('Context window & plan'))
-    await screen.findByText('Plan usage')
+    await u.click(screen.getByTitle('statusBar.contextAndPlan'))
+    await screen.findByText('statusBar.planUsage')
     // Default: rows visible
-    expect(screen.getByText('Skills')).toBeInTheDocument()
+    expect(screen.getByText('statusBar.breakdown.skills')).toBeInTheDocument()
     // Collapse
     await u.click(screen.getByTestId('breakdown-toggle'))
-    expect(screen.queryByText('Skills')).toBeNull()
+    expect(screen.queryByText('statusBar.breakdown.skills')).toBeNull()
   })
 })
 
@@ -460,15 +460,15 @@ describe('StatusBar ContextChip — simplified 6-row breakdown', () => {
       activeSessionId: 'sess-1',
     })
     render(<StatusBar model="MiniMax-M3" setModel={vi.fn()} thinkingEnabled={false} setThinkingEnabled={vi.fn()} supportsThinking={true} />)
-    screen.getByTitle('Context window & plan').click()
-    await screen.findByText('Plan usage')
+    screen.getByTitle('statusBar.contextAndPlan').click()
+    await screen.findByText('statusBar.planUsage')
     // 6 row labels visible
-    expect(screen.getByText('Messages')).toBeInTheDocument()
-    expect(screen.getByText('Skills')).toBeInTheDocument()
-    expect(screen.getByText('Memory files')).toBeInTheDocument()
-    expect(screen.getByText('Custom agents')).toBeInTheDocument()
-    expect(screen.getByText('System prompt')).toBeInTheDocument()
-    expect(screen.getByText('MCP tools')).toBeInTheDocument()
+    expect(screen.getByText('statusBar.breakdown.messages')).toBeInTheDocument()
+    expect(screen.getByText('statusBar.breakdown.skills')).toBeInTheDocument()
+    expect(screen.getByText('statusBar.breakdown.memoryFiles')).toBeInTheDocument()
+    expect(screen.getByText('statusBar.breakdown.customAgents')).toBeInTheDocument()
+    expect(screen.getByText('statusBar.breakdown.systemPrompt')).toBeInTheDocument()
+    expect(screen.getByText('statusBar.breakdown.mcpTools')).toBeInTheDocument()
     // The 2 deferred buckets are NOT rendered
     expect(screen.queryByText(/deferred/)).toBeNull()
     expect(screen.queryByText('Free space')).toBeNull()
@@ -497,8 +497,8 @@ describe('StatusBar ContextChip — simplified 6-row breakdown', () => {
       activeSessionId: 'sess-1',
     })
     render(<StatusBar model="MiniMax-M3" setModel={vi.fn()} thinkingEnabled={false} setThinkingEnabled={vi.fn()} supportsThinking={true} />)
-    screen.getByTitle('Context window & plan').click()
-    await screen.findByText('Plan usage')
+    screen.getByTitle('statusBar.contextAndPlan').click()
+    await screen.findByText('statusBar.planUsage')
     // The Messages row should show the byte size, not 3720.
     // 14,960 bytes ≈ 14.6KB → "14.6KB" via formatByteCount
     expect(screen.getByText('14.6KB')).toBeInTheDocument()
@@ -528,8 +528,8 @@ describe('StatusBar ContextChip — simplified 6-row breakdown', () => {
       activeSessionId: 'sess-1',
     })
     render(<StatusBar model="MiniMax-M3" setModel={vi.fn()} thinkingEnabled={false} setThinkingEnabled={vi.fn()} supportsThinking={true} />)
-    screen.getByTitle('Context window & plan').click()
-    await screen.findByText('Plan usage')
+    screen.getByTitle('statusBar.contextAndPlan').click()
+    await screen.findByText('statusBar.planUsage')
     // Token counts (1-decimal k format) for the 5 non-Messages rows
     expect(screen.getByText('30.0k')).toBeInTheDocument()  // skills
     expect(screen.getByText('7.4k')).toBeInTheDocument()   // memory_files

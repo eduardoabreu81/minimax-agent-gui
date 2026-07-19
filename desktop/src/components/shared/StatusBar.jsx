@@ -5,6 +5,7 @@ import { useAgentActivity } from '../../context/AgentActivityContext'
 import { useTheme, THEMES } from '../../context/ThemeContext'
 import { getContextLimit, formatTokenCount, formatByteCount, DEFAULT_MODEL } from '../../lib/modelLimits'
 import { apiFetch } from '../../lib/api.js'
+import { useTranslation } from 'react-i18next'
 
 // StatusBar — global footer anchored above the bottom of the app.
 // Layout (left → right), matches the Claude Code reference:
@@ -64,11 +65,11 @@ function formatResetTime(ms) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const OFFICIAL_MODELS = [
-  { match: 'general', label: 'Text (M-series)', desc: 'Chat', interval: '5h', group: 'text', hasWeekly: true, plan: 'plus' },
-  { match: 'image',   label: 'Image-01',        desc: 'Image gen', interval: '24h', group: 'daily', plan: 'plus' },
-  { match: 'speech',  label: 'Speech 2.8',      desc: 'TTS',       interval: '24h', group: 'daily', plan: 'plus' },
-  { match: 'music',   label: 'Music-2.6',       desc: 'Music gen', interval: '24h', group: 'daily', plan: 'plus' },
-  { match: 'video',   label: 'Hailuo Video',    desc: 'Video gen', interval: '24h', group: 'daily', plan: 'max'  },
+  { match: 'general', labelKey: 'quota.models.general', descKey: 'quota.modelDesc.general', interval: '5h', group: 'text', hasWeekly: true, plan: 'plus' },
+  { match: 'image',   labelKey: 'quota.models.image',   descKey: 'quota.modelDesc.image',   interval: '24h', group: 'daily', plan: 'plus' },
+  { match: 'speech',  labelKey: 'quota.models.speech',  descKey: 'quota.modelDesc.speech',  interval: '24h', group: 'daily', plan: 'plus' },
+  { match: 'music',   labelKey: 'quota.models.music',   descKey: 'quota.modelDesc.music',   interval: '24h', group: 'daily', plan: 'plus' },
+  { match: 'video',   labelKey: 'quota.models.video',   descKey: 'quota.modelDesc.video',   interval: '24h', group: 'daily', plan: 'max'  },
 ]
 const PLAN_LABEL = { plus: 'Plus', max: 'Max', ultra: 'Ultra' }
 const PLAN_ORDER = { plus: 0, max: 1, ultra: 2 }
@@ -92,15 +93,15 @@ function parseQuota(envelope, userPlan) {
       const usedPct = Math.max(0, Math.min(100, 100 - remainingPct))
       return {
         key: meta.match,
-        name: meta.label,
-        desc: meta.desc,
+        name: t(meta.labelKey),
+        desc: t(meta.descKey),
         group: meta.group,
         usedPct,
         resetMs: item.remains_time || 0,
         weeklyPct: meta.hasWeekly ? Math.max(0, Math.min(100, 100 - (item.current_weekly_remaining_percent || 0))) : null,
       }
     }
-    return { key: meta.match, name: meta.label, desc: meta.desc, group: meta.group, available: true }
+    return { key: meta.match, name: t(meta.labelKey), desc: t(meta.descKey), group: meta.group, available: true }
   }).filter(Boolean)
 }
 
@@ -143,6 +144,7 @@ function useQuota() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function ConnectionChip() {
+  const { t } = useTranslation()
   const [status, setStatus] = useState('checking')
   useEffect(() => {
     let cancelled = false
@@ -166,9 +168,9 @@ function ConnectionChip() {
     status === 'checking' ? 'bg-amber-400' :
     'bg-error'
   const label =
-    status === 'online' ? 'Connected' :
-    status === 'checking' ? 'Connecting…' :
-    'Offline'
+    status === 'online' ? t('statusBar.connected') :
+    status === 'checking' ? t('statusBar.connecting') :
+    t('statusBar.offline')
   return (
     <div className="flex items-center gap-1.5 text-muted-foreground" title={label}>
       <span className={`w-[7px] h-[7px] rounded-full ${dotColor}`} />
@@ -226,6 +228,7 @@ export const contextBarGradient = 'linear-gradient(to right, hsl(142 71% 45%) 0%
 
 
 function ContextChip({ model }) {
+  const { t } = useTranslation()
   const { sessions, activeSessionId } = useSessionTokens()
   const { data: quotaData, items: quotaItems } = useQuota()
   const { theme: themeId } = useTheme()
@@ -280,7 +283,7 @@ function ContextChip({ model }) {
         ref={anchorRef}
         onClick={() => setOpen(!open)}
         className="flex items-center gap-2 h-[22px] px-2.5 rounded-md hover:bg-secondary hover:text-foreground text-muted-foreground transition-colors"
-        title="Context window & plan"
+        title={t('statusBar.contextAndPlan')}
       >
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <circle cx="12" cy="12" r="10" />
@@ -317,12 +320,12 @@ function ContextChip({ model }) {
               data-testid="breakdown-toggle"
               aria-expanded={breakdownOpen}
               className="flex items-center gap-1 text-[12.5px] font-semibold text-foreground hover:text-primary transition-colors"
-              title={breakdownOpen ? 'Hide breakdown' : 'Show breakdown'}
+              title={breakdownOpen ? t('statusBar.hideBreakdown') : t('statusBar.showBreakdown')}
             >
               {breakdownOpen
                 ? <ChevronDown size={13} />
                 : <ChevronRight size={13} />}
-              <span>Context window</span>
+              <span>{t('statusBar.contextWindow')}</span>
             </button>
             <span className="text-[11px] text-muted-foreground tabular-nums">
               {formatTokenCount(used)} / {formatTokenCount(limit)} tokens ({pct}%)
@@ -372,12 +375,12 @@ function ContextChip({ model }) {
             // of the token count, per Edu's "tamanho em bytes" ask.
             // All other rows show token counts as before.
             const rows = [
-              { key: 'messages',      label: 'Messages',      useBytes: true  },
-              { key: 'skills',        label: 'Skills',        useBytes: false },
-              { key: 'memory_files',  label: 'Memory files',  useBytes: false },
-              { key: 'custom_agents', label: 'Custom agents', useBytes: false },
-              { key: 'system_prompt', label: 'System prompt', useBytes: false },
-              { key: 'mcp_tools',     label: 'MCP tools',     useBytes: false },
+              { key: 'messages',      label: t('statusBar.breakdown.messages'),      useBytes: true  },
+              { key: 'skills',        label: t('statusBar.breakdown.skills'),        useBytes: false },
+              { key: 'memory_files',  label: t('statusBar.breakdown.memoryFiles'),  useBytes: false },
+              { key: 'custom_agents', label: t('statusBar.breakdown.customAgents'), useBytes: false },
+              { key: 'system_prompt', label: t('statusBar.breakdown.systemPrompt'), useBytes: false },
+              { key: 'mcp_tools',     label: t('statusBar.breakdown.mcpTools'),     useBytes: false },
             ]
             return (
               <div className="space-y-1 mt-1">
@@ -425,7 +428,7 @@ function ContextChip({ model }) {
             </div>
           ) : !textQuota ? (
             <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground py-2">
-              Plan data unavailable
+              {t('statusBar.planUnavailable')}
             </div>
           ) : (
             <div className="space-y-2.5">
@@ -442,7 +445,7 @@ function ContextChip({ model }) {
                       <span className="text-[12px] font-semibold text-foreground">5-hour limit</span>
                       <span className={`inline-flex items-center gap-1 text-[11px] tabular-nums ${sessionTextClass}`}>
                         {sessionState !== 'normal' && <AlertCircle size={11} />}
-                        Resets in {formatResetTime(sessionReset)} · {100 - sessionPct}% left
+                        {t('statusBar.resetsIn')} {formatResetTime(sessionReset)} · {100 - sessionPct}% left
                       </span>
                     </div>
                     <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
@@ -507,6 +510,7 @@ const CHAT_MODELS = [
 ]
 
 function ModelPicker({ model, setModel }) {
+  const { t } = useTranslation()
   const anchorRef = useRef(null)
   const [open, setOpen] = useState(false)
 
@@ -593,6 +597,7 @@ function ModelPicker({ model, setModel }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function ThinkingToggle({ thinkingEnabled, setThinkingEnabled, supportsThinking }) {
+  const { t } = useTranslation()
   if (!supportsThinking) return null
   const knobLeft = thinkingEnabled ? 'left-[17px]' : 'left-[1.5px]'
   const trackBg = thinkingEnabled ? 'bg-primary' : 'bg-secondary'
@@ -624,6 +629,7 @@ function ThinkingToggle({ thinkingEnabled, setThinkingEnabled, supportsThinking 
 // ─────────────────────────────────────────────────────────────────────────────
 
 function AgentStatus() {
+  const { t } = useTranslation()
   const { thinking, steps } = useAgentActivity()
   const active = thinking.active || steps.some((s) => s.status === 'running')
   const color = active ? 'text-success' : 'text-muted-foreground'
@@ -650,13 +656,14 @@ function AgentStatus() {
 // Top-level StatusBar — mounted by App.jsx below the main panel.
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function StatusBar({
+export default function StatusBarInner({
   model,
   setModel,
   thinkingEnabled,
   setThinkingEnabled,
   supportsThinking,
 }) {
+  const { t } = useTranslation()
   return (
     <footer className="h-[30px] flex-none border-t border-border bg-surface/95 backdrop-blur-sm flex items-center justify-between px-3.5 text-foreground relative z-30 select-none">
       {/* Left: connectivity */}

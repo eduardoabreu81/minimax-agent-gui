@@ -850,7 +850,15 @@
     "removePath": "Remove this custom path",
     "createDescription": "Describe what the skill provides.",
     "license": "License",
-    "compatibility": "Compatibility"
+    "compatibility": "Compatibility",
+    "edit": "Edit",
+    "editUser": "Edit (user dir)",
+    "importToUser": "Import to user",
+    "copyPath": "Copy skill path",
+    "installToUser": "Install to user dir",
+    "noMatches": "No skills match \"{query}\".",
+    "none": "No skills found.",
+    "readOnlyVisible": "read-only"
   },
   "skillSources": {
     "builtin": "Built-in",
@@ -1033,7 +1041,8 @@
     "voiceDescriptionLabel": "Voice description",
     "languageLabel": "Language",
     "traitsPrefix": "+ ",
-    "sampleUploading": "Uploading…"
+    "sampleUploading": "Uploading…",
+    "deleteFailed": "Delete failed."
   },
   "video": {
     "modes": {

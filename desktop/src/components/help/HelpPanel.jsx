@@ -76,7 +76,8 @@ export default function HelpPanel() {
         <article className="max-w-2xl mx-auto px-8 py-8 text-sm text-foreground leading-relaxed">
           {content
             ? <MarkdownRenderer content={content} />
-            : <p className="text-muted-foreground">No content available.</p>}
+            : <p className="text-muted-foreground">{t('help.noContent')}</p>
+          }
         </article>
       </main>
     </div>

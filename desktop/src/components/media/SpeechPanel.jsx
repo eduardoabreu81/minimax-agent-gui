@@ -8,7 +8,7 @@ import { useSessionProtection } from '../../hooks/useSessionProtection'
 import RecentGenerations from './RecentGenerations'
 import MediaPanelLayout from '../shared/MediaPanelLayout'
 import ModeTabBar from '../shared/ModeTabBar'
-import { apiFetch, assetUrl } from '../../lib/api.js'
+import { apiFetch } from '../../lib/api.js'
 
 // ───────────────────────────────────────────────────────────────────────────
 // Constants — TAURI_SPEC §6b
@@ -540,7 +540,7 @@ export default function SpeechPanel() {
       setCloneSample(file)
       setCloneSampleFileId(data.file_id)
       fetchVoices()
-    } catch (e) { setError(e.message || 'Sample upload failed.') }
+    } catch (e) { setError(e.message || t('speech.uploadFailed')) }
     finally { setCloneUploading(false) }
   }
 
@@ -591,7 +591,7 @@ export default function SpeechPanel() {
       }
       setCloneResult({ voice_id: v, demo_audio: data.demo_audio || '' })
       fetchVoices()
-    } catch (e) { setError(e.message || 'Voice cloning failed.') }
+    } catch (e) { setError(e.message || t('speech.cloneFailed')) }
     finally { setCloneRunning(false) }
   }
 
@@ -616,7 +616,7 @@ export default function SpeechPanel() {
       }
       setDesignResult({ voice_id: data.voice_id, trial_audio_path: data.trial_audio_path })
       fetchVoices()
-    } catch (e) { setError(e.message || 'Voice design failed.') }
+    } catch (e) { setError(e.message || t('speech.designFailed')) }
     finally { setDesignRunning(false) }
   }
 
@@ -631,9 +631,9 @@ export default function SpeechPanel() {
     try {
       const res = await apiFetch(`/api/minimax/speech/voices/${type}/${encodeURIComponent(vid)}`, { method: 'DELETE' })
       const data = await res.json()
-      if (!res.ok || !data.success) throw new Error(data.detail || data.error || 'Delete failed.')
+      if (!res.ok || !data.success) throw new Error(data.detail || data.error || t('speech.deleteFailed'))
       fetchVoices()
-    } catch (e) { setError(e.message || 'Delete failed.') }
+    } catch (e) { setError(e.message || t('speech.deleteFailed')) }
   }
 
   // ── Reusable UI bits ────────────────────────────────────────────────────
@@ -980,7 +980,7 @@ export default function SpeechPanel() {
       >
         {loading
           ? <><Loader2 size={14} className="animate-spin" /> {t('speech.generating')}</>
-          : <><Volume2 size={16} /> {t('speech.synthesizeButton')}</>
+          : <><Volume2 size={16} /> {t('speech.synthesizeButton')}</>}
       </button>
     </>
   )
@@ -1026,9 +1026,9 @@ export default function SpeechPanel() {
           </div>
           {result.file_path && (
             <>
-              <audio controls style={{ width: '100%' }} src={assetUrl(`/api/files/content?path=${encodeURIComponent(result.file_path)}`)} />
+              <audio controls style={{ width: '100%' }} src={`/api/files/content?path=${encodeURIComponent(result.file_path)}`} />
               <a
-                href={assetUrl(`/api/files/content?path=${encodeURIComponent(result.file_path)}`)}
+                href={`/api/files/content?path=${encodeURIComponent(result.file_path)}`}
                 download
                 style={{
                   display: 'inline-flex', alignItems: 'center', gap: 6,
@@ -1102,7 +1102,7 @@ export default function SpeechPanel() {
         >
           {cloneUploading ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--app-text-2)' }}>
-              <Loader2 size={14} className="animate-spin" /> {t('speech.sampleUploading')}
+              <Loader2 size={14} className="animate-spin" /> Uploading…
             </div>
           ) : cloneSample ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--app-text)' }}>
@@ -1142,7 +1142,7 @@ export default function SpeechPanel() {
       {/* Voice ID */}
       <div>
         <label style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--app-text-2)', display: 'block', marginBottom: 7 }}>
-          {t('speech.voiceIdLabel')}
+          Voice ID
         </label>
         <input
           type="text"
@@ -1276,7 +1276,7 @@ export default function SpeechPanel() {
         fontSize: 11, color: 'var(--app-text)', lineHeight: 1.5,
       }}>
         <AlertCircle size={14} color="hsl(43 96% 46%)" style={{ flexShrink: 0, marginTop: 1 }} />
-        <span>{t('speech.cloneSevenDayNotice')}</span>
+        <span>A cloned voice is <strong>deleted automatically if unused for 7 days</strong>.</span>
       </div>
 
       {errorBox}
@@ -1413,7 +1413,7 @@ export default function SpeechPanel() {
         <textarea
           value={designPreviewText}
           onChange={(e) => setDesignPreviewText(e.target.value)}
-          placeholder="Once upon a time, in a quiet village by the sea…"
+          placeholder={t('speech.designPreviewPlaceholder')}
           rows={3}
           style={{
             width: '100%',
@@ -1507,7 +1507,7 @@ export default function SpeechPanel() {
             </div>
           )}
           {designResult.trial_audio_path && (
-            <audio controls style={{ width: '100%' }} src={assetUrl(`/api/files/content?path=${encodeURIComponent(designResult.trial_audio_path)}`)} />
+            <audio controls style={{ width: '100%' }} src={`/api/files/content?path=${encodeURIComponent(designResult.trial_audio_path)}`} />
           )}
         </div>
       ) : (
@@ -1605,7 +1605,7 @@ export default function SpeechPanel() {
       {/* System voices */}
       {voicesLoading ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--app-text-2)', padding: '12px 0' }}>
-          <Loader2 size={14} className="animate-spin" /> Loading voices…
+          <Loader2 size={14} className="animate-spin" /> {t('speech.loadingVoices')}
         </div>
       ) : (
         <>

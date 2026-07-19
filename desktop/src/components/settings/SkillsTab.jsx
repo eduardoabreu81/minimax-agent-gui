@@ -11,21 +11,22 @@ import { apiFetch } from '../../lib/api.js'
 // quickly. BUILTIN = grey (shipped with package), USER = green (writable),
 // CLAUDE = orange, CODEX = violet, GEMINI = yellow, EXTRA = blue, GENERIC = slate.
 const SOURCE_BADGES = {
-  'builtin':          { letter: 'B', color: 'bg-zinc-500/15 text-zinc-700 dark:text-zinc-300 border-zinc-500/30',   label: 'Built-in' },
-  'user':             { letter: 'U', color: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30', label: 'User' },
-  'extra':            { letter: 'E', color: 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/30',         label: 'Extra' },
-  'external:claude':  { letter: 'C', color: 'bg-orange-500/15 text-orange-700 dark:text-orange-300 border-orange-500/30', label: 'Claude' },
-  'external:codex':   { letter: 'X', color: 'bg-violet-500/15 text-violet-700 dark:text-violet-300 border-violet-500/30', label: 'Codex' },
-  'external:gemini':  { letter: 'G', color: 'bg-yellow-500/15 text-yellow-700 dark:text-yellow-300 border-yellow-500/30', label: 'Gemini' },
-  'external:generic': { letter: '·', color: 'bg-slate-500/15 text-slate-700 dark:text-slate-300 border-slate-500/30',     label: 'Generic' },
+  'builtin':          { letter: 'B', color: 'bg-zinc-500/15 text-zinc-700 dark:text-zinc-300 border-zinc-500/30',   labelKey: 'skillSources.builtin' },
+  'user':             { letter: 'U', color: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30', labelKey: 'skillSources.user' },
+  'extra':            { letter: 'E', color: 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/30',         labelKey: 'skillSources.extra' },
+  'external:claude':  { letter: 'C', color: 'bg-orange-500/15 text-orange-700 dark:text-orange-300 border-orange-500/30', labelKey: 'skillSources.claude' },
+  'external:codex':   { letter: 'X', color: 'bg-violet-500/15 text-violet-700 dark:text-violet-300 border-violet-500/30', labelKey: 'skillSources.codex' },
+  'external:gemini':  { letter: 'G', color: 'bg-yellow-500/15 text-yellow-700 dark:text-yellow-300 border-yellow-500/30', labelKey: 'skillSources.gemini' },
+  'external:generic': { letter: '·', color: 'bg-slate-500/15 text-slate-700 dark:text-slate-300 border-slate-500/30',     labelKey: 'skillSources.generic' },
 }
 
 function SourceBadge({ source }) {
+  const { t } = useTranslation()
   const meta = SOURCE_BADGES[source] || SOURCE_BADGES['builtin']
   return (
     <span
       className={`inline-flex items-center justify-center w-[18px] h-[18px] rounded-[5px] border text-[10px] font-semibold font-mono shrink-0 ${meta.color}`}
-      title={meta.label}
+      title={t(meta.labelKey)}
     >
       {meta.letter}
     </span>
@@ -192,12 +193,12 @@ export default function SkillsTab() {
   }
 
   const deleteSkill = async (skill) => {
-    if (!confirm(`Delete skill "${skill.name}"? This removes the skill directory.`)) return
+    if (!confirm(t('skills.confirmDelete', { name: skill.name }))) return
     try {
       const r = await apiFetch(`/api/skills/${encodeURIComponent(skill.name)}`, { method: 'DELETE' })
       const data = await r.json()
       if (!r.ok) throw new Error(data.detail || 'Delete failed')
-      showMessage(`Skill "${skill.name}" deleted.`)
+      showMessage(t('skills.toastDeleted', { name: skill.name }))
       await fetchAll()
     } catch (e) {
       setError(e.message)
@@ -226,7 +227,7 @@ export default function SkillsTab() {
       })
       const cd = await cr.json()
       if (!cr.ok) throw new Error(cd.detail || 'Import failed')
-      showMessage(`Skill "${skill.name}" imported to user dir.`)
+      showMessage(t('skills.toastImported', { name: skill.name }))
       await fetchAll()
     } catch (e) {
       setError(e.message)
@@ -271,9 +272,9 @@ export default function SkillsTab() {
       <div className="border border-border rounded-[14px] bg-card overflow-hidden">
         <div className="px-5 py-4 border-b border-border flex items-center justify-between">
           <div>
-            <div className="text-[13px] font-medium">Skill sources</div>
+            <div className="text-[13px] font-medium">{t('skills.sources')}</div>
             <div className="text-[11.5px] text-muted-foreground mt-0.5">
-              Built-in + User + Extra + external brand dirs (Claude / Codex / Gemini). User wins on conflict.
+              {t('skillSources.desc')}
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
@@ -281,17 +282,17 @@ export default function SkillsTab() {
               onClick={rescan}
               disabled={rescanning}
               className="flex items-center gap-1.5 h-[30px] px-3 rounded-[8px] border border-border bg-transparent text-foreground text-[12px] font-medium hover:border-primary/50 transition-colors disabled:opacity-40"
-              title="Re-scan all sources"
+              title={t('skills.rescan')}
             >
               {rescanning ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
-              Rescan
+              {t('skills.rescan')}
             </button>
             <button
               onClick={() => setAddPathOpen(true)}
               className="flex items-center gap-1.5 h-[30px] px-3 rounded-[8px] border border-border bg-transparent text-foreground text-[12px] font-medium hover:border-primary/50 transition-colors"
-              title="Add a custom skills directory"
+              title={t('skills.addPath')}
             >
-              <span className="text-[14px] leading-none">+</span> Add path
+              <span className="text-[14px] leading-none">+</span> {t('skills.addPath')}
             </button>
           </div>
         </div>
@@ -303,7 +304,7 @@ export default function SkillsTab() {
               value={newPath}
               onChange={(e) => setNewPath(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') addCustomPath(); if (e.key === 'Escape') setAddPathOpen(false) }}
-              placeholder="~/my-team-skills  or  C:/path/to/skills  or  .claude/plugins/foo/skills"
+              placeholder={t('skills.pathPlaceholder')}
               className="flex-1 h-[32px] bg-card border border-border rounded-[8px] px-3 font-mono text-[12px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
               autoFocus
             />
@@ -336,13 +337,13 @@ export default function SkillsTab() {
                     <span className="text-[10px] text-muted-foreground italic px-1.5">not on disk</span>
                   )}
                   {src.read_only && (
-                    <span className="text-[10px] text-muted-foreground italic px-1.5" title="Read-only source">read-only</span>
+                    <span className="text-[10px] text-muted-foreground italic px-1.5" title={t('skills.readOnly')}>{t('skills.readOnlyVisible')}</span>
                   )}
                   {removable && (
                     <button
                       onClick={() => removeCustomPath(src.path)}
                       className="p-1 rounded-[5px] text-muted-foreground hover:text-error hover:bg-error/10 transition-colors"
-                      title="Remove this custom path"
+                      title={t('skills.removePath')}
                     >
                       <Trash2 size={12} />
                     </button>
@@ -362,7 +363,7 @@ export default function SkillsTab() {
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search skills…"
+            placeholder={t('skills.search')}
             className="w-full h-[34px] bg-surface border border-border rounded-[8px] pl-9 pr-3 text-[12.5px] focus:outline-none focus:border-primary"
           />
         </div>
@@ -397,7 +398,7 @@ export default function SkillsTab() {
               >
                 {expanded ? <ChevronDown size={13} className="text-muted-foreground" /> : <ChevronRight size={13} className="text-muted-foreground" />}
                 <SourceBadge source={source} />
-                <span className="text-[12.5px] font-semibold">{meta.label}</span>
+                <span className="text-[12.5px] font-semibold">{t(meta.labelKey)}</span>
                 <span className="text-[10.5px] text-muted-foreground">{items.length} skill{items.length === 1 ? '' : 's'}</span>
               </button>
               {expanded && (
@@ -435,7 +436,7 @@ export default function SkillsTab() {
                             <button
                               onClick={() => editSkill(s)}
                               className="p-1.5 rounded-[6px] text-muted-foreground hover:text-foreground hover:bg-surface transition-colors"
-                              title="Edit (user dir)"
+                              title={t('skills.editUser')}
                             >
                               <Edit3 size={12} />
                             </button>
@@ -451,7 +452,7 @@ export default function SkillsTab() {
         })}
         {Object.keys(groupedFiltered).length === 0 && (
           <div className="px-5 py-8 text-center text-[12.5px] text-muted-foreground">
-            {search ? `No skills match "${search}".` : 'No skills found.'}
+            {search ? t('skills.noMatches', { query: search }) : t('skills.none')}
           </div>
         )}
       </div>
@@ -535,10 +536,9 @@ function ContextMenu({ skill, x, y, onClose, onView, onEdit, onImport, onDelete,
       style={{ left, top }}
     >
       <MenuItem icon={<Eye size={12} />} onClick={onView}>View raw markdown</MenuItem>
-      {!skill.read_only && <MenuItem icon={<Edit3 size={12} />} onClick={onEdit}>Edit</MenuItem>}
-      <MenuItem icon={<Copy size={12} />} onClick={onImport}>Import to user</MenuItem>
-      <MenuItem icon={<ExternalLink size={12} />} onClick={onCopyPath}>Copy skill path</MenuItem>
-      {!skill.read_only && (
+      {!skill.read_only && <MenuItem icon={<Edit3 size={12} />} onClick={onEdit}>{t('skills.edit')}</MenuItem>}
+      <MenuItem icon={<Copy size={12} />} onClick={onImport}>{t('skills.importToUser')}</MenuItem>}
+      <MenuItem icon={<ExternalLink size={12} />} onClick={onCopyPath}>{t('skills.copyPath')}</MenuItem>}
         <>
           <div className="border-t border-border my-1" />
           <MenuItem icon={<Trash2 size={12} />} onClick={onDelete} destructive>Delete</MenuItem>
@@ -820,7 +820,7 @@ function ImportModal({ onClose, onInstalled, onError }) {
           <button onClick={install} disabled={!preview || loading}
             className="flex items-center gap-1.5 h-[34px] px-4 rounded-[8px] bg-primary hover:bg-primary-hover disabled:opacity-40 text-white text-[12px] font-medium">
             {loading && preview ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
-            Install to user dir
+            {t('skills.installToUser')}
           </button>
         </div>
       </div>
