@@ -1131,6 +1131,7 @@
   },
   "statusBar": {
     "thinkingOnShort": "생각: 켬",
-    "thinkingOffShort": "생각: 끔"
+    "thinkingOffShort": "생각: 끔",
+    "pctLeft": "{pct}% 남음"
   }
 }

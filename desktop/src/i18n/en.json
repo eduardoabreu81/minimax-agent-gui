@@ -1131,6 +1131,7 @@
   },
   "statusBar": {
     "thinkingOnShort": "Thinking",
-    "thinkingOffShort": "Thinking off"
+    "thinkingOffShort": "Thinking off",
+    "pctLeft": "{pct}% left"
   }
 }
