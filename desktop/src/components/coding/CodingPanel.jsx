@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import XTermTerminal from './XTermTerminal'
 import MarkdownRenderer from '../MarkdownRenderer'
+import ArtifactViewerModal from '../artifact/ArtifactViewerModal.jsx'
 import WorkspaceSidebar from './WorkspaceSidebar'
 import WorkspacePicker from './WorkspacePicker'
 import AgentChatPanel from './AgentChatPanel'
@@ -82,6 +83,7 @@ export default function CodingPanel({
   const [agentMode, setAgentMode] = useState(() => {
     try { return localStorage.getItem('agent-mode') || 'agent' } catch { return 'agent' }
   })
+  const [artifact, setArtifact] = useState(null)
   const [permissionRequest, setPermissionRequest] = useState(null)
   const [selectedPreview, setSelectedPreview] = useState(null)
   const [showEditorDrawer, setShowEditorDrawer] = useState(false)
@@ -1039,7 +1041,10 @@ const sendCodingMessage = useCallback((text, attachment) => {
                       <CopyButton text={msg.content} />
                     </div>
                   )}
-                  <MarkdownRenderer content={msg.content} />
+                  <MarkdownRenderer
+                    content={msg.content}
+                    onArtifactOpen={(a) => setArtifact(a)}
+                  />
                   {msg.attachment && (
                     <div className="mt-2 pt-2 border-t border-white/20">
                       {/\.(png|jpg|jpeg|webp|gif)$/i.test(msg.attachment) ? (
@@ -1078,6 +1083,13 @@ const sendCodingMessage = useCallback((text, attachment) => {
               </div>
             </div>
           )}
+
+        <ArtifactViewerModal
+          open={!!artifact}
+          onOpenChange={(o) => { if (!o) setArtifact(null) }}
+          code={artifact?.code || ''}
+          language={artifact?.language || 'html'}
+        />
         </div>
 
         {/* Composer — owns the chat input + attachment + slash menu +
