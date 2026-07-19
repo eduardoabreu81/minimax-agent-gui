@@ -83,6 +83,22 @@ function extractVars(str) {
     .sort()
 }
 
+function nodeType(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? 'object'
+    : typeof value
+}
+
+function collectNodes(value, prefix = '', out = new Map()) {
+  if (prefix) out.set(prefix, { type: nodeType(value), value })
+  if (nodeType(value) === 'object') {
+    for (const [key, child] of Object.entries(value)) {
+      collectNodes(child, prefix ? `${prefix}.${key}` : key, out)
+    }
+  }
+  return out
+}
+
 describe('i18n locale files', () => {
   it('contains no mustache-style {{var}} placeholders in any locale', () => {
     for (const [name, json] of Object.entries(LOCALES)) {
@@ -189,4 +205,35 @@ describe('i18n locale files', () => {
       }
     }
   })
-})
+
+  it('keeps the Korean locale tree identical to English', () => {
+    const enNodes = collectNodes(en)
+    const koNodes = collectNodes(ko)
+    expect([...koNodes.keys()].sort()).toEqual([...enNodes.keys()].sort())
+    for (const [key, enNode] of enNodes) {
+      expect(koNodes.get(key)?.type, `ko.${key} has a different node type`).toBe(enNode.type)
+    }
+  })
+
+  it('keeps every Korean leaf non-empty', () => {
+    for (const [key, node] of collectNodes(ko)) {
+      if (node.type === 'string') expect(node.value.trim(), `ko.${key} is empty`).not.toBe('')
+    }
+  })
+
+  it('keeps placeholders aligned between English and Korean', () => {
+    const koNodes = collectNodes(ko)
+    for (const [key, node] of collectNodes(en)) {
+      if (node.type !== 'string') continue
+      expect(extractVars(koNodes.get(key)?.value || ''), `ko.${key} placeholder drift`).toEqual(extractVars(node.value))
+    }
+  })
+
+  it('pins known Korean semantic translations', async () => {
+    await i18n.changeLanguage('ko')
+    expect(i18n.t('music.instrumentalActiveHint')).toBe('이 곡은 보컬과 가사 없이 연주곡으로 생성됩니다.')
+    expect(i18n.t('music.bestQuality')).toContain('Token Plan')
+    expect(i18n.t('music.unlimitedDefault')).toBe('무료 티어(낮은 RPM)')
+    expect(i18n.t('palette.results', { count: 5 })).toBe('결과 5개')
+  })
+ })
