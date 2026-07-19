@@ -209,31 +209,48 @@ describe('i18n locale files', () => {
   it('keeps the Korean locale tree identical to English', () => {
     const enNodes = collectNodes(en)
     const koNodes = collectNodes(ko)
-    expect([...koNodes.keys()].sort()).toEqual([...enNodes.keys()].sort())
+    expect(
+      [...koNodes.keys()].sort(),
+      'ko has a different set of dotted keys than en',
+    ).toEqual([...enNodes.keys()].sort())
     for (const [key, enNode] of enNodes) {
-      expect(koNodes.get(key)?.type, `ko.${key} has a different node type`).toBe(enNode.type)
+      expect(
+        koNodes.get(key)?.type,
+        `ko.${key} has a different node type than en`,
+      ).toBe(enNode.type)
     }
   })
 
   it('keeps every Korean leaf non-empty', () => {
     for (const [key, node] of collectNodes(ko)) {
-      if (node.type === 'string') expect(node.value.trim(), `ko.${key} is empty`).not.toBe('')
+      if (node.type === 'string') {
+        expect(
+          node.value.trim().length,
+          `ko.${key} is empty`,
+        ).toBeGreaterThan(0)
+      }
     }
   })
 
   it('keeps placeholders aligned between English and Korean', () => {
     const koNodes = collectNodes(ko)
-    for (const [key, node] of collectNodes(en)) {
-      if (node.type !== 'string') continue
-      expect(extractVars(koNodes.get(key)?.value || ''), `ko.${key} placeholder drift`).toEqual(extractVars(node.value))
+    for (const [key, enNode] of collectNodes(en)) {
+      if (enNode.type !== 'string') continue
+      expect(
+        extractVars(koNodes.get(key)?.value || ''),
+        `ko.${key} placeholder drift`,
+      ).toEqual(extractVars(enNode.value))
     }
   })
 
   it('pins known Korean semantic translations', async () => {
     await i18n.changeLanguage('ko')
-    expect(i18n.t('music.instrumentalActiveHint')).toBe('이 곡은 보컬과 가사 없이 연주곡으로 생성됩니다.')
+    expect(i18n.t('music.instrumentalActiveHint')).toBe(
+      '이 곡은 보컬과 가사 없이 연주곡으로 생성됩니다.',
+    )
     expect(i18n.t('music.bestQuality')).toContain('Token Plan')
     expect(i18n.t('music.unlimitedDefault')).toBe('무료 티어(낮은 RPM)')
     expect(i18n.t('palette.results', { count: 5 })).toBe('결과 5개')
   })
- })
+
+})
