@@ -276,3 +276,12 @@ system_prompt += "\n\n" + ARTIFACT_RULES
 - 단위 테스트 3종 + vitest 회귀 테스트 + production build 가 모두 통과한다.
 - 비활성 `App.tsx` / `WorkPanel.tsx` / `MessageBubble.tsx` 는 수정하지 않는다.
 - 다중 파일 React, esbuild-wasm, share URL, CodingPanel 사이드 패널, WebView 스파이크 실패 OS 에서의 mermaid/reactjs 는 이번 결과에서 완료된 것으로 보고하지 않는다.
+
+## Phase 0 Spike Result
+
+- macOS: **SKIPPED** per user decision (2026-07-19). User accepted all 4 languages (html, svg, mermaid, reactjs) shipping in v0.5.0 with the understanding that if any of the 3 Tauri WebView runtimes blocks the esm.sh ESM import inside `<iframe sandbox srcdoc>`, the artifact will render as an error bridge (red "Failed to load runtime" inside the iframe) rather than a graceful fallback. Fallback to `html+svg`-only (Task 2, Task 3 Step 5, Task 9 Step 2 narrow branch) remains available for any post-merge bug report.
+- Windows: not tested on this machine.
+- Linux: not tested on this machine.
+- Languages shipping in v0.5.0: **html, svg, mermaid, reactjs** (optimistic default).
+
+Spike HTML (`desktop/src/components/artifact/__spike__/webview-esm.html`) and its temporary `App.jsx` mount were reverted in commit following this entry; the spike file itself is retained as a developer reference for a future re-verification run.
