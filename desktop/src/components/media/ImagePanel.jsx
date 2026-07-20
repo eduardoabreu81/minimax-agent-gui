@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef } from 'react'
+import { useCallback, useState, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Image as ImageIcon, Loader2, Sparkles,
   Upload, X, Dice5, Plus, Minus,
+  Plus as PlusIcon, Edit3 as Edit3Icon,
 } from 'lucide-react'
 import { useSessionProtection } from '../../hooks/useSessionProtection'
 import MediaPanelLayout from '../shared/MediaPanelLayout'
@@ -11,6 +12,8 @@ import GalleryHeader from '../shared/GalleryHeader'
 import ShapePreview from '../shared/ShapePreview'
 import RecentGenerations from './RecentGenerations'
 import { apiFetch } from '../../lib/api.js'
+import { StyleSheetEditor, StyleSheetModal } from '../style-sheets/index.js'
+import { listStyleSheets } from '../../lib/styleSheets.js'
 
 // ── Aspect ratios — match MiniMax `image-01` official resolutions (mockup L182-189)
 const ASPECT_RATIOS = [
@@ -147,29 +150,33 @@ export default function ImagePanel() {
     register('image-prompt', prompt.trim().length > 0, t('image.prompt'))
   }, [prompt, register, t])
 
-  useEffect(() => { fetchGallery() }, [])
-  // Load style sheets once on mount. If the persisted selection was
-  // deleted out-of-band, clear it so the dropdown doesn't point at a
-  // ghost. The body lengths power the char-budget indicator below.
-  useEffect(() => {
-    let cancelled = false
-    apiFetch('/api/style-sheets')
-      .then((r) => r.json())
-      .then((data) => {
-        if (cancelled || !data.success) return
-        const sheets = data.style_sheets || []
-        setStyleSheets(sheets)
-        const current =
-          (typeof localStorage !== 'undefined' && localStorage.getItem('image-style-sheet')) || ''
-        if (current && !sheets.find((s) => s.name === current)) {
-          if (typeof localStorage !== 'undefined')
-            localStorage.removeItem('image-style-sheet')
-          setStyleSheet('')
-        }
-      })
-      .catch(() => { /* style sheets are optional — never block the panel */ })
-    return () => { cancelled = true }
+  const [styleEditorState, setStyleEditorState] = useState(null)
+  // null = closed; { mode: 'create' } | { mode: 'edit', sheet }
+  const [styleSheetsLoadError, setStyleSheetsLoadError] = useState(null)
+
+  const loadStyleSheets = useCallback(async () => {
+    try {
+      const sheets = await listStyleSheets()
+      setStyleSheets(sheets)
+      const current =
+        (typeof localStorage !== 'undefined' && localStorage.getItem('image-style-sheet')) || ''
+      if (current && !sheets.find((s) => s.name === current)) {
+        if (typeof localStorage !== 'undefined') localStorage.removeItem('image-style-sheet')
+        setStyleSheet('')
+      }
+    } catch (e) {
+      setStyleSheetsLoadError(e.message || 'Failed to load style sheets')
+    }
   }, [])
+
+  useEffect(() => { loadStyleSheets() }, [loadStyleSheets])
+
+  const handleStyleSaved = useCallback(async (saved) => {
+    setStyleEditorState(null)
+    await loadStyleSheets()
+    setStyleSheet(saved.name)
+    if (typeof localStorage !== 'undefined') localStorage.setItem('image-style-sheet', saved.name)
+  }, [loadStyleSheets])
   // Mirror backend combine_prompt so the char-budget indicator matches
   // what the server will actually send to MiniMax.
   const computeCombinedLen = (userPrompt, sheet) => {
@@ -397,24 +404,42 @@ export default function ImagePanel() {
           server-side; the char-budget chip on the right mirrors that
           combination so the user sees the real total. */}
       <div>
-        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 7 }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 7, gap: 8 }}>
           <label style={{ ...labelStyle, marginBottom: 0 }}>{t('image.styleSheet')}</label>
-          {styleSheet && (
-            <span
-              style={{
-                fontSize: 10.5,
-                color: overBudget
-                  ? 'hsl(var(--destructive))'
-                  : combinedLen > PROMPT_MAX * 0.8
-                    ? 'hsl(var(--primary))'
-                    : 'var(--app-text-2)',
-                fontVariantNumeric: 'tabular-nums',
-              }}
-              title={overBudget ? t('image.styleSheetOverBudget') : undefined}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {styleSheet && (
+              <button
+                onClick={() => setStyleEditorState({ mode: 'edit', sheet: { name: styleSheet } })}
+                title={t('styleSheets.edit')}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--app-text-2)', display: 'flex' }}
+              >
+                <Edit3Icon size={12} />
+              </button>
+            )}
+            <button
+              onClick={() => setStyleEditorState({ mode: 'create' })}
+              title={t('styleSheets.create')}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'hsl(var(--primary))', display: 'flex' }}
             >
-              {combinedLen} / {PROMPT_MAX}
-            </span>
-          )}
+              <PlusIcon size={14} />
+            </button>
+            {styleSheet && (
+              <span
+                style={{
+                  fontSize: 10.5,
+                  color: overBudget
+                    ? 'hsl(var(--destructive))'
+                    : combinedLen > PROMPT_MAX * 0.8
+                      ? 'hsl(var(--primary))'
+                      : 'var(--app-text-2)',
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+                title={overBudget ? t('image.styleSheetOverBudget') : undefined}
+              >
+                {combinedLen} / {PROMPT_MAX}
+              </span>
+            )}
+          </div>
         </div>
         <select
           value={styleSheet}
@@ -831,30 +856,51 @@ export default function ImagePanel() {
   )
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      {message && (
-        <div
-          role="status"
-          style={{
-            padding: '6px 12px',
-            fontSize: 12,
-            background: 'hsl(var(--primary) / 0.12)',
-            color: 'var(--app-text)',
-            borderBottom: '1px solid var(--app-border)',
-          }}
-        >
-          {message}
+    <>
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+        {message && (
+          <div
+            role="status"
+            style={{
+              padding: '6px 12px',
+              fontSize: 12,
+              background: 'hsl(var(--primary) / 0.12)',
+              color: 'var(--app-text)',
+              borderBottom: '1px solid var(--app-border)',
+            }}
+          >
+            {message}
+          </div>
+        )}
+        <div style={{ flex: 1, minHeight: 0 }}>
+          <MediaPanelLayout
+            controlsWidth={360}
+            topBar={topBar}
+            galleryHeader={galleryHeader}
+            controls={controls}
+            canvas={canvas}
+          />
         </div>
-      )}
-      <div style={{ flex: 1, minHeight: 0 }}>
-        <MediaPanelLayout
-          controlsWidth={360}
-          topBar={topBar}
-          galleryHeader={galleryHeader}
-          controls={controls}
-          canvas={canvas}
-        />
       </div>
-    </div>
+      {styleEditorState && (
+        <StyleSheetModal
+          onClose={() => setStyleEditorState(null)}
+          title={styleEditorState.mode === 'edit'
+            ? t('styleSheets.editTitle', { name: styleEditorState.sheet?.name || '' })
+            : t('image.createStyleSheetTitle')}
+          maxWidth="max-w-[1100px]"
+        >
+          <StyleSheetEditor
+            mode={styleEditorState.mode}
+            sheet={styleEditorState.sheet}
+            imagePrompt={prompt}
+            saveLabel={t('image.saveAndApply')}
+            onClose={() => setStyleEditorState(null)}
+            onSaved={handleStyleSaved}
+            onError={(msg) => setError(msg)}
+          />
+        </StyleSheetModal>
+      )}
+    </>
   )
 }
