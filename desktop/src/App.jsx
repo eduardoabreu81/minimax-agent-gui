@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
+import KeepAliveAgentPanels from './components/shell/KeepAliveAgentPanels'
 import { useTheme } from './context/ThemeContext'
 import { AgentActivityProvider } from './context/AgentActivityContext'
 import { SessionTokensProvider } from './context/SessionTokensContext'
@@ -178,22 +179,23 @@ function AppShell() {
     setWizardOpen(true)
   }, [])
 
+  // Keep-alive agent panels: Chat/Coding session IDs used to drive
+  // StatusBar visible token bucket. Updated by the panels themselves
+  // via onSessionIdChange.
+  const [tabSessionIds, setTabSessionIds] = useState({ chat: null, code: null })
+  const handleSessionIdChange = useCallback((tabId, sessionId) => {
+    setTabSessionIds(prev => ({ ...prev, [tabId]: sessionId }))
+  }, [])
+
+  const visibleSessionId = activeTab === 'chat' || activeTab === 'code'
+    ? tabSessionIds[activeTab]
+    : null
+
   const panels = {
-    chat: <ChatPanel key={chatKey}
-                     activeModel={activeModel}
-                     setActiveModel={setActiveModel}
-                     thinkingEnabled={thinkingEnabled}
-                     setThinkingEnabled={setThinkingEnabled}
-                     supportsThinking={supportsThinking} />,
     tts: <SpeechPanel />,
     image: <ImagePanel />,
     music: <MusicPanel />,
     video: <VideoPanel />,
-    code: <CodingPanel activeModel={activeModel}
-                      setActiveModel={setActiveModel}
-                      thinkingEnabled={thinkingEnabled}
-                      setThinkingEnabled={setThinkingEnabled}
-                      supportsThinking={supportsThinking} />,
     tasks: <TaskBoard />,
     settings: <SettingsPanel onRestartSetup={restartSetup} />,
     help: <HelpPanel />,
@@ -300,14 +302,8 @@ function AppShell() {
   }, [])
 
   const handleNavigate = useCallback((tabId) => {
-    if (hasAnyRisk() && tabId !== activeTab) {
-      setGuardAction('navigate')
-      setGuardPayload(tabId)
-      setShowSessionGuard(true)
-    } else {
-      setActiveTab(tabId)
-    }
-  }, [activeTab])
+    setActiveTab(tabId)
+  }, [])
 
   const executeAction = useCallback((action) => {
     switch (action) {
@@ -348,8 +344,7 @@ function AppShell() {
     }
   }, [executeAction])
 
-  return (
-    <SessionTokensProvider>
+    <SessionTokensProvider visibleSessionId={visibleSessionId}>
       <AgentActivityProvider>
         <div className="flex flex-col h-screen w-screen bg-background text-foreground overflow-hidden relative">
           {theme === 'matrix' && matrixEffect && <MatrixRain />}
@@ -357,18 +352,35 @@ function AppShell() {
           <div className="flex flex-1 min-h-0">
             <Sidebar
               activeTab={activeTab}
-              onTabChange={(tab) => {
-                if (hasAnyRisk() && tab !== activeTab) {
-                  setGuardAction('tab')
-                  setPendingTab(tab)
-                  setShowSessionGuard(true)
-                } else {
-                  setActiveTab(tab)
-                }
-              }}
+              onTabChange={(tab) => setActiveTab(tab)}
             />
             <main className="flex-1 flex flex-col min-w-0">
-              {panels[activeTab]}
+              <KeepAliveAgentPanels
+                activeTab={activeTab}
+                renderChat={(active) => (
+                  <ChatPanel
+                    active={active}
+                    onSessionIdChange={(sid) => handleSessionIdChange('chat', sid)}
+                    activeModel={activeModel}
+                    setActiveModel={setActiveModel}
+                    thinkingEnabled={thinkingEnabled}
+                    setThinkingEnabled={setThinkingEnabled}
+                    supportsThinking={supportsThinking}
+                  />
+                )}
+                renderCode={(active) => (
+                  <CodingPanel
+                    active={active}
+                    onSessionIdChange={(sid) => handleSessionIdChange('code', sid)}
+                    activeModel={activeModel}
+                    setActiveModel={setActiveModel}
+                    thinkingEnabled={thinkingEnabled}
+                    setThinkingEnabled={setThinkingEnabled}
+                    supportsThinking={supportsThinking}
+                  />
+                )}
+              />
+              {activeTab !== 'chat' && activeTab !== 'code' && panels[activeTab]}
             </main>
           </div>
           <StatusBar
