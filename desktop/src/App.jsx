@@ -344,6 +344,7 @@ function AppShell() {
     }
   }, [executeAction])
 
+  return (
     <SessionTokensProvider visibleSessionId={visibleSessionId}>
       <AgentActivityProvider>
         <div className="flex flex-col h-screen w-screen bg-background text-foreground overflow-hidden relative">
