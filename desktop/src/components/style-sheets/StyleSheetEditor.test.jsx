@@ -127,4 +127,66 @@ describe('StyleSheetEditor', () => {
       expect(mockApi.draftStyleSheetFromImage).toHaveBeenCalledWith({ imagePath: 'generations/images/x.png' }),
     )
   })
+
+  // Regression: edit mode used to mark the form dirty on mount because
+  // the editor compared against "any value present" instead of against
+  // the sheet's original values. That made the parent's discard guard
+  // fire on every close, including the close that follows a successful
+  // save — the user saw a "Discard changes?" dialog (or, in production,
+  // nothing at all) immediately after clicking Save.
+  it('edit mode is not dirty on mount and resets to clean after save', async () => {
+    mockApi.getStyleSheet.mockResolvedValueOnce({
+      name: 'wc',
+      description: 'old desc',
+      body: 'old body',
+      raw_markdown: '---\nname: wc\ndescription: old desc\n---\nold body',
+    })
+    mockApi.updateStyleSheet.mockResolvedValueOnce({
+      name: 'wc',
+      description: 'new desc',
+      body: 'old body',
+    })
+
+    const onDirtyChange = vi.fn()
+    render(
+      <StyleSheetEditor
+        mode="edit"
+        sheet={{ name: 'wc', description: 'old desc' }}
+        onSaved={vi.fn()}
+        onDirtyChange={onDirtyChange}
+      />,
+    )
+
+    // After the lazy edit-mode load resolves, dirty should NOT have flipped
+    // to true at any point. The form's mounted baseline matches the
+    // fetched values, so onDirtyChange's first call (and all subsequent
+    // ones until the user actually edits a field) should be `false`.
+    await waitFor(() => expect(mockApi.getStyleSheet).toHaveBeenCalledWith('wc'))
+    await waitFor(() => {
+      expect(onDirtyChange).toHaveBeenCalled()
+      expect(onDirtyChange.mock.calls.every(([v]) => v === false)).toBe(true)
+    })
+
+    // User edits description → dirty becomes true.
+    fireEvent.change(screen.getByPlaceholderText('styleSheets.descriptionPlaceholder'), {
+      target: { value: 'new desc' },
+    })
+    await waitFor(() => {
+      const last = onDirtyChange.mock.calls[onDirtyChange.mock.calls.length - 1]?.[0]
+      expect(last).toBe(true)
+    })
+
+    // Save → baseline updates → dirty goes back to false. The parent's
+    // discard guard now treats the save as committed and won't pop on
+    // the subsequent close.
+    fireEvent.click(screen.getByText('styleSheets.saveChanges'))
+    await waitFor(() => expect(mockApi.updateStyleSheet).toHaveBeenCalledWith(
+      'wc',
+      expect.objectContaining({ description: 'new desc' }),
+    ))
+    await waitFor(() => {
+      const last = onDirtyChange.mock.calls[onDirtyChange.mock.calls.length - 1]?.[0]
+      expect(last).toBe(false)
+    })
+  })
 })

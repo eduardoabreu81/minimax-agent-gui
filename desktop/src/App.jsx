@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
+import { invoke } from '@tauri-apps/api/core'
 import KeepAliveAgentPanels from './components/shell/KeepAliveAgentPanels'
 import { useTheme } from './context/ThemeContext'
 import { AgentActivityProvider } from './context/AgentActivityContext'
@@ -117,6 +118,35 @@ function AppShell() {
   useEffect(() => {
     try { localStorage.setItem('global-thinking-enabled', String(thinkingEnabled)) } catch {}
   }, [thinkingEnabled])
+
+  // Global keyboard shortcut: Cmd+Shift+I (macOS) / Ctrl+Shift+I (Win/Linux)
+  // toggles WebView DevTools. WKWebView on macOS does not expose a
+  // right-click Inspect menu by default, so users have no other reliable
+  // way to open devtools in the built app.
+  //
+  // Wired on the React side (rather than via tauri-plugin-global-shortcut)
+  // to keep the Rust dependency surface minimal — the shortcut is forwarded
+  // to the Rust `toggle_devtools` command, which is gated behind the
+  // `devtools` Cargo feature (see src-tauri/Cargo.toml).
+  useEffect(() => {
+    if (!isTauri) return
+    const isMac = navigator.platform.toLowerCase().includes('mac')
+    const handler = (e) => {
+      const modPressed = isMac ? e.metaKey : e.ctrlKey
+      if (!modPressed || !e.shiftKey || e.key.toLowerCase() !== 'i') return
+      // Don't hijack Ctrl+Shift+I inside text inputs — the browser's own
+      // caret-history shortcut has no default behavior there, but
+      // respecting focus avoids accidental toggles while typing.
+      const tag = (e.target?.tagName || '').toLowerCase()
+      if (tag === 'input' || tag === 'textarea') return
+      e.preventDefault()
+      invoke('toggle_devtools').catch((err) => {
+        console.warn('[minimax] toggle_devtools failed:', err)
+      })
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
 
   // Extended thinking is M3-only (today). Other chat models in the Token
   // Plan do not support the Anthropic `thinking` param.

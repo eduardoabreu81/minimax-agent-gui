@@ -1158,8 +1158,14 @@
     "extractStyle": "スタイルを抽出",
     "confirmOverwriteDraft": "現在の下書きを新しい下書きに置き換えますか？",
     "confirmDiscard": "変更を破棄して閉じますか？",
-    "combinedPreview": "結合プロンプトのプレビュー"
-  },
+    "combinedPreview": "結合プロンプトのプレビュー",
+    "noneChip": "スタイルシートなし",
+    "deleteHint": "このスタイルシートを削除",
+    "bodyPreview": "本文プレビュー",
+    "loading": "読み込み中…",
+    "unavailable": "プレビューを表示できません",
+    "emptyBody": "(本文が空)"
+   },
   "contextRef": {
     "expanding": "",
     "types": {

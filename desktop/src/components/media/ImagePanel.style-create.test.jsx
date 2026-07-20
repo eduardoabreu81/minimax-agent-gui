@@ -51,8 +51,8 @@ describe('ImagePanel inline style create', () => {
     })
     render(<ImagePanel />)
     await waitFor(() => expect(mockApi.listStyleSheets).toHaveBeenCalled())
-    fireEvent.click(screen.getByTitle('styleSheets.create'))
-    // Fill the shared editor.
+    fireEvent.click(screen.getByTestId('style-sheet-trigger'))
+    fireEvent.click(screen.getByTestId('style-sheet-new'))
     await waitFor(() => expect(screen.getByPlaceholderText('watercolor-pastel')).toBeTruthy())
     fireEvent.change(screen.getByPlaceholderText('watercolor-pastel'), { target: { value: 'wc' } })
     fireEvent.change(screen.getByPlaceholderText('styleSheets.descriptionPlaceholder'), { target: { value: 'Watercolor' } })

@@ -130,16 +130,18 @@ describe('StyleSheetsTab', () => {
       .mockResolvedValueOnce(jsonResp({ success: true, deleted: 'doomed' }))
       .mockResolvedValueOnce(jsonResp({ success: true, style_sheets: [], count: 0 }))
 
-    const confirmSpy = vi.spyOn(global, 'confirm').mockReturnValue(true)
     render(<StyleSheetsTab />)
     await waitFor(() => expect(screen.getByText('doomed')).toBeTruthy())
 
     fireEvent.click(screen.getByTitle('styleSheets.delete'))
+    // SessionActionGuard renders two buttons; the confirm one has the
+    // confirmLabel i18n key ("styleSheets.delete") on its text node.
+    const confirmBtn = await screen.findByText('styleSheets.delete')
+    fireEvent.click(confirmBtn)
     await waitFor(() => {
       const del = mockApiFetch.mock.calls.find(([url, opts]) => url === '/api/style-sheets/doomed' && opts?.method === 'DELETE')
       expect(del).toBeTruthy()
     })
-    confirmSpy.mockRestore()
   })
 
   it('does not DELETE when confirm is dismissed', async () => {
@@ -149,10 +151,10 @@ describe('StyleSheetsTab', () => {
     render(<StyleSheetsTab />)
     await waitFor(() => expect(screen.getByText('safe')).toBeTruthy())
 
-    const confirmSpy = vi.spyOn(global, 'confirm').mockReturnValue(false)
     fireEvent.click(screen.getByTitle('styleSheets.delete'))
+    const cancelBtn = await screen.findByText('common.cancel')
+    fireEvent.click(cancelBtn)
     const del = mockApiFetch.mock.calls.find(([url, opts]) => url === '/api/style-sheets/safe' && opts?.method === 'DELETE')
     expect(del).toBeUndefined()
-    confirmSpy.mockRestore()
   })
 })

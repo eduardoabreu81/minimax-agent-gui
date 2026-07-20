@@ -28,34 +28,31 @@ const IS_TAURI =
   (window.location?.protocol === "tauri:" ||
     /(^|\.)tauri\.localhost$/i.test(window.location?.hostname || ""));
 
-// Lazy import so the web build (no @tauri-apps/api installed) does
-// not crash. If anything goes wrong, we fall back to a relative path
-// and let the caller surface a network error.
-let invokePromise = null;
-async function tryInvoke(command, args) {
+// Resolve the Tauri `invoke` command. With `withGlobalTauri: true` in
+// tauri.conf.json, the desktop build exposes `window.__TAURI__.core.invoke`
+// synchronously at boot — so we don't need a dynamic import. The previous
+// `import('@tauri-apps/api/core')` specifier was kept behind a string
+// concat to dodge Vite/Rollup resolution, but production bundles still
+// emitted a raw `import("@tauri-apps/api/core")` call that the WebView
+// could not resolve at runtime (the package ships a flat `core.js` file,
+// not a directory, and the wildcard export map in the package's
+// package.json is not honored by the browser's native dynamic import).
+// That manifested as `[api] @tauri-apps/api not available, falling back
+// to relative URLs` and silent failures downstream.
+//
+// Web builds do not have `window.__TAURI__` at all — `isTauri` is false
+// there, so we never reach this code path in dev.
+function getInvoke() {
   if (!IS_TAURI) return null;
-  if (invokePromise === null) {
-    invokePromise = (async () => {
-      try {
-        // Build the specifier at runtime so Rollup/Vite cannot
-        // resolve it statically. The web build does not have
-        // @tauri-apps/api installed (only the desktop Tauri build
-        // does), so a static import would fail.
-        const specifier = "@tauri" + "-apps/api/core";
-        const mod = await import(/* @vite-ignore */ specifier);
-        return mod.invoke;
-      } catch (err) {
-        // Module not installed or invoke unavailable. Treat as no-Tauri.
-        // eslint-disable-next-line no-console
-        console.warn(
-          "[api] @tauri-apps/api not available, falling back to relative URLs:",
-          err,
-        );
-        return null;
-      }
-    })();
+  try {
+    // eslint-disable-next-line no-undef
+    return window.__TAURI__?.core?.invoke || null;
+  } catch {
+    return null;
   }
-  const invoke = await invokePromise;
+}
+async function tryInvoke(command, args) {
+  const invoke = getInvoke();
   if (!invoke) return null;
   try {
     return await invoke(command, args);

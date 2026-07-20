@@ -8,6 +8,7 @@ import {
   draftStyleSheetFromBrief,
   draftStyleSheetFromImage,
 } from '../../lib/styleSheets.js'
+import SessionActionGuard from '../shared/SessionActionGuard'
 
 const PROMPT_MAX = 1500
 const BODY_MAX = 1000
@@ -71,11 +72,53 @@ export default function StyleSheetEditor({
   const [description, setDescription] = useState(sheet?.description || '')
   const [body, setBody] = useState(extractBody(sheet?.raw_markdown) || '')
 
+  // Snapshot of the values that came from `sheet` on mount (and after
+  // the lazy edit-mode load resolves). `fieldsDirty` compares the live
+  // form against THIS baseline, not against "any value present" — the
+  // previous logic flagged the editor as dirty the moment it mounted in
+  // edit mode (because name/description/body are pre-filled), which made
+  // the parent's discard guard fire on save and on every close attempt.
+  //
+  // Stored as state (not a ref) so updating it re-runs the `fieldsDirty`
+  // useMemo and notifies the parent via `onDirtyChange`. A ref would
+  // mutate silently and leave the memo's cached value stuck on "true"
+  // after a successful save.
+  const [baseline, setBaseline] = useState({
+    name: sheet?.name || '',
+    description: sheet?.description || '',
+    body: extractBody(sheet?.raw_markdown) || '',
+    brief: '',
+    imagePath: initialImagePath || '',
+    uploadedDataUrl: '',
+  })
+  const resetBaseline = (snapshot) => {
+    setBaseline(snapshot || { name, description, body, brief, imagePath, uploadedDataUrl })
+  }
+
   const [drafting, setDrafting] = useState(false)
   const [saving, setSaving] = useState(false)
   const [nameError, setNameError] = useState('')
   const [loadingSheet, setLoadingSheet] = useState(false)
-
+  const [overwriteGuardOpen, setOverwriteGuardOpen] = useState(false)
+  const [pendingDraftKind, setPendingDraftKind] = useState(null)
+  // Inline error surfaced inside the modal body. Required because the
+  // parent's onError path paints a banner that the modal's full-screen
+  // overlay (z-40) covers — without this, validation failures look like
+  // "the button does nothing" to the user.
+  const [inlineError, setInlineError] = useState('')
+  useEffect(() => {
+    if (!inlineError) return
+    const id = setTimeout(() => setInlineError(''), 4000)
+    return () => clearTimeout(id)
+  }, [inlineError])
+  // Centralized error sink so every onError site (validation + draft +
+  // save) renders inside the modal instead of being lost behind the
+  // overlay.
+  const reportError = (msg) => {
+    setInlineError(msg)
+    onError?.(msg)
+  }
+  // Edit mode: lazily fetch the full sheet (with raw_markdown) on mount.
   // Edit mode: lazily fetch the full sheet (with raw_markdown) on mount.
   useEffect(() => {
     if (!isEdit || !sheet?.name) return
@@ -84,11 +127,24 @@ export default function StyleSheetEditor({
     getStyleSheet(sheet.name)
       .then((s) => {
         if (cancelled) return
-        setName(s.name || '')
-        setDescription(s.description || '')
-        setBody(extractBody(s.raw_markdown) || '')
+        const nextName = s.name || ''
+        const nextDescription = s.description || ''
+        const nextBody = extractBody(s.raw_markdown) || ''
+        setName(nextName)
+        setDescription(nextDescription)
+        setBody(nextBody)
+        // After a successful load, the baseline IS the loaded values —
+        // the form should be clean, not dirty.
+        setBaseline({
+          name: nextName,
+          description: nextDescription,
+          body: nextBody,
+          brief: '',
+          imagePath: initialImagePath || '',
+          uploadedDataUrl: '',
+        })
       })
-      .catch((e) => onError?.(e.message || 'Failed to load style sheet'))
+      .catch((e) => reportError(e.message || 'Failed to load style sheet'))
       .finally(() => { if (!cancelled) setLoadingSheet(false) })
     return () => { cancelled = true }
   }, [isEdit, sheet?.name])
@@ -124,25 +180,25 @@ export default function StyleSheetEditor({
     return fm.join('\n') + (body || '').trim() + '\n'
   }, [name, description, body])
 
-  const fieldsDirty = !!(name || description || body || brief || imagePath || uploadedDataUrl)
+  // Dirty = current form diverges from the baseline snapshot. The baseline
+  // is updated on every successful save (so a save followed by a close
+  // doesn't pop the discard dialog) and after the lazy edit-mode load.
+  const fieldsDirty = useMemo(() => {
+    return (
+      name !== baseline.name ||
+      description !== baseline.description ||
+      body !== baseline.body ||
+      brief !== baseline.brief ||
+      imagePath !== baseline.imagePath ||
+      uploadedDataUrl !== baseline.uploadedDataUrl
+    )
+  }, [name, description, body, brief, imagePath, uploadedDataUrl, baseline])
 
   useEffect(() => {
     onDirtyChange?.(fieldsDirty)
   }, [fieldsDirty, onDirtyChange])
 
-  const runDraft = async (kind) => {
-    if (kind === 'ai') {
-      if (!brief.trim()) { onError?.(t('styleSheets.briefRequired')); return }
-    } else if (kind === 'image') {
-      if (!imagePath && !uploadedDataUrl) { onError?.(t('styleSheets.imageRequired')); return }
-    } else {
-      return
-    }
-    const overwriteOk =
-      !name && !description && !body
-        ? true
-        : window.confirm(t('styleSheets.confirmOverwriteDraft'))
-    if (!overwriteOk) return
+   const performDraft = async (kind) => {
     setDrafting(true)
     try {
       const draft = kind === 'ai'
@@ -154,26 +210,46 @@ export default function StyleSheetEditor({
       setDescription(draft.description || '')
       setBody(draft.body || '')
     } catch (e) {
-      onError?.(e.message || 'Draft failed')
+      reportError(e.message || 'Draft failed')
     } finally {
       setDrafting(false)
     }
   }
 
+  const runDraft = async (kind) => {
+    if (kind === 'ai') {
+      if (!brief.trim()) { reportError(t('styleSheets.briefRequired')); return }
+    } else if (kind === 'image') {
+      if (!imagePath && !uploadedDataUrl) { reportError(t('styleSheets.imageRequired')); return }
+    } else {
+      return
+    }
+    if (name || description || body) {
+      setPendingDraftKind(kind)
+      setOverwriteGuardOpen(true)
+      return
+    }
+    await performDraft(kind)
+  }
+
   const handleSave = async () => {
     const err = validateName(name)
-    if (err) { setNameError(err); return }
-    if (!description.trim()) { onError?.(t('styleSheets.descriptionRequired')); return }
-    if (bodyTooLong) { onError?.(t('styleSheets.bodyTooLong', { max: BODY_MAX })); return }
-    if (tooManyPlaceholders) { onError?.(t('styleSheets.tooManyPlaceholders', { placeholder: PLACEHOLDER })); return }
+    if (err) { setNameError(err); reportError(err); return }
+    if (!description.trim()) { reportError(t('styleSheets.descriptionRequired')); return }
+    if (bodyTooLong) { reportError(t('styleSheets.bodyTooLong', { max: BODY_MAX })); return }
+    if (tooManyPlaceholders) { reportError(t('styleSheets.tooManyPlaceholders', { placeholder: PLACEHOLDER })); return }
     setSaving(true)
     try {
       const saved = isEdit
         ? await updateStyleSheet(sheet.name, { description: description.trim(), body })
         : await createStyleSheet({ name: name.trim(), description: description.trim(), body })
+      // Treat the saved form as the new baseline. Without this, a save
+      // followed by close would still pop the discard guard because the
+      // form's current values would still diverge from the old baseline.
+      resetBaseline()
       onSaved?.(saved)
     } catch (e) {
-      onError?.(e.message || 'Save failed')
+      reportError(e.message || 'Save failed')
     } finally {
       setSaving(false)
     }
@@ -196,8 +272,8 @@ export default function StyleSheetEditor({
       </div>
     )
   }
-
   return (
+    <>
     <div className="space-y-4">
       {/* Start-mode tabs (hidden in edit mode — edits only touch fields). */}
       {!isEdit && (
@@ -304,23 +380,51 @@ export default function StyleSheetEditor({
         </div>
       </div>
 
-      <div className="mt-4 flex items-center justify-end gap-2">
+      {/* Inline error banner — sits above the action row so the user
+          always sees it inside the modal. The modal's z-40 overlay
+          hides the parent's onError banner; this is the only error
+          surface that's guaranteed visible. */}
+      {inlineError && (
+        <div
+          role="alert"
+          data-testid="style-sheet-editor-error"
+          className="mt-3 px-3 py-2 rounded-[8px] border border-error/40 bg-error/10 text-[12px] text-error"
+        >
+          {inlineError}
+        </div>
+      )}
+
+      <div className="mt-3 flex items-center justify-end gap-2">
         <button onClick={onClose} className="h-[34px] px-4 rounded-[8px] border border-border text-[12px] hover:border-primary/50">
           {t('common.cancel') || 'Cancel'}
         </button>
         <button
           onClick={handleSave}
-          disabled={saving || bodyTooLong || tooManyPlaceholders}
-          className="flex items-center gap-1.5 h-[34px] px-4 rounded-[8px] bg-primary hover:bg-primary-hover disabled:opacity-40 text-white text-[12px] font-medium"
+          disabled={saving || bodyTooLong || tooManyPlaceholders || !name.trim() || !description.trim()}
+          className="flex items-center gap-1.5 h-[34px] px-4 rounded-[8px] bg-primary hover:bg-primary-hover disabled:opacity-40 disabled:cursor-not-allowed text-white text-[12px] font-medium"
         >
           {saving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
           {saveLabel || (isEdit ? t('styleSheets.saveChanges') : t('styleSheets.createSheet'))}
         </button>
       </div>
     </div>
+    <SessionActionGuard
+      open={overwriteGuardOpen}
+      title={t('styleSheets.overwriteTitle', { defaultValue: 'Overwrite draft fields?' })}
+      description={t('styleSheets.confirmOverwriteDraft')}
+      confirmLabel={t('styleSheets.overwrite', { defaultValue: 'Overwrite' })}
+      cancelLabel={t('common.cancel', { defaultValue: 'Cancel' })}
+      onCancel={() => { setOverwriteGuardOpen(false); setPendingDraftKind(null) }}
+      onConfirm={() => {
+        const kind = pendingDraftKind
+        setOverwriteGuardOpen(false)
+        setPendingDraftKind(null)
+        if (kind) performDraft(kind)
+      }}
+    />
+    </>
   )
 }
-
 function StartTab({ icon: Icon, active, onClick, label }) {
   return (
     <button

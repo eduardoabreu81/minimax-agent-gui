@@ -1158,8 +1158,14 @@
     "extractStyle": "Extraer estilo",
     "confirmOverwriteDraft": "¿Reemplazar el borrador actual por uno nuevo?",
     "confirmDiscard": "¿Descartar los cambios y cerrar?",
-    "combinedPreview": "Vista previa combinada"
-  },
+    "combinedPreview": "Vista previa combinada",
+    "noneChip": "Sin hoja de estilo",
+    "deleteHint": "Eliminar esta hoja de estilo",
+    "bodyPreview": "Vista previa del cuerpo",
+    "loading": "Cargando…",
+    "unavailable": "Vista previa no disponible",
+    "emptyBody": "(cuerpo vacío)"
+   },
   "contextRef": {
     "expanding": "",
     "types": {

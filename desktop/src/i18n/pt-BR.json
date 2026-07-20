@@ -1166,8 +1166,14 @@
     "extractStyle": "Extrair estilo",
     "confirmOverwriteDraft": "Substituir o rascunho atual por um novo?",
     "confirmDiscard": "Descartar alterações e fechar?",
-    "combinedPreview": "Visualização combinada do prompt"
-  },
+    "combinedPreview": "Visualização combinada do prompt",
+    "noneChip": "Nenhuma folha de estilo",
+    "deleteHint": "Excluir esta folha de estilo",
+    "bodyPreview": "Pré-visualização do corpo",
+    "loading": "Carregando…",
+    "unavailable": "Pré-visualização indisponível",
+    "emptyBody": "(corpo vazio)"
+   },
   "contextRef": {
     "expanding": "",
     "types": {

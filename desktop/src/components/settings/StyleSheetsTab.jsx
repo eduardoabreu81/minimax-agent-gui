@@ -10,6 +10,7 @@ import {
   listStyleSheets,
   deleteStyleSheet as apiDelete,
 } from '../../lib/styleSheets.js'
+import SessionActionGuard from '../shared/SessionActionGuard'
 
 // StyleSheetsTab — reusable image-prompt fragments.
 //
@@ -61,9 +62,9 @@ export default function StyleSheetsTab() {
     setSavedMessage(msg)
     setTimeout(() => setSavedMessage(''), 2500)
   }
+  const [deleteGuard, setDeleteGuard] = useState(null) // sheet | null
 
-  const deleteSheet = async (sheet) => {
-    if (!confirm(t('styleSheets.confirmDelete', { name: sheet.name }))) return
+  const performDeleteSheet = async (sheet) => {
     try {
       await apiDelete(sheet.name)
       showMessage(t('styleSheets.toastDeleted', { name: sheet.name }))
@@ -71,6 +72,9 @@ export default function StyleSheetsTab() {
     } catch (e) {
       setError(e.message || 'Delete failed')
     }
+  }
+  const deleteSheet = (sheet) => {
+    setDeleteGuard(sheet)
   }
 
   const viewSheet = async (sheet) => {
@@ -233,6 +237,21 @@ export default function StyleSheetsTab() {
       {viewingSheet && (
         <StyleSheetViewerModal sheet={viewingSheet} onClose={() => setViewingSheet(null)} />
       )}
+      <SessionActionGuard
+        open={!!deleteGuard}
+        title={t('styleSheets.deleteTitle', { defaultValue: 'Delete style sheet?' })}
+        description={deleteGuard
+          ? t('styleSheets.confirmDelete', { name: deleteGuard.name })
+          : ''}
+        confirmLabel={t('styleSheets.delete', { defaultValue: 'Delete' })}
+        cancelLabel={t('common.cancel', { defaultValue: 'Cancel' })}
+        onCancel={() => setDeleteGuard(null)}
+        onConfirm={() => {
+          const target = deleteGuard
+          setDeleteGuard(null)
+          if (target) performDeleteSheet(target)
+        }}
+      />
     </div>
   )
 }
@@ -243,11 +262,13 @@ function StyleSheetEditorModal({ mode, sheet, onClose, onSaved, onError }) {
   const { t } = useTranslation()
   const isEdit = mode === 'edit'
   const [dirty, setDirty] = useState(false)
+  const [discardOpen, setDiscardOpen] = useState(false)
   const guardedClose = () => {
-    if (dirty && typeof window !== 'undefined' && !window.confirm(t('styleSheets.confirmDiscard'))) return
+    if (dirty) { setDiscardOpen(true); return }
     onClose()
   }
   return (
+    <>
     <StyleSheetModal
       onClose={guardedClose}
       title={isEdit ? t('styleSheets.editTitle', { name: sheet?.name || '' }) : t('styleSheets.createTitle')}
@@ -257,14 +278,26 @@ function StyleSheetEditorModal({ mode, sheet, onClose, onSaved, onError }) {
         mode={mode}
         sheet={sheet}
         onClose={guardedClose}
-        onSaved={onClose}
+        onSaved={onSaved}
         onError={onError}
         onDirtyChange={setDirty}
       />
     </StyleSheetModal>
+    <SessionActionGuard
+      open={discardOpen}
+      title={t('styleSheets.discardTitle', { defaultValue: 'Discard unsaved changes?' })}
+      description={t('styleSheets.confirmDiscard')}
+      confirmLabel={t('styleSheets.discard', { defaultValue: 'Discard' })}
+      cancelLabel={t('common.cancel', { defaultValue: 'Cancel' })}
+      onCancel={() => setDiscardOpen(false)}
+      onConfirm={() => {
+        setDiscardOpen(false)
+        onClose()
+      }}
+    />
+    </>
   )
 }
-
 // ─── Viewer modal (read-only raw markdown) ─────────────────────────────────
 
 function StyleSheetViewerModal({ sheet, onClose }) {

@@ -10,6 +10,7 @@ import GenerationMetaModal from './GenerationMetaModal'
 import MediaPanelLayout from '../shared/MediaPanelLayout'
 import ModeTabBar from '../shared/ModeTabBar'
 import { apiFetch } from '../../lib/api.js'
+import SessionActionGuard from '../shared/SessionActionGuard'
 
 // ───────────────────────────────────────────────────────────────────────────
 // Constants — TAURI_SPEC §6b
@@ -628,8 +629,8 @@ export default function SpeechPanel() {
     setDesignPrompt(prev => prev + sep + trait)
   }
 
-  const deleteVoice = async (type, vid, vname) => {
-    if (!window.confirm(t('speech.confirmDeleteVoice', { name: vname || vid }))) return
+  const [deleteGuard, setDeleteGuard] = useState(null) // { type, vid, vname } | null
+  const performDeleteVoice = async (type, vid) => {
     setError(null)
     try {
       const res = await apiFetch(`/api/minimax/speech/voices/${type}/${encodeURIComponent(vid)}`, { method: 'DELETE' })
@@ -637,6 +638,9 @@ export default function SpeechPanel() {
       if (!res.ok || !data.success) throw new Error(data.detail || data.error || t('speech.deleteFailed'))
       fetchVoices()
     } catch (e) { setError(e.message || t('speech.deleteFailed')) }
+  }
+  const deleteVoice = (type, vid, vname) => {
+    setDeleteGuard({ type, vid, vname })
   }
 
   // ── Reusable UI bits ────────────────────────────────────────────────────
@@ -1710,6 +1714,21 @@ export default function SpeechPanel() {
       {metaItem && (
         <GenerationMetaModal item={metaItem} onClose={() => setMetaItem(null)} />
       )}
-    </>
-  )
+      <SessionActionGuard
+        open={!!deleteGuard}
+        title={t('speech.deleteVoiceTitle', { defaultValue: 'Delete voice?' })}
+        description={deleteGuard
+          ? t('speech.confirmDeleteVoice', { name: deleteGuard.vname || deleteGuard.vid })
+          : ''}
+        confirmLabel={t('speech.delete', { defaultValue: 'Delete' })}
+        cancelLabel={t('common.cancel', { defaultValue: 'Cancel' })}
+        onCancel={() => setDeleteGuard(null)}
+        onConfirm={() => {
+          const target = deleteGuard
+          setDeleteGuard(null)
+          if (target) performDeleteVoice(target.type, target.vid)
+        }}
+      />
+     </>
+   )
 }

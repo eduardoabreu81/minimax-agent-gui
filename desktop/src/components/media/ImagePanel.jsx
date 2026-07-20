@@ -14,9 +14,10 @@ import RecentGenerations from './RecentGenerations'
 import GenerationMetaModal from './GenerationMetaModal'
 import { apiFetch } from '../../lib/api.js'
 import { StyleSheetEditor, StyleSheetModal } from '../style-sheets/index.js'
-import { listStyleSheets } from '../../lib/styleSheets.js'
+import StyleSheetPicker from '../style-sheets/StyleSheetPicker.jsx'
+import { listStyleSheets, deleteStyleSheet } from '../../lib/styleSheets.js'
+import SessionActionGuard from '../shared/SessionActionGuard'
 
-// ── Aspect ratios — match MiniMax `image-01` official resolutions (mockup L182-189)
 const ASPECT_RATIOS = [
   { labelKey: 'image.aspectRatios.square',     value: '1:1',  shapeW: 22, shapeH: 22, res: '1024 × 1024' },
   { labelKey: 'image.aspectRatios.widescreen', value: '16:9', shapeW: 26, shapeH: 15, res: '1280 × 720'  },
@@ -241,9 +242,10 @@ export default function ImagePanel() {
     } catch (e) { /* ignore */ }
     setGalleryLoading(false)
   }
+  const [deleteGuard, setDeleteGuard] = useState(null) // image item | null
+  const [discardGuardOpen, setDiscardGuardOpen] = useState(false)
 
-  const handleDeleteImage = async (item) => {
-    if (!confirm(t('image.confirmDelete', { name: item.name }))) return
+  const performDeleteImage = async (item) => {
     let res
     try {
       res = await apiFetch(
@@ -266,7 +268,10 @@ export default function ImagePanel() {
     }
   }
 
-  // Read a File as a base64 data URL — same approach used by VideoPanel.
+  const handleDeleteImage = (item) => {
+    setDeleteGuard(item)
+  }
+
   // The MiniMax image_generation endpoint accepts data URLs inside
   // subject_reference[].image_file, so no separate upload step needed.
   const readFileAsDataURL = (file) => new Promise((resolve, reject) => {
@@ -403,78 +408,33 @@ export default function ImagePanel() {
       )}
       {/* (a2) Style sheet — reusable prompt fragment. Optional.
           The {prompt} placeholder in the sheet body is interpolated
-          server-side; the char-budget chip on the right mirrors that
-          combination so the user sees the real total. */}
+          server-side; the char-budget chip inside the picker mirrors
+          that combination so the user sees the real total. The picker
+          also handles add / edit / delete inline (no Settings round-trip). */}
       <div>
         <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 7, gap: 8 }}>
           <label style={{ ...labelStyle, marginBottom: 0 }}>{t('image.styleSheet')}</label>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            {styleSheet && (
-              <button
-                onClick={() => setStyleEditorState({ mode: 'edit', sheet: { name: styleSheet } })}
-                title={t('styleSheets.edit')}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--app-text-2)', display: 'flex' }}
-              >
-                <Edit3Icon size={12} />
-              </button>
-            )}
-            <button
-              onClick={() => setStyleEditorState({ mode: 'create' })}
-              title={t('styleSheets.create')}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'hsl(var(--primary))', display: 'flex' }}
-            >
-              <PlusIcon size={14} />
-            </button>
-            {styleSheet && (
-              <span
-                style={{
-                  fontSize: 10.5,
-                  color: overBudget
-                    ? 'hsl(var(--destructive))'
-                    : combinedLen > PROMPT_MAX * 0.8
-                      ? 'hsl(var(--primary))'
-                      : 'var(--app-text-2)',
-                  fontVariantNumeric: 'tabular-nums',
-                }}
-                title={overBudget ? t('image.styleSheetOverBudget') : undefined}
-              >
-                {combinedLen} / {PROMPT_MAX}
-              </span>
-            )}
-          </div>
         </div>
-        <select
+        <StyleSheetPicker
           value={styleSheet}
-          onChange={(e) => {
-            const v = e.target.value
-            setStyleSheet(v)
+          sheets={styleSheets}
+          onChange={(name) => {
+            setStyleSheet(name || '')
             if (typeof localStorage !== 'undefined') {
-              if (v) localStorage.setItem('image-style-sheet', v)
+              if (name) localStorage.setItem('image-style-sheet', name)
               else localStorage.removeItem('image-style-sheet')
             }
           }}
-          style={{
-            width: '100%',
-            height: 38,
-            boxSizing: 'border-box',
-            background: 'hsl(var(--card))',
-            border: '1px solid var(--app-border-2)',
-            borderRadius: 10,
-            padding: '0 11px',
-            fontSize: 13,
-            color: 'var(--app-text)',
-            fontFamily: 'inherit',
-            outline: 'none',
-            cursor: 'pointer',
+          onCreate={() => setStyleEditorState({ mode: 'create' })}
+          onEdit={(sheet) => setStyleEditorState({ mode: 'edit', sheet })}
+          onDelete={async (name) => {
+            await deleteStyleSheet(name)
+            await loadStyleSheets()
           }}
-        >
-          <option value="">{t('image.styleSheetNone')}</option>
-          {styleSheets.map((s) => (
-            <option key={s.name} value={s.name}>
-              {s.description || s.name}
-            </option>
-          ))}
-        </select>
+          overBudget={overBudget}
+          combinedLen={combinedLen}
+          promptMax={PROMPT_MAX}
+        />
       </div>
 
 
@@ -893,7 +853,7 @@ export default function ImagePanel() {
       </div>
       {styleEditorState && (() => {
         const closeStyleEditor = () => {
-          if (styleEditorDirty && typeof window !== 'undefined' && !window.confirm(t('styleSheets.confirmDiscard'))) return
+          if (styleEditorDirty) { setDiscardGuardOpen(true); return }
           setStyleEditorDirty(false)
           setStyleEditorState(null)
         }
@@ -923,6 +883,34 @@ export default function ImagePanel() {
       {metaItem && (
         <GenerationMetaModal item={metaItem} onClose={() => setMetaItem(null)} />
       )}
+      <SessionActionGuard
+        open={!!deleteGuard}
+        title={t('image.deleteTitle', { defaultValue: 'Delete image?' })}
+        description={deleteGuard
+          ? t('image.confirmDelete', { name: deleteGuard.name })
+          : ''}
+        confirmLabel={t('image.delete', { defaultValue: 'Delete' })}
+        cancelLabel={t('common.cancel', { defaultValue: 'Cancel' })}
+        onCancel={() => setDeleteGuard(null)}
+        onConfirm={() => {
+          const target = deleteGuard
+          setDeleteGuard(null)
+          if (target) performDeleteImage(target)
+        }}
+      />
+      <SessionActionGuard
+        open={discardGuardOpen}
+        title={t('styleSheets.discardTitle', { defaultValue: 'Discard unsaved changes?' })}
+        description={t('styleSheets.confirmDiscard')}
+        confirmLabel={t('styleSheets.discard', { defaultValue: 'Discard' })}
+        cancelLabel={t('common.cancel', { defaultValue: 'Cancel' })}
+        onCancel={() => setDiscardGuardOpen(false)}
+        onConfirm={() => {
+          setDiscardGuardOpen(false)
+          setStyleEditorDirty(false)
+          setStyleEditorState(null)
+        }}
+      />
     </>
   )
 }

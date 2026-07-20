@@ -5,6 +5,7 @@ import {
   AlertCircle, Check, Search, ChevronDown, ChevronRight, Copy, ExternalLink,
 } from 'lucide-react'
 import { apiFetch } from '../../lib/api.js'
+import SessionActionGuard from '../shared/SessionActionGuard'
 
 // ─── Source-badge palette ───────────────────────────────────────────────────
 // Each source has a short letter + a colour band so users can scan the list
@@ -192,8 +193,8 @@ export default function SkillsTab() {
     setContextMenu({ skill, x: e.clientX, y: e.clientY })
   }
 
-  const deleteSkill = async (skill) => {
-    if (!confirm(t('skills.confirmDelete', { name: skill.name }))) return
+  const [deleteGuard, setDeleteGuard] = useState(null) // skill | null
+  const performDeleteSkill = async (skill) => {
     try {
       const r = await apiFetch(`/api/skills/${encodeURIComponent(skill.name)}`, { method: 'DELETE' })
       const data = await r.json()
@@ -203,6 +204,9 @@ export default function SkillsTab() {
     } catch (e) {
       setError(e.message)
     }
+  }
+  const deleteSkill = (skill) => {
+    setDeleteGuard(skill)
   }
 
   const importToUser = async (skill) => {
@@ -518,6 +522,21 @@ export default function SkillsTab() {
           onError={setError}
         />
       )}
+      <SessionActionGuard
+        open={!!deleteGuard}
+        title={t('skills.deleteTitle', { defaultValue: 'Delete skill?' })}
+        description={deleteGuard
+          ? t('skills.confirmDelete', { name: deleteGuard.name })
+          : ''}
+        confirmLabel={t('skills.delete', { defaultValue: 'Delete' })}
+        cancelLabel={t('common.cancel', { defaultValue: 'Cancel' })}
+        onCancel={() => setDeleteGuard(null)}
+        onConfirm={() => {
+          const target = deleteGuard
+          setDeleteGuard(null)
+          if (target) performDeleteSkill(target)
+        }}
+      />
     </div>
   )
 }

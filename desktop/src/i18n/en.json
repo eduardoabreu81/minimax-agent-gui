@@ -962,8 +962,14 @@
     "extractStyle": "Extract style",
     "confirmOverwriteDraft": "Replace the current draft with a new one?",
     "confirmDiscard": "Discard changes and close?",
-    "combinedPreview": "Combined prompt preview"
-  },
+    "combinedPreview": "Combined prompt preview",
+    "noneChip": "No style sheet",
+    "deleteHint": "Delete this style sheet",
+    "bodyPreview": "Body preview",
+    "loading": "Loading…",
+    "unavailable": "Preview unavailable",
+    "emptyBody": "(empty body)"
+   },
   "skillSources": {
     "builtin": "Built-in",
     "user": "User",

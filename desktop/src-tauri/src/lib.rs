@@ -18,7 +18,7 @@ use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State, WebviewWindow};
 
 struct BackendProcess(Mutex<Option<Child>>);
 
@@ -473,6 +473,25 @@ fn shutdown_backend(app: &AppHandle) {
     }
 }
 
+/// Toggle the WebView DevTools pane on the main window. Exposed as an
+/// `invoke` command so the React frontend can wire the keyboard shortcut
+/// (`Cmd+Shift+I` on macOS, `Ctrl+Shift+I` on Windows/Linux) via a normal
+/// DOM `keydown` listener — keeps the Tauri Rust surface minimal and
+/// avoids pulling in `tauri-plugin-global-shortcut` for one hotkey.
+///
+/// `is_devtools_open` / `open_devtools` / `close_devtools` are gated
+/// behind the `devtools` Cargo feature on the `tauri` crate (enabled in
+/// Cargo.toml), so the calls compile in both debug and release builds.
+#[tauri::command]
+fn toggle_devtools(window: WebviewWindow) -> Result<bool, String> {
+    if window.is_devtools_open() {
+        window.close_devtools();
+        Ok(false)
+    } else {
+        window.open_devtools();
+        Ok(true)
+    }
+}
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let app = tauri::Builder::default()
@@ -495,7 +514,8 @@ pub fn run() {
             start_backend,
             stop_backend,
             backend_status,
-            get_backend_url
+            get_backend_url,
+            toggle_devtools
         ])
         .setup(|app| {
             // Fire-and-forget the auto-start. Failures are reported to

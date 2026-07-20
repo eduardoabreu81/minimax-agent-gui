@@ -1158,8 +1158,14 @@
     "extractStyle": "提取风格",
     "confirmOverwriteDraft": "用新草稿替换当前草稿？",
     "confirmDiscard": "放弃更改并关闭？",
-    "combinedPreview": "组合提示预览"
-  },
+    "combinedPreview": "组合提示预览",
+    "noneChip": "无样式表",
+    "deleteHint": "删除此样式表",
+    "bodyPreview": "正文预览",
+    "loading": "加载中…",
+    "unavailable": "无法显示预览",
+    "emptyBody": "(正文为空)"
+   },
   "contextRef": {
     "expanding": "",
     "types": {

@@ -18,10 +18,10 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Plus, Loader2, Anchor } from 'lucide-react'
+import { listAnchors, deleteAnchor } from '../../lib/anchors.js'
 import AnchorCard from './AnchorCard.jsx'
 import AnchorEditor from './AnchorEditor.jsx'
-import { listAnchors, deleteAnchor } from '../../lib/anchors.js'
+import { Anchor, Loader2, Plus } from 'lucide-react'
 
 const MAX_ANCHORS = 4  // max attached per generation (subject_reference[] cap)
 
@@ -121,11 +121,9 @@ export default function AnchorLibrary({ attachedAnchors = [], onAttachedChange }
     setEditorOpen(true)
   }
 
-  const handleDelete = async (anchor) => {
-    if (!confirm(t('anchor.confirmDelete', {
-      defaultValue: `Delete anchor "${anchor.name}"? This cannot be undone.`,
-      name: anchor.name,
-    }))) return
+  const [deleteGuard, setDeleteGuard] = useState(null) // anchor | null
+
+  const performDelete = async (anchor) => {
     try {
       await deleteAnchor(anchor.id)
       if (attachedIds.has(anchor.id)) {
@@ -135,6 +133,10 @@ export default function AnchorLibrary({ attachedAnchors = [], onAttachedChange }
     } catch (e) {
       setError(e.message)
     }
+  }
+
+  const handleDelete = (anchor) => {
+    setDeleteGuard(anchor)
   }
 
   const handleNew = () => {
@@ -232,7 +234,6 @@ export default function AnchorLibrary({ attachedAnchors = [], onAttachedChange }
           ))}
         </div>
       )}
-
       <AnchorEditor
         open={editorOpen}
         mode={editorMode}
@@ -240,6 +241,24 @@ export default function AnchorLibrary({ attachedAnchors = [], onAttachedChange }
         initialImagePath={initialImagePath}
         onClose={() => setEditorOpen(false)}
         onSaved={handleSaved}
+      />
+      <SessionActionGuard
+        open={!!deleteGuard}
+        title={t('anchor.deleteTitle', { defaultValue: 'Delete anchor?' })}
+        description={deleteGuard
+          ? t('anchor.confirmDelete', {
+              defaultValue: `Delete anchor "${deleteGuard.name}"? This cannot be undone.`,
+              name: deleteGuard.name,
+            })
+          : ''}
+        confirmLabel={t('anchor.delete', { defaultValue: 'Delete' })}
+        cancelLabel={t('common.cancel', { defaultValue: 'Cancel' })}
+        onCancel={() => setDeleteGuard(null)}
+        onConfirm={() => {
+          const target = deleteGuard
+          setDeleteGuard(null)
+          if (target) performDelete(target)
+        }}
       />
     </div>
   )
