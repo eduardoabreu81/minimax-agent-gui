@@ -89,3 +89,76 @@ def test_write_media_meta_does_not_raise_on_failure(tmp_path, monkeypatch):
     monkeypatch.setattr(Path, "write_text", boom)
     # Must not raise.
     _main._write_media_meta(img, {"version": 1})
+
+def test_image_endpoint_writes_sidecar(monkeypatch):
+    """POST /api/image must write a sidecar with prompt + params.
+    Mocks image_sync so no network/API key is needed."""
+    def fake_image_sync(api_key, api_base, prompt, output_path, **kw):
+        Path(output_path).write_bytes(b"\x89PNG\r\n\x1a\n")
+        return True, output_path
+
+    monkeypatch.setattr(_main, "get_minimax_config",
+                        lambda: {"api_key": "sk-test", "api_base": "x"})
+    import mini_max_mcp.client as mc
+    monkeypatch.setattr(mc, "image_sync", fake_image_sync)
+
+    res = client.post("/api/image", json={
+        "prompt": "a red apple",
+        "aspect_ratio": "1:1",
+        "n": 1,
+        "seed": 42,
+    })
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert body["success"] is True
+    rel = body["file_path"]
+    img = _workspace() / rel
+    sc = _main._media_meta_sidecar_path(img)
+    try:
+        assert img.exists(), "media file must exist"
+        assert sc.exists(), "sidecar must exist"
+        data = json.loads(sc.read_text(encoding="utf-8"))
+        assert data["version"] == 1
+        assert data["media_type"] == "image"
+        assert data["prompt"] == "a red apple"
+        assert data["user_prompt"] == "a red apple"
+        assert data["model"] == "image-01"
+        assert data["params"]["aspect_ratio"] == "1:1"
+        assert data["params"]["seed"] == 42
+        assert data["params"]["mode"] == "t2i"
+        assert "created_at" in data
+    finally:
+        for p in (sc, img):
+            if p.exists():
+                p.unlink()
+
+
+def test_image_endpoint_i2i_live_mode_records_mode(monkeypatch):
+    """POST /api/image with subject_reference switches to i2i-live and
+    records the attached anchor IDs in the sidecar."""
+    def fake_image_sync(api_key, api_base, prompt, output_path, **kw):
+        Path(output_path).write_bytes(b"\x89PNG\r\n\x1a\n")
+        return True, output_path
+
+    monkeypatch.setattr(_main, "get_minimax_config",
+                        lambda: {"api_key": "sk-test", "api_base": "x"})
+    import mini_max_mcp.client as mc
+    monkeypatch.setattr(mc, "image_sync", fake_image_sync)
+
+    res = client.post("/api/image", json={
+        "prompt": "a hero with a red cloak",
+        "subject_reference": [{"type": "character", "image_file": "data:image/png;base64,xxx"}],
+        "subject_reference_anchors": ["anchor-abc-123"],
+    })
+    assert res.status_code == 200, res.text
+    img = _workspace() / res.json()["file_path"]
+    sc = _main._media_meta_sidecar_path(img)
+    try:
+        data = json.loads(sc.read_text(encoding="utf-8"))
+        assert data["params"]["mode"] == "i2i-live"
+        assert data["model"] == "image-01-live"
+        assert data["references"]["subject_reference"] == ["anchor-abc-123"]
+    finally:
+        for p in (sc, img):
+            if p.exists():
+                p.unlink()

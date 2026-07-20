@@ -232,6 +232,10 @@ class ImageRequest(BaseModel):
     # i2i: same endpoint as T2I but with subject_reference + model "image-01-live"
     model: str = "image-01"
     subject_reference: list = None
+    # Anchor IDs corresponding 1:1 to subject_reference entries, so the
+    # meta sidecar can record stable references instead of opaque data
+    # URLs. Ignored by the MiniMax API call itself.
+    subject_reference_anchors: list = None
     reference_image: str = ""  # legacy I2I: local file path (image_variations)
     # Optional style sheet name. If set, the sheet body is combined with
     # ``prompt`` via ``{prompt}`` interpolation (or ", " concat) before the
@@ -4108,6 +4112,20 @@ async def tts_generate(req: GenerateRequest, background_tasks: BackgroundTasks, 
         )
 
         if success:
+            _write_media_meta(Path(result), {
+                "version": 1,
+                "media_type": "tts",
+                "created_at": datetime.utcnow().isoformat() + "Z",
+                "prompt": req.prompt,
+                "user_prompt": req.prompt,
+                "model": tts_model,
+                "params": {
+                    "voice_id": req.settings.get("voice", "male-qn-qingque"),
+                    "speed": req.settings.get("speed", 1.0),
+                    "format": "mp3",
+                },
+                "references": {},
+            })
             cost = calculate_tts_cost(len(req.prompt or ""), tts_model)
             return {
                 "success": True,
@@ -4244,11 +4262,30 @@ async def image_generate(req: ImageRequest, session_id: str = ""):
         )
 
         if success:
-            # Return path relative to the session's workspace root (coding
-            # workspace if attached, else app workspace) so the frontend
-            # can fetch it back via /api/files/raw?session_id=...&path=...
             out_root = _resolve_session_root(session_id or None)
             rel_path = str(Path(result).relative_to(out_root)).replace('\\', '/')
+            _write_media_meta(Path(result), {
+                "version": 1,
+                "media_type": "image",
+                "created_at": datetime.utcnow().isoformat() + "Z",
+                "prompt": final_prompt,
+                "user_prompt": req.prompt,
+                "model": model,
+                "params": {
+                    "aspect_ratio": req.aspect_ratio,
+                    "width": req.width,
+                    "height": req.height,
+                    "n": n,
+                    "seed": req.seed,
+                    "prompt_optimizer": req.prompt_optimizer,
+                    "watermark": req.watermark,
+                    "style_sheet": style_sheet_used,
+                    "mode": "i2i-live" if subject_reference else "t2i",
+                },
+                "references": {
+                    "subject_reference": list(req.subject_reference_anchors or []),
+                },
+            })
             cost = calculate_image_cost(n)
             return {
                 "success": True,
@@ -4305,6 +4342,27 @@ async def image_i2i_generate(req: ImageRequest, session_id: str = ""):
 
         if success:
             rel_path = str(Path(result).relative_to(_resolve_session_root(session_id or None))).replace('\\', '/')
+            _write_media_meta(Path(result), {
+                "version": 1,
+                "media_type": "image",
+                "created_at": datetime.utcnow().isoformat() + "Z",
+                "prompt": req.prompt,
+                "user_prompt": req.prompt,
+                "model": "image-01",
+                "params": {
+                    "aspect_ratio": req.aspect_ratio,
+                    "width": req.width,
+                    "height": req.height,
+                    "n": n,
+                    "seed": req.seed,
+                    "prompt_optimizer": req.prompt_optimizer,
+                    "watermark": req.watermark,
+                    "mode": "i2i-variation",
+                },
+                "references": {
+                    "reference_image": req.reference_image or None,
+                },
+            })
             cost = calculate_image_cost(n)
             return {
                 "success": True,
@@ -4770,6 +4828,24 @@ async def speech_synthesize(req: SpeechSynthesizeRequest, session_id: str = ""):
         if not hex_audio:
             raise HTTPException(status_code=502, detail="T2A response missing audio data")
         rel_path = _save_audio_hex(hex_audio, audio_setting, req.filename, session_id=session_id)
+        abs_audio_path = _resolve_session_root(session_id or None) / rel_path
+        _write_media_meta(abs_audio_path, {
+            "version": 1,
+            "media_type": "tts",
+            "created_at": datetime.utcnow().isoformat() + "Z",
+            "prompt": req.text,
+            "user_prompt": req.text,
+            "model": req.model,
+            "params": {
+                "voice_id": req.voice_id,
+                "speed": req.speed,
+                "vol": req.vol,
+                "pitch": req.pitch,
+                "audio_setting": audio_setting,
+                "format": audio_setting.get("format", "mp3"),
+            },
+            "references": {},
+        })
         return {
             "success": True,
             "file_path": rel_path,
@@ -5321,6 +5397,21 @@ async def music_generate(req: MusicRequest):
         trace_id = (result.get("trace_id") or "") if isinstance(result, dict) else ""
 
         rel_path = str(Path(actual_path).relative_to(get_app_workspace_dir())).replace("\\", "/")
+        _write_media_meta(Path(actual_path), {
+            "version": 1,
+            "media_type": "music",
+            "created_at": datetime.utcnow().isoformat() + "Z",
+            "prompt": req.prompt,
+            "user_prompt": req.prompt,
+            "model": req.model,
+            "params": {
+                "audio_setting": audio_setting,
+                "mode": "instrumental" if req.is_instrumental else "lyrics",
+            },
+            "references": {
+                "cover_audio": req.audio_url or None,
+            },
+        })
         cost = calculate_music_cost(include_lyrics=bool(req.lyrics.strip()))
         return {
             "success": True,
