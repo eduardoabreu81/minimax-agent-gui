@@ -466,7 +466,9 @@
     "promptOptimizerHint": "",
     "keepFace": "",
     "pickReference": "",
-    "seedBlank": ""
+    "seedBlank": "",
+    "createStyleSheetTitle": "スタイルシートを作成",
+    "saveAndApply": "保存して適用"
   },
   "music": {
     "title": "音楽生成",
@@ -1059,7 +1061,24 @@
     "nameRequired": "",
     "bodyTooLong": "",
     "title": "",
-    "viewRaw": ""
+    "viewRaw": "",
+    "startMode": {
+      "direct": "直接入力",
+      "ai": "AI下書き",
+      "image": "画像から抽出"
+    },
+    "briefLabel": "スタイルを説明",
+    "briefHint": "一文か二文 — メディア、パレット、雰囲気。",
+    "briefPlaceholder": "1990年代の日本アニメーション、セルシェーディング、暖かい夕日",
+    "briefRequired": "最初にスタイルを説明してください。",
+    "createDraft": "下書きを作成",
+    "imageLabel": "ソース画像",
+    "imageHint": "視覚スタイルのみ抽出します — 被写体やシーンは含みません。",
+    "imageDropzone": "画像をドロップするかクリックしてアップロード",
+    "imageRequired": "最初に画像を選択またはドロップしてください。",
+    "extractStyle": "スタイルを抽出",
+    "confirmOverwriteDraft": "現在の下書きを新しい下書きに置き換えますか？",
+    "combinedPreview": "結合プロンプトのプレビュー"
   },
   "contextRef": {
     "expanding": "",
@@ -1244,5 +1263,22 @@
   },
   "help": {
     "noContent": ""
+  },
+  "generationMeta": {
+    "showMeta": "View prompt & settings",
+    "noMeta": "No saved metadata"
+  },
+  "metaModal": {
+    "title": "Generation details",
+    "promptSection": "Prompt",
+    "userPromptSection": "User prompt",
+    "paramsSection": "Parameters",
+    "referencesSection": "References",
+    "modelLabel": "Model",
+    "createdAtLabel": "Created",
+    "copyPrompt": "Copy prompt",
+    "copyJson": "Copy full JSON",
+    "empty": "This generation has no saved metadata.",
+    "manualUpload": "Manual upload — not persisted"
   }
 }

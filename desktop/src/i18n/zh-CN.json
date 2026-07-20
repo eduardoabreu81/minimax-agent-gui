@@ -466,7 +466,9 @@
     "promptOptimizerHint": "",
     "keepFace": "",
     "pickReference": "",
-    "seedBlank": ""
+    "seedBlank": "",
+    "createStyleSheetTitle": "创建样式表",
+    "saveAndApply": "保存并应用"
   },
   "music": {
     "title": "音乐生成",
@@ -1059,7 +1061,24 @@
     "nameRequired": "",
     "bodyTooLong": "",
     "title": "",
-    "viewRaw": ""
+    "viewRaw": "",
+    "startMode": {
+      "direct": "直接编写",
+      "ai": "AI草稿",
+      "image": "从图片提取"
+    },
+    "briefLabel": "描述风格",
+    "briefHint": "一两句话 — 媒介、调色板、氛围。",
+    "briefPlaceholder": "1990年代日本动画、赛璐珞着色、温暖日落光线",
+    "briefRequired": "请先描述一种风格。",
+    "createDraft": "创建草稿",
+    "imageLabel": "源图片",
+    "imageHint": "我们只提取视觉风格 — 不包含主体或场景。",
+    "imageDropzone": "拖入图片或点击上传",
+    "imageRequired": "请先选择或拖入一张图片。",
+    "extractStyle": "提取风格",
+    "confirmOverwriteDraft": "用新草稿替换当前草稿？",
+    "combinedPreview": "组合提示预览"
   },
   "contextRef": {
     "expanding": "",
@@ -1244,5 +1263,22 @@
   },
   "help": {
     "noContent": ""
+  },
+  "generationMeta": {
+    "showMeta": "View prompt & settings",
+    "noMeta": "No saved metadata"
+  },
+  "metaModal": {
+    "title": "Generation details",
+    "promptSection": "Prompt",
+    "userPromptSection": "User prompt",
+    "paramsSection": "Parameters",
+    "referencesSection": "References",
+    "modelLabel": "Model",
+    "createdAtLabel": "Created",
+    "copyPrompt": "Copy prompt",
+    "copyJson": "Copy full JSON",
+    "empty": "This generation has no saved metadata.",
+    "manualUpload": "Manual upload — not persisted"
   }
 }

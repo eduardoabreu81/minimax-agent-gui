@@ -466,7 +466,9 @@
     "promptOptimizerHint": "",
     "keepFace": "",
     "pickReference": "",
-    "seedBlank": ""
+    "seedBlank": "",
+    "createStyleSheetTitle": "Crear hoja de estilo",
+    "saveAndApply": "Guardar y aplicar"
   },
   "music": {
     "title": "Generación de Música",
@@ -1059,7 +1061,24 @@
     "nameRequired": "",
     "bodyTooLong": "",
     "title": "",
-    "viewRaw": ""
+    "viewRaw": "",
+    "startMode": {
+      "direct": "Escribir",
+      "ai": "Borrador IA",
+      "image": "Extraer de imagen"
+    },
+    "briefLabel": "Describe el estilo",
+    "briefHint": "Una o dos frases — medio, paleta, ambiente.",
+    "briefPlaceholder": "Animación japonesa de los 90, cel shading, cálida luz de atardecer",
+    "briefRequired": "Describe un estilo primero.",
+    "createDraft": "Crear borrador",
+    "imageLabel": "Imagen de origen",
+    "imageHint": "Extraemos solo el estilo visual — no el sujeto ni la escena.",
+    "imageDropzone": "Suelta una imagen o haz clic para subir",
+    "imageRequired": "Elige o suelta una imagen primero.",
+    "extractStyle": "Extraer estilo",
+    "confirmOverwriteDraft": "¿Reemplazar el borrador actual por uno nuevo?",
+    "combinedPreview": "Vista previa combinada"
   },
   "contextRef": {
     "expanding": "",
@@ -1244,5 +1263,22 @@
   },
   "help": {
     "noContent": ""
+  },
+  "generationMeta": {
+    "showMeta": "View prompt & settings",
+    "noMeta": "No saved metadata"
+  },
+  "metaModal": {
+    "title": "Generation details",
+    "promptSection": "Prompt",
+    "userPromptSection": "User prompt",
+    "paramsSection": "Parameters",
+    "referencesSection": "References",
+    "modelLabel": "Model",
+    "createdAtLabel": "Created",
+    "copyPrompt": "Copy prompt",
+    "copyJson": "Copy full JSON",
+    "empty": "This generation has no saved metadata.",
+    "manualUpload": "Manual upload — not persisted"
   }
 }

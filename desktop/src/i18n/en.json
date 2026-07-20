@@ -466,7 +466,9 @@
     "promptOptimizerHint": "Enhance prompt before generating",
     "confirmDelete": "Delete image \"{name}\"? This cannot be undone.",
     "toastDeleted": "Image \"{name}\" deleted.",
-    "toastDeleteFailed": "Could not delete image: {message}"
+    "toastDeleteFailed": "Could not delete image: {message}",
+    "createStyleSheetTitle": "Create style sheet",
+    "saveAndApply": "Save and apply"
   },
   "music": {
     "title": "Music Generation",
@@ -919,7 +921,24 @@
     "previewEmpty": "Fill in name + description to see preview…",
     "budgetNote": "At apply time, the user prompt replaces {placeholder}. Combined length must stay under {promptMax} chars.",
     "saveChanges": "Save changes",
-    "createSheet": "Create style sheet"
+    "createSheet": "Create style sheet",
+    "startMode": {
+      "direct": "Write",
+      "ai": "AI draft",
+      "image": "Extract from image"
+    },
+    "briefLabel": "Describe the style",
+    "briefHint": "One or two sentences — medium, palette, mood.",
+    "briefPlaceholder": "1990s Japanese animation, cel shading, warm sunset light",
+    "briefRequired": "Describe a style first.",
+    "createDraft": "Create draft",
+    "imageLabel": "Source image",
+    "imageHint": "We extract only the visual style — no subject or scene.",
+    "imageDropzone": "Drop an image or click to upload",
+    "imageRequired": "Pick or drop an image first.",
+    "extractStyle": "Extract style",
+    "confirmOverwriteDraft": "Replace the current draft with a new one?",
+    "combinedPreview": "Combined prompt preview"
   },
   "skillSources": {
     "builtin": "Built-in",
@@ -1187,6 +1206,23 @@
     "create": "Create anchor",
     "confirmDelete": "Delete anchor \"{name}\"? This cannot be undone.",
     "lockedByAnchors": "Referenced by anchor(s)"
+  },
+  "generationMeta": {
+    "showMeta": "View prompt & settings",
+    "noMeta": "No saved metadata"
+  },
+  "metaModal": {
+    "title": "Generation details",
+    "promptSection": "Prompt",
+    "userPromptSection": "User prompt",
+    "paramsSection": "Parameters",
+    "referencesSection": "References",
+    "modelLabel": "Model",
+    "createdAtLabel": "Created",
+    "copyPrompt": "Copy prompt",
+    "copyJson": "Copy full JSON",
+    "empty": "This generation has no saved metadata.",
+    "manualUpload": "Manual upload — not persisted"
   },
   "commonActions": {
     "deleteTask": "Delete task?"
