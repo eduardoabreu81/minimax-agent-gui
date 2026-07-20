@@ -68,9 +68,23 @@ def get_error_details(status_code: int) -> Tuple[str, str]:
 
 
 def format_api_error(status_code: int, default_msg: str = "") -> str:
-    """Format an API error with code, message, and solution."""
+    """Format an API error with code, message, and solution.
+
+    When the API supplied a non-empty ``status_msg`` (the second argument
+    from the call site), append it after the canned solution. Otherwise
+    the caller would only see the generic "Please check the request
+    parameters" hint and never learn *which* field was wrong — which is
+    exactly what happened for the video ``[Error 2013]`` reports before
+    this change.
+    """
     error_msg, solution = get_error_details(status_code)
-    return f"[Error {status_code}] {error_msg}. {solution}"
+    base = f"[Error {status_code}] {error_msg}. {solution}"
+    msg = (default_msg or "").strip()
+    # Skip if the API echoed the canned message (no new info) or if it
+    # matches the localised error_msg verbatim.
+    if msg and msg not in base:
+        return f"{base} (API: {msg})"
+    return base
 
 
 # Synchronous client for use in Qt threads (uses requests, not httpx)
@@ -839,16 +853,22 @@ class MiniMaxSyncClient:
         duration: int = 6,
         resolution: str = "768P",
         prompt_optimizer: bool = True,
-        fast_pretreatment: bool = False
     ) -> Tuple[bool, str]:
-        """Create a video generation task (sync)."""
+        """Create a video generation task (sync).
+
+        Sends only the fields the current ``/v1/video_generation`` spec
+        accepts for the Hailuo 2.3 family. The legacy ``fast_pretreatment``
+        toggle was a no-op for every model we expose (only ``abab-video-1``
+        ever accepted it) and the live API rejects unknown request keys
+        with ``[Error 2013] invalid params`` — so we omit it entirely
+        instead of forwarding a default of ``False``.
+        """
         data: dict = {
             "model": model,
             "prompt": prompt,
             "duration": duration,
             "resolution": resolution,
             "prompt_optimizer": prompt_optimizer,
-            "fast_pretreatment": fast_pretreatment
         }
         if first_frame_image:
             data["first_frame_image"] = first_frame_image
@@ -1397,9 +1417,14 @@ class MiniMaxClient:
         duration: int = 6,
         resolution: str = "768P",
         prompt_optimizer: bool = True,
-        fast_pretreatment: bool = False
     ) -> Tuple[bool, str]:
-        """Create a video generation task (async)."""
+        """Create a video generation task (async).
+
+        Mirrors the sync client — only the keys documented for Hailuo 2.3
+        are forwarded. ``fast_pretreatment`` is omitted: the live API
+        rejects unknown params with ``[Error 2013]`` and no model we
+        ship accepts it.
+        """
         url = f"{self.api_base}/v1/video_generation"
 
         headers = {
@@ -1413,7 +1438,6 @@ class MiniMaxClient:
             "duration": duration,
             "resolution": resolution,
             "prompt_optimizer": prompt_optimizer,
-            "fast_pretreatment": fast_pretreatment
         }
         if first_frame_image:
             data["first_frame_image"] = first_frame_image
@@ -1598,7 +1622,11 @@ def video_sync(
     duration: int = 6,
     resolution: str = "768P",
     prompt_optimizer: bool = True,
-    fast_pretreatment: bool = False,
+    # fast_pretreatment is accepted for backward compatibility (the
+    # public function signature predates the deprecation) but no longer
+    # forwarded to the client — Hailuo 2.3 rejects unknown params with
+    # ``[Error 2013]``. See ``client.video_generate`` for the full note.
+    fast_pretreatment: bool = False,  # noqa: ARG001 — kept for back-compat
     output_path: str = "workspace/video_output.mp4"
 ) -> Tuple[bool, str]:
     """Synchronous video generation wrapper with polling."""
@@ -1607,7 +1635,7 @@ def video_sync(
         success, task_id = client.video_generate(
             prompt=prompt, model=model, first_frame_image=first_frame_image,
             duration=duration, resolution=resolution,
-            prompt_optimizer=prompt_optimizer, fast_pretreatment=fast_pretreatment
+            prompt_optimizer=prompt_optimizer,
         )
         if not success:
             return False, task_id
