@@ -341,20 +341,28 @@ client = TestClient(_main.app)
 
 
 def test_api_list_empty_then_populated():
-    assert client.get("/api/style-sheets").json()["style_sheets"] == []
-    r = client.post("/api/style-sheets", json={
-        "name": "watercolor",
-        "description": "Watercolor, pastel",
-        "body": "watercolor of {prompt}, pastel tones",
-    })
-    assert r.status_code == 200
-    data = client.get("/api/style-sheets").json()
-    assert data["success"] is True
-    assert data["count"] == 1
-    sheet = data["style_sheets"][0]
-    assert sheet["name"] == "watercolor"
-    assert sheet["prompt_placeholder_count"] == 1
-    assert sheet["body_length"] == len("watercolor of {prompt}, pastel tones")
+    # Re-patch the user dir to a fresh per-test temp dir so this test is
+    # robust against sibling files (e.g. tests/test_style_sheet_draft_api.py)
+    # that also patch _style_sheets_user_dir at module import and may write
+    # to whichever dir wins the patch last.
+    with tempfile.TemporaryDirectory() as _d:
+        _iso = Path(_d) / "sheets"
+        _iso.mkdir(parents=True, exist_ok=True)
+        with patch.object(_main, "_style_sheets_user_dir", return_value=_iso):
+            assert client.get("/api/style-sheets").json()["style_sheets"] == []
+            r = client.post("/api/style-sheets", json={
+                "name": "watercolor",
+                "description": "Watercolor, pastel",
+                "body": "watercolor of {prompt}, pastel tones",
+            })
+            assert r.status_code == 200
+            data = client.get("/api/style-sheets").json()
+            assert data["success"] is True
+            assert data["count"] == 1
+            sheet = data["style_sheets"][0]
+            assert sheet["name"] == "watercolor"
+            assert sheet["prompt_placeholder_count"] == 1
+            assert sheet["body_length"] == len("watercolor of {prompt}, pastel tones")
 
 
 def test_api_get_single_and_404():

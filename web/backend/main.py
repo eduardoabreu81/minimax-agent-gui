@@ -2333,6 +2333,264 @@ async def delete_style_sheet_route(name: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+from mini_agent.tools.style_sheet_loader import _validate_name as _validate_name
+
+class StyleSheetDraftRequest(BaseModel):
+    """Body for ``POST /api/style-sheets/draft``.
+
+    ``mode`` is either ``"description"`` (uses ``brief``) or ``"image"``
+    (uses exactly one of ``image_path`` / ``image_data_url``). The route
+    is read-only with respect to style-sheet storage — it returns a draft
+    only; persistence happens later through ``POST /api/style-sheets``.
+    """
+    mode: str = "description"
+    brief: Optional[str] = None
+    image_path: Optional[str] = None
+    image_data_url: Optional[str] = None
+
+
+# Brief cap mirrors a generous user prompt; the model has ~BODY_MAX of
+# real estate for the style fragment after the server prepends
+# "{prompt}, " (see _build_style_draft_body).
+STYLE_DRAFT_BRIEF_MAX = 500
+STYLE_DRAFT_FRAGMENT_MAX = 900  # leaves room for "{prompt}, " under BODY_MAX=1000
+
+STYLE_DRAFT_LLM_PROMPT = (
+    "You propose a reusable image style sheet. From the user's brief, "
+    "produce ONE JSON object and nothing else, with keys: "
+    "\"name\" (lowercase kebab-case, letters/digits/hyphens, <=64 chars, "
+    "leading alphanumeric), \"description\" (<=120 chars), "
+    "and \"style_fragment\" (concise transferable visual style only: "
+    "medium, art direction, palette, lighting, texture, line work, "
+    "rendering treatment — NO subject identity, objects, scene content, "
+    "logos, or visible text; <=900 chars)."
+)
+
+STYLE_DRAFT_VLM_PROMPT = (
+    "Analyze ONLY the transferable visual style of this image: medium, "
+    "art direction, palette and color treatment, lighting, surface "
+    "texture, line work, and rendering/photographic characteristics. "
+    "Do NOT identify or describe people, clothing, objects, the scene, "
+    "action, logos, captions, or visible text; do NOT infer sensitive "
+    "attributes. Return ONE JSON object and nothing else with keys: "
+    "\"name\" (lowercase kebab-case), \"description\" (<=120 chars), "
+    "and \"style_fragment\" (<=900 chars)."
+)
+
+_STYLE_DRAFT_MIME_EXT = {
+    "png": "png", "jpeg": "jpg", "jpg": "jpg",
+    "webp": "webp", "gif": "gif",
+}
+
+
+def _parse_style_draft_payload(raw: str) -> dict:
+    """Parse + sanity-check the model's structured response.
+
+    Returns ``{"name", "description", "style_fragment"}`` on success.
+    Raises ``ValueError`` on any malformed/missing field; the caller
+    maps that to HTTP 502.
+    """
+    import json as _json
+    try:
+        data = _json.loads(raw.strip())
+    except Exception as e:
+        raise ValueError(f"model output was not valid JSON: {e}")
+    if not isinstance(data, dict):
+        raise ValueError("model output was not a JSON object")
+    name = str(data.get("name") or "").strip()
+    description = str(data.get("description") or "").strip()
+    fragment = str(data.get("style_fragment") or data.get("fragment") or "").strip()
+    if not (name and description and fragment):
+        raise ValueError("model output missing one of name/description/style_fragment")
+    return {"name": name, "description": description, "style_fragment": fragment}
+
+
+def _build_style_draft_body(fragment: str) -> str:
+    """Construct the final draft body from a validated fragment.
+
+    Always ``"{prompt}, <fragment>"``; truncates ``fragment`` to fit
+    under ``BODY_MAX`` (leaving room for the literal prefix). Guarantees
+    exactly one ``{prompt}`` occurrence.
+    """
+    from mini_agent.tools.style_sheet_loader import BODY_MAX
+    prefix = "{prompt}, "
+    room = max(0, BODY_MAX - len(prefix))
+    return prefix + fragment[:room].rstrip()
+
+
+def _resolve_style_draft_image_path(req: "StyleSheetDraftRequest") -> Path:
+    """Resolve a workspace image path for VLM analysis.
+
+    Returns the absolute path of an existing regular image file under the
+    app workspace. Raises HTTPException(403) on traversal, (404) on
+    missing, (400) on unsupported type.
+    """
+    root = get_app_workspace_dir()
+    target = _safe_join(root, req.image_path or "")
+    if not target.is_file():
+        raise HTTPException(status_code=404, detail=f"Image not found: {req.image_path}")
+    ext = target.suffix.lower().lstrip(".")
+    if ext not in _STYLE_DRAFT_MIME_EXT:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported image type '{ext}'. Allowed: png, jpg, jpeg, webp, gif.",
+        )
+    return target
+
+
+def _decode_style_draft_data_url(data_url: str) -> tuple[Path, bytes]:
+    """Decode an inline image data URL to a temp file path + raw bytes.
+
+    Returns ``(tmp_path, raw_bytes)``. Raises HTTPException(400) on
+    malformed data URL, unsupported MIME, or decoded size > 10 MiB.
+    """
+    import base64 as _b64
+    import re as _re
+    import tempfile as _tf
+    m = _re.match(r"^data:image/([a-zA-Z0-9.+-]+);base64,(.*)$", data_url, _re.DOTALL)
+    if not m:
+        raise HTTPException(
+            status_code=400,
+            detail="image_data_url must be a base64 data URL (data:image/<ext>;base64,...)",
+        )
+    mime_ext = m.group(1).lower()
+    ext = _STYLE_DRAFT_MIME_EXT.get(mime_ext)
+    if ext is None:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported image MIME '{mime_ext}'. Allowed: png, jpeg, webp, gif.",
+        )
+    try:
+        raw = _b64.b64decode(m.group(2))
+    except Exception:
+        raise HTTPException(status_code=400, detail="image_data_url is not valid base64")
+    if len(raw) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="image_data_url exceeds 10 MiB decoded")
+    tmp = _tf.NamedTemporaryFile(suffix=f".{ext}", delete=False)
+    tmp.write(raw)
+    tmp.close()
+    return Path(tmp.name), raw
+
+
+@app.post("/api/style-sheets/draft")
+async def draft_style_sheet(req: StyleSheetDraftRequest):
+    """Produce an editable ``{name, description, body}`` draft from a
+    natural-language brief or an image.
+
+    Read-only: never calls ``write_style_sheet`` and never creates a
+    ``STYLE.md``. The caller persists the returned draft through
+    ``POST /api/style-sheets``.
+
+    Modes:
+      - ``description`` → requires non-empty ``brief`` (<=500 chars).
+      - ``image`` → requires exactly one of ``image_path`` (workspace
+        relative) or ``image_data_url`` (base64 data URL).
+    """
+    import os as _os
+    import asyncio as _asyncio
+    from mini_agent.tools.style_sheet_loader import (
+        BODY_MAX, DESCRIPTION_MAX, NAME_MAX,
+        kebab_slugify, suggest_unique_name, _validate_description, _validate_name,
+    )
+    from mini_max_mcp.mcp_tools import MiniMaxMCPClient
+
+    minimax_config = get_minimax_config()
+    api_key = minimax_config.get("api_key") or ""
+    api_base = minimax_config.get("api_base") or ""
+    if not api_key:
+        raise HTTPException(status_code=400, detail="API key not configured")
+
+    mode = (req.mode or "").strip().lower()
+    if mode == "description":
+        brief = (req.brief or "").strip()
+        if not brief:
+            raise HTTPException(status_code=400, detail="brief is required for description mode")
+        if len(brief) > STYLE_DRAFT_BRIEF_MAX:
+            raise HTTPException(
+                status_code=400,
+                detail=f"brief must be <= {STYLE_DRAFT_BRIEF_MAX} chars",
+            )
+        # Build the LLM call.
+        from mini_agent.llm import LLMClient
+        from mini_agent.schema.schema import Message
+        model = config.get("agent", {}).get("model", "MiniMax-M3")
+        llm = LLMClient(api_key=api_key, api_base=api_base, model=model)
+        messages = [
+            Message(role="system", content=STYLE_DRAFT_LLM_PROMPT),
+            Message(role="user", content=f"Brief: {brief}"),
+        ]
+        try:
+            resp = await llm.generate(messages)
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"LLM failed: {e}")
+        raw_out = (resp.content or "").strip() if hasattr(resp, "content") else ""
+    elif mode == "image":
+        if bool(req.image_path) == bool(req.image_data_url):
+            raise HTTPException(
+                status_code=400,
+                detail="image mode requires exactly one of image_path or image_data_url",
+            )
+        cleanup_path: Path | None = None
+        try:
+            if req.image_path:
+                image_path = _resolve_style_draft_image_path(req)
+            else:
+                image_path, _raw = _decode_style_draft_data_url(req.image_data_url or "")
+                cleanup_path = image_path
+            client = MiniMaxMCPClient(api_key, api_base)
+            try:
+                ok, out = client.understand_image(
+                    image_path=str(image_path),
+                    prompt=STYLE_DRAFT_VLM_PROMPT,
+                )
+            finally:
+                client.close()
+            if not ok:
+                raise HTTPException(status_code=502, detail=f"VLM failed: {out}")
+            raw_out = (out or "").strip()
+        finally:
+            if cleanup_path is not None:
+                try:
+                    _os.unlink(cleanup_path)
+                except OSError:
+                    pass
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail=f"mode must be 'description' or 'image' (got '{mode}')",
+        )
+
+    try:
+        parsed = _parse_style_draft_payload(raw_out)
+    except ValueError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+    # Normalize name (slugify), then make unique against existing sheets.
+    slug = kebab_slugify(parsed["name"])[:NAME_MAX]
+    try:
+        user_dir = _style_sheets_user_dir()
+        final_name = suggest_unique_name(user_dir, slug if slug != "style-1" else parsed["name"])
+    except Exception:
+        final_name = slug if slug != "style-1" else "style-1"
+    # Defensive: re-validate the final name.
+    try:
+        final_name = _validate_name(final_name)
+    except Exception:
+        final_name = suggest_unique_name(_style_sheets_user_dir(), "style")
+
+    description = parsed["description"][:DESCRIPTION_MAX]
+    try:
+        description = _validate_description(description)
+    except Exception:
+        description = (parsed["description"] or "Style sheet")[:DESCRIPTION_MAX]
+
+    body = _build_style_draft_body(parsed["style_fragment"])
+    # Defensive: body must be ≤ BODY_MAX and contain exactly one {prompt}.
+    if body.count("{prompt}") != 1 or len(body) > BODY_MAX:
+        raise HTTPException(status_code=502, detail="model produced an unusable style fragment")
+
+    return {"success": True, "draft": {"name": final_name, "description": description, "body": body}}
+
 class ToolsConfigRequest(BaseModel):
     web_search: bool = True
     understand_image: bool = True
