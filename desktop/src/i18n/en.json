@@ -1310,6 +1310,12 @@
     "empty": "This generation has no saved metadata.",
     "manualUpload": "Manual upload — not persisted"
   },
+  "lightbox": {
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "reset": "Reset zoom",
+    "doubleClickHint": "Double-click to reset"
+  },
   "commonActions": {
     "deleteTask": "Delete task?"
   },

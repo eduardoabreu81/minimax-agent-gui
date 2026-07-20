@@ -1367,6 +1367,12 @@
     "empty": "This generation has no saved metadata.",
     "manualUpload": "Manual upload — not persisted"
   },
+  "lightbox": {
+    "zoomIn": "Aproximar",
+    "zoomOut": "Afastar",
+    "reset": "Redefinir zoom",
+    "doubleClickHint": "Clique duplo para redefinir"
+  },
   "recent": {
     "saveAsVideoAnchor": "",
     "saveAsStyle": "",

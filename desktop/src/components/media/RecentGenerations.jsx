@@ -26,6 +26,7 @@ export default function RecentGenerations({
   onSaveAsStyle,
   onDeleteImage,
   onShowMeta,
+  onClickImage,
 }) {
   const { t } = useTranslation()
   const mediaUrl = (path) => assetUrl(`/api/files/download?path=${encodeURIComponent(path)}`)
@@ -82,36 +83,61 @@ export default function RecentGenerations({
                   key={item.path}
                   className="bg-surface border border-border rounded-xl overflow-hidden group"
                 >
-                  <div className="relative aspect-square">
+                  <div
+                    className="relative aspect-square"
+                    onClick={() => onClickImage && onClickImage(item)}
+                    role={onClickImage ? 'button' : undefined}
+                    aria-label={onClickImage ? t('recent.imagePreviewTitle', { defaultValue: 'View image' }) : undefined}
+                    tabIndex={onClickImage ? 0 : undefined}
+                    onKeyDown={
+                      onClickImage
+                        ? (e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault()
+                              onClickImage(item)
+                            }
+                          }
+                        : undefined
+                    }
+                  >
                     <img
                       src={mediaUrl(item.path)}
                       alt={item.name}
                       className="w-full h-full object-cover"
                       loading="lazy"
                     />
-                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                    <div
+                      className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2"
+                      onClick={(e) => e.stopPropagation()}
+                      onKeyDown={(e) => e.stopPropagation()}
+                    >
                       <a
                         href={mediaUrl(item.path)}
                         download={item.name}
                         className="p-1.5 bg-white/90 rounded-lg hover:bg-white transition-colors"
                         title={t('common.download')}
+                        aria-label={t('common.download')}
                       >
                         <Save size={12} className="text-black" />
                       </a>
                       {onPromoteToAnchor && (
                         <button
-                          onClick={() => onPromoteToAnchor(item)}
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); onPromoteToAnchor(item) }}
                           className="p-1.5 bg-primary hover:bg-primary-hover rounded-lg transition-colors"
                           title={t('recent.saveAsVideoAnchor')}
+                          aria-label={t('recent.saveAsVideoAnchor')}
                         >
                           <Anchor size={12} className="text-white" />
                         </button>
                       )}
                       {onSaveAsStyle && (
                         <button
-                          onClick={() => onSaveAsStyle(item)}
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); onSaveAsStyle(item) }}
                           className="p-1.5 bg-primary hover:bg-primary-hover rounded-lg transition-colors"
                           title={t('recent.saveAsStyle')}
+                          aria-label={t('recent.saveAsStyle')}
                         >
                           <Sparkles size={12} className="text-white" />
                         </button>
@@ -190,7 +216,7 @@ export default function RecentGenerations({
                       <a
                         href={mediaUrl(item.path)}
                         download={item.name}
-                        className="px-3 py-1 bg-primary hover:bg-primary-hover text-white text-xs rounded-lg transition-colors flex items-center gap-1"
+                        className="px-3 py-1 bg-primary hover:bg-primary-hover text-white text-xs rounded-lg flex items-center gap-1"
                       >
                         <Save size={10} /> Download
                       </a>

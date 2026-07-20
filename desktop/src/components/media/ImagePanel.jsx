@@ -11,7 +11,7 @@ import ModeTabBar from '../shared/ModeTabBar'
 import GalleryHeader from '../shared/GalleryHeader'
 import ShapePreview from '../shared/ShapePreview'
 import RecentGenerations from './RecentGenerations'
-import GenerationMetaModal from './GenerationMetaModal'
+import ImageLightbox from './ImageLightbox'
 import { apiFetch } from '../../lib/api.js'
 import { StyleSheetEditor, StyleSheetModal } from '../style-sheets/index.js'
 import StyleSheetPicker from '../style-sheets/StyleSheetPicker.jsx'
@@ -156,6 +156,7 @@ export default function ImagePanel() {
   const [styleEditorDirty, setStyleEditorDirty] = useState(false)
   // null = closed; { mode: 'create' } | { mode: 'edit', sheet }
   const [metaItem, setMetaItem] = useState(null)
+  const [lightboxItem, setLightboxItem] = useState(null)
 
   const loadStyleSheets = useCallback(async () => {
     try {
@@ -794,8 +795,8 @@ export default function ImagePanel() {
       type="image"
       items={gallery}
       loading={galleryLoading}
-      onRefresh={fetchGallery}
       onShowMeta={setMetaItem}
+      onClickImage={setLightboxItem}
       emptyMessage={t('image.noGenerated')}
       onPromoteToAnchor={(item) => {
         // Cross-tab promotion to the Video panel's AnchorLibrary.
@@ -882,6 +883,9 @@ export default function ImagePanel() {
       })()}
       {metaItem && (
         <GenerationMetaModal item={metaItem} onClose={() => setMetaItem(null)} />
+      )}
+      {lightboxItem && (
+        <ImageLightbox item={lightboxItem} onClose={() => setLightboxItem(null)} />
       )}
       <SessionActionGuard
         open={!!deleteGuard}
