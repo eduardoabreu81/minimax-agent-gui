@@ -1132,6 +1132,25 @@
   "statusBar": {
     "thinkingOnShort": "Thinking",
     "thinkingOffShort": "Thinking off",
-    "pctLeft": "{pct}% left"
+    "pctLeft": "{pct}% left",
+    "contextAndPlan": "Context window & plan",
+    "contextWindow": "Context window",
+    "planUsage": "Plan usage",
+    "connectingToPlan": "Connecting to Token Plan\u2026",
+    "planUnavailable": "Plan data unavailable",
+    "hideBreakdown": "Hide breakdown",
+    "showBreakdown": "Show breakdown",
+    "tokens": "tokens",
+    "fiveHourLimit": "5-hour limit",
+    "resetsIn": "Resets in",
+    "weeklyAllModels": "Weekly \u00b7 all models",
+    "breakdown": {
+      "messages": "Messages",
+      "skills": "Skills",
+      "memoryFiles": "Memory files",
+      "customAgents": "Custom agents",
+      "systemPrompt": "System prompt",
+      "mcpTools": "MCP tools"
+    }
   }
 }
