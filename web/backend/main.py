@@ -3433,6 +3433,16 @@ async def chat_websocket(websocket: WebSocket, session_id: str):
                             except asyncio.TimeoutError:
                                 _logger.warning(f"Permission request {req_id} timed out")
                                 _deferred_messages.extend(deferred)
+                                # Notify the frontend before rejecting so it
+                                # can clear the attention state and show an
+                                # explicit timeout message rather than a
+                                # silent rejection.
+                                await _safe_send({
+                                    "type": "permission_expired",
+                                    "request_id": req_id,
+                                    "tool_name": request.get("tool_name", "unknown"),
+                                    "reason": "Permission request timed out after 120 seconds.",
+                                })
                                 return "rejected"
                             if resp.get("type") == "permission_response" and resp.get("request_id") == req_id:
                                 # Hand any unrelated messages back to the
