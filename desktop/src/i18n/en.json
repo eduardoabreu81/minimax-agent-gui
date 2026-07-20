@@ -938,6 +938,7 @@
     "imageRequired": "Pick or drop an image first.",
     "extractStyle": "Extract style",
     "confirmOverwriteDraft": "Replace the current draft with a new one?",
+    "confirmDiscard": "Discard changes and close?",
     "combinedPreview": "Combined prompt preview"
   },
   "skillSources": {

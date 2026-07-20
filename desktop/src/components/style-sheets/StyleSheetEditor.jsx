@@ -56,6 +56,7 @@ export default function StyleSheetEditor({
   onClose,
   onSaved,
   onError,
+  onDirtyChange,
 }) {
   const { t } = useTranslation()
   const isEdit = mode === 'edit'
@@ -124,6 +125,10 @@ export default function StyleSheetEditor({
   }, [name, description, body])
 
   const fieldsDirty = !!(name || description || body || brief || imagePath || uploadedDataUrl)
+
+  useEffect(() => {
+    onDirtyChange?.(fieldsDirty)
+  }, [fieldsDirty, onDirtyChange])
 
   const runDraft = async (kind) => {
     if (kind === 'ai') {

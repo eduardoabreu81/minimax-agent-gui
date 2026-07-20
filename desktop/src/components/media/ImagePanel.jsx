@@ -152,8 +152,8 @@ export default function ImagePanel() {
   }, [prompt, register, t])
 
   const [styleEditorState, setStyleEditorState] = useState(null)
+  const [styleEditorDirty, setStyleEditorDirty] = useState(false)
   // null = closed; { mode: 'create' } | { mode: 'edit', sheet }
-  // Currently-open GenerationMetaModal item (null = closed).
   const [metaItem, setMetaItem] = useState(null)
 
   const loadStyleSheets = useCallback(async () => {
@@ -173,6 +173,7 @@ export default function ImagePanel() {
   useEffect(() => { fetchGallery() }, [])
 
   const handleStyleSaved = useCallback(async (saved) => {
+    setStyleEditorDirty(false)
     setStyleEditorState(null)
     await loadStyleSheets()
     setStyleSheet(saved.name)
@@ -889,27 +890,35 @@ export default function ImagePanel() {
           />
         </div>
       </div>
-      {styleEditorState && (
-        <StyleSheetModal
-          onClose={() => setStyleEditorState(null)}
-          title={styleEditorState.mode === 'edit'
-            ? t('styleSheets.editTitle', { name: styleEditorState.sheet?.name || '' })
-            : t('image.createStyleSheetTitle')}
-          maxWidth="max-w-[1100px]"
-        >
-          <StyleSheetEditor
-            mode={styleEditorState.mode}
-            sheet={styleEditorState.sheet}
-            source={styleEditorState.source || 'direct'}
-            initialImagePath={styleEditorState.initialImagePath || ''}
-            imagePrompt={prompt}
-            saveLabel={t('image.saveAndApply')}
-            onClose={() => setStyleEditorState(null)}
-            onSaved={handleStyleSaved}
-            onError={(msg) => setError(msg)}
-          />
-        </StyleSheetModal>
-      )}
+      {styleEditorState && (() => {
+        const closeStyleEditor = () => {
+          if (styleEditorDirty && typeof window !== 'undefined' && !window.confirm(t('styleSheets.confirmDiscard'))) return
+          setStyleEditorDirty(false)
+          setStyleEditorState(null)
+        }
+        return (
+          <StyleSheetModal
+            onClose={closeStyleEditor}
+            title={styleEditorState.mode === 'edit'
+              ? t('styleSheets.editTitle', { name: styleEditorState.sheet?.name || '' })
+              : t('image.createStyleSheetTitle')}
+            maxWidth="max-w-[1100px]"
+          >
+            <StyleSheetEditor
+              mode={styleEditorState.mode}
+              sheet={styleEditorState.sheet}
+              source={styleEditorState.source || 'direct'}
+              initialImagePath={styleEditorState.initialImagePath || ''}
+              imagePrompt={prompt}
+              saveLabel={t('image.saveAndApply')}
+              onClose={closeStyleEditor}
+              onSaved={handleStyleSaved}
+              onError={(msg) => setError(msg)}
+              onDirtyChange={setStyleEditorDirty}
+            />
+          </StyleSheetModal>
+        )
+      })()}
       {metaItem && (
         <GenerationMetaModal item={metaItem} onClose={() => setMetaItem(null)} />
       )}

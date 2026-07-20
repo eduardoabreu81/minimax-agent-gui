@@ -7,8 +7,8 @@ import {
 import { apiFetch } from '../../lib/api.js'
 import { StyleSheetEditor, StyleSheetModal } from '../style-sheets/index.js'
 import {
-  listStyleSheets, createStyleSheet as apiCreate, updateStyleSheet as apiUpdate,
-  deleteStyleSheet as apiDelete, getStyleSheet as apiGet,
+  listStyleSheets,
+  deleteStyleSheet as apiDelete,
 } from '../../lib/styleSheets.js'
 
 // StyleSheetsTab — reusable image-prompt fragments.
@@ -242,18 +242,24 @@ export default function StyleSheetsTab() {
 function StyleSheetEditorModal({ mode, sheet, onClose, onSaved, onError }) {
   const { t } = useTranslation()
   const isEdit = mode === 'edit'
+  const [dirty, setDirty] = useState(false)
+  const guardedClose = () => {
+    if (dirty && typeof window !== 'undefined' && !window.confirm(t('styleSheets.confirmDiscard'))) return
+    onClose()
+  }
   return (
     <StyleSheetModal
-      onClose={onClose}
+      onClose={guardedClose}
       title={isEdit ? t('styleSheets.editTitle', { name: sheet?.name || '' }) : t('styleSheets.createTitle')}
       maxWidth="max-w-[1100px]"
     >
       <StyleSheetEditor
         mode={mode}
         sheet={sheet}
-        onClose={onClose}
-        onSaved={onSaved}
+        onClose={guardedClose}
+        onSaved={onClose}
         onError={onError}
+        onDirtyChange={setDirty}
       />
     </StyleSheetModal>
   )

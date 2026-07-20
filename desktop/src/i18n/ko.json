@@ -938,6 +938,7 @@
     "imageRequired": "먼저 이미지를 선택하거나 드롭하세요.",
     "extractStyle": "스타일 추출",
     "confirmOverwriteDraft": "현재 초안을 새 초안으로 교체할까요?",
+    "confirmDiscard": "변경사항을 폐기하고 닫을까요?",
     "combinedPreview": "결합 프롬프트 미리보기"
   },
   "skillSources": {

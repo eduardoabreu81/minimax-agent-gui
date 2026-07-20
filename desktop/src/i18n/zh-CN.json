@@ -1078,6 +1078,7 @@
     "imageRequired": "请先选择或拖入一张图片。",
     "extractStyle": "提取风格",
     "confirmOverwriteDraft": "用新草稿替换当前草稿？",
+    "confirmDiscard": "放弃更改并关闭？",
     "combinedPreview": "组合提示预览"
   },
   "contextRef": {

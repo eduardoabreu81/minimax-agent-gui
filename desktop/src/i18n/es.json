@@ -1078,6 +1078,7 @@
     "imageRequired": "Elige o suelta una imagen primero.",
     "extractStyle": "Extraer estilo",
     "confirmOverwriteDraft": "¿Reemplazar el borrador actual por uno nuevo?",
+    "confirmDiscard": "¿Descartar los cambios y cerrar?",
     "combinedPreview": "Vista previa combinada"
   },
   "contextRef": {

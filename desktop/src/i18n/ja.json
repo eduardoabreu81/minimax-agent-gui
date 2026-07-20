@@ -1078,6 +1078,7 @@
     "imageRequired": "最初に画像を選択またはドロップしてください。",
     "extractStyle": "スタイルを抽出",
     "confirmOverwriteDraft": "現在の下書きを新しい下書きに置き換えますか？",
+    "confirmDiscard": "変更を破棄して閉じますか？",
     "combinedPreview": "結合プロンプトのプレビュー"
   },
   "contextRef": {

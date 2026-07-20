@@ -1086,6 +1086,7 @@
     "imageRequired": "Selecione ou solte uma imagem primeiro.",
     "extractStyle": "Extrair estilo",
     "confirmOverwriteDraft": "Substituir o rascunho atual por um novo?",
+    "confirmDiscard": "Descartar alterações e fechar?",
     "combinedPreview": "Visualização combinada do prompt"
   },
   "contextRef": {
