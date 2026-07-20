@@ -64,6 +64,11 @@ export default function CodingPanel({
   supportsThinking: supportsThinkingProp,
 } = {}) {
   const { t } = useTranslation()
+  // Coding Agent Chat state — codingSessionId must be declared BEFORE its
+  // first use (useSessionActivity at line 70, useEffect at line 76).
+  // Forward-referencing a `const` is a TDZ ("Cannot access 'X' before
+  // initialization") that fires on first mount.
+  const [codingSessionId, setCodingSessionId] = useState(() => `coding-${Math.random().toString(36).substring(2, 10)}`)
   const activity = useSessionActivity(codingSessionId)
   const activityRef = useRef(activity)
   activityRef.current = activity
@@ -121,7 +126,6 @@ export default function CodingPanel({
   const [codingWs, setCodingWs] = useState(null)
   const [codingThinking, setCodingThinking] = useState(false)
   const [codingConnected, setCodingConnected] = useState(false)
-  const [codingSessionId, setCodingSessionId] = useState(() => `coding-${Math.random().toString(36).substring(2, 10)}`)
   const [codingConversations, setCodingConversations] = useState([])
   const [showCodingConvList, setShowCodingConvList] = useState(false)
   const [codingSearchQuery, setCodingSearchQuery] = useState('')

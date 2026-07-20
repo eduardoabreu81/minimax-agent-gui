@@ -1386,10 +1386,10 @@ export default function SpeechPanel() {
           {t('speech.traitPresets')}
         </label>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
-          {DESIGN_TRAITS.map(t => (
+          {DESIGN_TRAITS.map(trait => (
             <button
-              key={t.id}
-              onClick={() => appendTrait(t.labelKey.replace('speech.traits.', ''))}
+              key={trait.id}
+              onClick={() => appendTrait(trait.labelKey.replace('speech.traits.', ''))}
               style={{
                 padding: '4px 9px', borderRadius: 7,
                 background: 'var(--app-surface)',
@@ -1397,7 +1397,7 @@ export default function SpeechPanel() {
                 color: 'var(--app-text)', fontSize: 11, fontWeight: 500,
                 cursor: 'pointer',
               }}
-            >{t(t.labelKey)}</button>
+            >{t(trait.labelKey)}</button>
           ))}
         </div>
       </div>

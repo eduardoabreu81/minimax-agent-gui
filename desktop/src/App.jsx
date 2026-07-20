@@ -229,6 +229,28 @@ function AppShell() {
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [])
 
+  // Cross-panel navigation events. Currently used by ImagePanel's
+  // "Save as video anchor" button: dispatching `minimax:nav-to-video`
+  // flips the active tab to Video so the user sees the anchor editor
+  // open (the promotion payload travels via `minimax:anchor-promote`).
+  useEffect(() => {
+    const onNav = (e) => {
+      const tab = e?.detail?.tab
+      // explicit allowlist — never trust arbitrary strings from events
+      if (tab && ['chat', 'code', 'image', 'video', 'music', 'tts', 'tasks', 'settings', 'help'].includes(tab)) {
+        setActiveTab(tab)
+      } else if (e?.type === 'minimax:nav-to-video') {
+        setActiveTab('video')
+      }
+    }
+    window.addEventListener('minimax:nav-to-video', onNav)
+    window.addEventListener('minimax:nav-to-tab', onNav)
+    return () => {
+      window.removeEventListener('minimax:nav-to-video', onNav)
+      window.removeEventListener('minimax:nav-to-tab', onNav)
+    }
+  }, [])
+
   // beforeunload guard — warn on page refresh/close when there's active work
   useEffect(() => {
     const handleBeforeUnload = (e) => {

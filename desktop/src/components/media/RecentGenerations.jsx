@@ -1,4 +1,4 @@
-import { RefreshCw, Save, Loader2 } from 'lucide-react'
+import { RefreshCw, Save, Loader2, Anchor } from 'lucide-react'
 import { assetUrl } from '../../lib/api.js'
 
 /**
@@ -21,6 +21,7 @@ export default function RecentGenerations({
   error = null,
   onRefresh,
   emptyMessage = 'No recent generations',
+  onPromoteToAnchor,
 }) {
   const mediaUrl = (path) => assetUrl(`/api/files/download?path=${encodeURIComponent(path)}`)
 
@@ -92,6 +93,15 @@ export default function RecentGenerations({
                       >
                         <Save size={12} className="text-black" />
                       </a>
+                      {onPromoteToAnchor && (
+                        <button
+                          onClick={() => onPromoteToAnchor(item)}
+                          className="p-1.5 bg-primary hover:bg-primary-hover rounded-lg transition-colors"
+                          title="Save as video anchor"
+                        >
+                          <Anchor size={12} className="text-white" />
+                        </button>
+                      )}
                     </div>
                   </div>
                   <p className="px-2 py-1.5 text-[10px] text-muted-foreground truncate" title={item.name}>

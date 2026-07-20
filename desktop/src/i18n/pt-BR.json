@@ -286,6 +286,7 @@
     "selectPalette": "Selecionar item da paleta",
     "newLine": "Nova linha na entrada",
     "skills": "Skills",
+    "styleSheets": "Folhas de estilo",
     "personality": {
       "preset": "Predefinição"
     },
@@ -335,6 +336,9 @@
     "promptTransform": "Prompt (descreva a transformação)",
     "promptPlaceholder": "Descreva a imagem que você quer gerar...",
     "promptTransformPlaceholder": "Descreva como transformar a imagem de referência...",
+    "styleSheet": "Folha de estilo",
+    "styleSheetNone": "Nenhuma",
+    "styleSheetOverBudget": "O prompt combinado excede 1500 caracteres. Encurte o prompt ou escolha outra folha de estilo.",
     "characters": "{count} / 2.000 caracteres",
     "exceedsLimit": "Limite excedido!",
     "uploadImage": "Enviar Imagem",
@@ -526,5 +530,25 @@
     "destructiveDescription": "Esta ação interromperá a execução atual e descartará a saída em andamento.",
     "stay": "Manter em execução",
     "stopAndContinue": "Parar e continuar"
+  },
+  "anchor": {
+    "libraryLabel": "Âncoras",
+    "new": "Nova",
+    "createNew": "Nova âncora",
+    "emptyHint": "Nenhuma âncora ainda. Crie uma para fixar um sujeito ou cena entre gerações.",
+    "createTitle": "Nova âncora",
+    "editTitle": "Editar \"{{name}}\"",
+    "imageLabel": "Imagem",
+    "imageLocked": "A imagem não pode ser alterada após a criação. Exclua e recrie para trocar.",
+    "dropHint": "Solte uma imagem ou clique para procurar",
+    "nameLabel": "Nome",
+    "namePlaceholder": "ex: \"Herói — jaqueta vermelha\"",
+    "descriptionLabel": "Descrição",
+    "descriptionPlaceholder": "Identidade visual estável — aparência, roupa, cenário, iluminação.",
+    "autoDescribe": "Auto-descrever",
+    "autoDescribeHint": "Gerar uma descrição via MiniMax VLM",
+    "create": "Criar âncora",
+    "confirmDelete": "Excluir âncora \"{{name}}\"? Isso não pode ser desfeito.",
+    "capExceeded": "Máx. de {{cap}} âncora(s) {{type}} por geração"
   }
 }

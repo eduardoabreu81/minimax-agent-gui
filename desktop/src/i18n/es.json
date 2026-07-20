@@ -268,6 +268,7 @@
     "selectPalette": "Seleccionar elemento de la paleta",
     "newLine": "Nueva línea en la entrada",
     "skills": "Skills",
+    "styleSheets": "Hojas de estilo",
     "personality": {
       "preset": "Preajuste"
     },
@@ -317,6 +318,9 @@
     "promptTransform": "Prompt (describe la transformación)",
     "promptPlaceholder": "Describe la imagen que quieres generar...",
     "promptTransformPlaceholder": "Describe cómo transformar la imagen de referencia...",
+    "styleSheet": "Hoja de estilo",
+    "styleSheetNone": "Ninguna",
+    "styleSheetOverBudget": "El prompt combinado supera los 1500 caracteres. Acorta el prompt o elige otra hoja de estilo.",
     "characters": "{count} / 2.000 caracteres",
     "exceedsLimit": "¡Límite excedido!",
     "uploadImage": "Subir Imagen",
@@ -403,5 +407,25 @@
     "destructiveDescription": "Esta acción detendrá la ejecución actual y descartará la salida en curso.",
     "stay": "Mantener ejecución",
     "stopAndContinue": "Detener y continuar"
+  },
+  "anchor": {
+    "libraryLabel": "Anclas",
+    "new": "Nueva",
+    "createNew": "Nueva ancla",
+    "emptyHint": "Sin anclas aún. Crea una para fijar un sujeto o escena entre generaciones.",
+    "createTitle": "Nueva ancla",
+    "editTitle": "Editar \"{{name}}\"",
+    "imageLabel": "Imagen",
+    "imageLocked": "La imagen no se puede cambiar tras la creación. Elimina y recrea para cambiarla.",
+    "dropHint": "Suelta una imagen o haz clic para buscar",
+    "nameLabel": "Nombre",
+    "namePlaceholder": "ej: \"Héroe — chaqueta roja\"",
+    "descriptionLabel": "Descripción",
+    "descriptionPlaceholder": "Identidad visual estable — apariencia, ropa, escenario, iluminación.",
+    "autoDescribe": "Auto-describir",
+    "autoDescribeHint": "Generar una descripción vía MiniMax VLM",
+    "create": "Crear ancla",
+    "confirmDelete": "¿Eliminar ancla \"{{name}}\"? Esto no se puede deshacer.",
+    "capExceeded": "Máx. {{cap}} ancla(s) {{type}} por generación"
   }
 }

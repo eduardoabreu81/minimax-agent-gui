@@ -8,6 +8,8 @@ import { useSessionProtection } from '../../hooks/useSessionProtection'
 import MediaPanelLayout from '../shared/MediaPanelLayout'
 import ModeTabBar from '../shared/ModeTabBar'
 import { apiFetch, assetUrl } from '../../lib/api.js'
+import AnchorLibrary from './AnchorLibrary.jsx'
+import { anchorToDataUrl } from '../../lib/anchors.js'
 
 // ───────────────────────────────────────────────────────────────────────────
 // Constants — TAURI_SPEC §5b
@@ -435,6 +437,10 @@ export default function VideoPanel() {
   const [firstFrame, setFirstFrame] = useState(null)
   const [lastFrame, setLastFrame] = useState(null)
   const [subjectImage, setSubjectImage] = useState(null)
+  // Attached anchors — their images are sent as subject_reference[] data
+  // URLs in generate(), giving the model character/subject visual
+  // references for cross-generation consistency.
+  const [attachedAnchors, setAttachedAnchors] = useState([])
 
   // Generation state (existing)
   const [loading, setLoading] = useState(false)
@@ -531,16 +537,31 @@ export default function VideoPanel() {
     setCost(null)
     setProgress(0)
     try {
-      // Build effective prompt: text + any selected camera commands
+      // Build effective prompt: user text + camera commands as `[Push in]` etc.
       const cmdText = cameraCommands.length
         ? ` ${cameraCommands.map(c => `[${c}]`).join(', ')}`
         : ''
       const effectivePrompt = prompt + cmdText
 
-      // Read picked frame files as data URLs (the API accepts them).
-      const firstFrameData = firstFrame  ? await readFileAsDataURL(firstFrame)  : ''
-      const lastFrameData  = lastFrame   ? await readFileAsDataURL(lastFrame)   : ''
-      const subjectData    = subjectImage ? [await readFileAsDataURL(subjectImage)] : null
+      // Resolve image references.
+      //   - Attached anchors → subject_reference[] (character/subject
+      //     visual consistency across the generated video). The MiniMax
+      //     API needs data URLs, so each anchor image is fetched via
+      //     /api/files/raw and converted.
+      //   - Manual dropzones (firstFrame / lastFrame / subjectImage) work
+      //     independently for the image2video / sef / s2v modes. When
+      //     anchors are attached they take precedence over the manual
+      //     subject dropzone.
+      const anchorDataUrls = []
+      for (const a of attachedAnchors) {
+        const d = await anchorToDataUrl(a, assetUrl)
+        if (d) anchorDataUrls.push(d)
+      }
+      const manualFirstFrame = firstFrame ? await readFileAsDataURL(firstFrame) : ''
+      const manualLastFrame  = lastFrame  ? await readFileAsDataURL(lastFrame)  : ''
+      const manualSubject    = subjectImage ? [await readFileAsDataURL(subjectImage)] : null
+
+      const subjectData = anchorDataUrls.length > 0 ? anchorDataUrls : manualSubject
 
       const res = await apiFetch('/api/video', {
         method: 'POST',
@@ -553,8 +574,8 @@ export default function VideoPanel() {
             duration: parseInt(duration, 10),
             resolution,
             prompt_optimizer: promptOptimizer,
-            first_frame_image: firstFrameData,
-            last_frame_image: lastFrameData,
+            first_frame_image: manualFirstFrame,
+            last_frame_image: manualLastFrame,
             subject_reference: subjectData,
           },
         }),
@@ -670,6 +691,35 @@ export default function VideoPanel() {
 
   const controls = (
     <>
+      {/* Anchor library — reusable image cards that provide character/subject
+          visual references for cross-generation consistency. Attached anchors
+          are sent as subject_reference[] data URLs in generate(). */}
+      <AnchorLibrary
+        attachedAnchors={attachedAnchors}
+        onAttachedChange={setAttachedAnchors}
+      />
+
+      {/* Active anchor attachment summary — compact chips showing what's
+          referenced for this generation. Hidden when nothing is attached. */}
+      {attachedAnchors.length > 0 && (
+        <div style={{
+          display: 'flex', flexWrap: 'wrap', gap: 5,
+          padding: '6px 8px',
+          background: 'hsl(var(--primary) / 0.05)',
+          border: '0.5px solid hsl(var(--primary) / 0.2)',
+          borderRadius: 9,
+        }}>
+          {attachedAnchors.map(a => (
+            <span key={a.id} style={{
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+              fontSize: 10.5, fontWeight: 500, color: 'hsl(var(--primary))',
+            }}>
+              <User size={10} /> {a.name}
+            </span>
+          ))}
+        </div>
+      )}
+
       {/* Frame inputs — mockup L489-506
           For image2video: 1 dropzone (first)
           For sef: 2 dropzones side by side (first + last)
@@ -699,7 +749,20 @@ export default function VideoPanel() {
           <label style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--app-text-2)', display: 'block', marginBottom: 7 }}>
             Subject reference
           </label>
-          <FrameDropzone file={subjectImage} onPick={setSubjectImage} />
+          {attachedAnchors.length > 0 ? (
+            <div style={{
+              minHeight: 96, borderRadius: 11,
+              border: '1.5px solid hsl(var(--primary) / 0.5)',
+              background: 'hsl(var(--primary) / 0.06)',
+              display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, padding: '8px 12px',
+              fontSize: 11, color: 'hsl(var(--primary))',
+            }}>
+              <Check size={14} strokeWidth={2.5} />
+              <span>{t('anchor.lockedByAnchors', { defaultValue: 'Referenced by anchor(s)' })}: <strong>{attachedAnchors.map(a => a.name).join(', ')}</strong></span>
+            </div>
+          ) : (
+            <FrameDropzone file={subjectImage} onPick={setSubjectImage} />
+          )}
         </div>
       )}
 

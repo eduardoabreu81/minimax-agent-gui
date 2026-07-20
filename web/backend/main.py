@@ -233,6 +233,10 @@ class ImageRequest(BaseModel):
     model: str = "image-01"
     subject_reference: list = None
     reference_image: str = ""  # legacy I2I: local file path (image_variations)
+    # Optional style sheet name. If set, the sheet body is combined with
+    # ``prompt`` via ``{prompt}`` interpolation (or ", " concat) before the
+    # MiniMax API call. Resolution + combination happen in /api/image below.
+    style_sheet: Optional[str] = None
 
 # --- Music Generation ---------------------------------------------------------
 #
@@ -2157,6 +2161,178 @@ async def update_skills_config(req: SkillsConfigUpdate):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# ---------------------------------------------------------------------------
+# Style Sheets — reusable image-prompt fragments (user-only, no sources)
+# ---------------------------------------------------------------------------
+#
+# Mirrors the /api/skills/* CRUD shape but without the multi-source
+# machinery. Storage lives under MiniMaxStudio/style-sheets/<name>/STYLE.md.
+# See mini_agent/tools/style_sheet_loader.py for validation + on-disk format.
+
+
+def _style_sheets_user_dir() -> Path:
+    """The user-writable style sheets dir (created on first call)."""
+    from mini_agent.tools.style_sheet_loader import get_default_user_dir
+    user_dir = get_default_user_dir()
+    user_dir.mkdir(parents=True, exist_ok=True)
+    return user_dir
+
+
+def _serialize_style_sheet(sheet, include_raw: bool = False) -> dict:
+    """StyleSheet → API dict. ``include_raw`` adds the full markdown source."""
+    out = {
+        "name": sheet.name,
+        "description": sheet.description,
+        "body": sheet.body,
+        "body_length": len(sheet.body),
+        "prompt_placeholder_count": sheet.body.count("{prompt}"),
+        "created_at": sheet.created_at,
+        "updated_at": sheet.updated_at,
+        "path": str(sheet.path) if sheet.path else None,
+    }
+    if include_raw and sheet.path:
+        try:
+            out["raw_markdown"] = sheet.path.read_text(encoding="utf-8")
+        except OSError:
+            out["raw_markdown"] = ""
+    return out
+
+
+@app.get("/api/style-sheets")
+async def list_style_sheets():
+    """List all style sheets in the user dir."""
+    try:
+        from mini_agent.tools.style_sheet_loader import list_style_sheets as _list
+        user_dir = _style_sheets_user_dir()
+        sheets = [_serialize_style_sheet(s) for s in _list(user_dir)]
+        return {"success": True, "style_sheets": sheets, "count": len(sheets)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/style-sheets/{name}")
+async def get_style_sheet(name: str):
+    """Get one style sheet (body + raw markdown)."""
+    try:
+        from mini_agent.tools.style_sheet_loader import read_style_sheet_raw
+        user_dir = _style_sheets_user_dir()
+        raw = read_style_sheet_raw(user_dir, name)
+        if raw is None:
+            raise HTTPException(
+                status_code=404, detail=f"Style sheet '{name}' not found."
+            )
+        fm, body, path = raw
+        from mini_agent.tools.style_sheet_loader import StyleSheet
+        sheet = StyleSheet(
+            name=str(fm.get("name") or name),
+            description=str(fm.get("description") or ""),
+            body=body,
+            created_at=fm.get("created_at"),
+            updated_at=fm.get("updated_at"),
+            path=path,
+        )
+        return {"success": True, "style_sheet": _serialize_style_sheet(sheet, include_raw=True)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class StyleSheetCreate(BaseModel):
+    name: str
+    description: str
+    body: str = ""
+
+
+@app.post("/api/style-sheets")
+async def create_style_sheet(req: StyleSheetCreate):
+    """Create a new style sheet in the user dir."""
+    from mini_agent.tools.style_sheet_loader import (
+        write_style_sheet,
+        StyleSheetValidationError,
+    )
+    try:
+        user_dir = _style_sheets_user_dir()
+        sheet = write_style_sheet(
+            user_dir,
+            name=req.name,
+            description=req.description,
+            body=req.body,
+        )
+        return {
+            "success": True,
+            "style_sheet": _serialize_style_sheet(sheet, include_raw=True),
+        }
+    except StyleSheetValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class StyleSheetUpdate(BaseModel):
+    description: Optional[str] = None
+    body: Optional[str] = None
+
+
+@app.put("/api/style-sheets/{name}")
+async def update_style_sheet_route(name: str, req: StyleSheetUpdate):
+    """Update an existing style sheet."""
+    from mini_agent.tools.style_sheet_loader import (
+        update_style_sheet,
+        read_style_sheet_raw,
+        StyleSheetValidationError,
+    )
+    try:
+        user_dir = _style_sheets_user_dir()
+        if read_style_sheet_raw(user_dir, name) is None:
+            raise HTTPException(
+                status_code=404, detail=f"Style sheet '{name}' not found."
+            )
+        sheet = update_style_sheet(
+            user_dir,
+            name=name,
+            description=req.description,
+            body=req.body,
+        )
+        return {
+            "success": True,
+            "style_sheet": _serialize_style_sheet(sheet, include_raw=True),
+        }
+    except HTTPException:
+        raise
+    except StyleSheetValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/style-sheets/{name}")
+async def delete_style_sheet_route(name: str):
+    """Delete a style sheet from the user dir."""
+    from mini_agent.tools.style_sheet_loader import (
+        delete_style_sheet,
+        read_style_sheet_raw,
+        StyleSheetValidationError,
+    )
+    try:
+        user_dir = _style_sheets_user_dir()
+        if read_style_sheet_raw(user_dir, name) is None:
+            raise HTTPException(
+                status_code=404, detail=f"Style sheet '{name}' not found."
+            )
+        ok = delete_style_sheet(user_dir, name)
+        if not ok:
+            raise HTTPException(
+                status_code=404, detail=f"Style sheet '{name}' not found on disk."
+            )
+        return {"success": True, "deleted": name}
+    except HTTPException:
+        raise
+    except StyleSheetValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 class ToolsConfigRequest(BaseModel):
     web_search: bool = True
     understand_image: bool = True
@@ -3716,8 +3892,44 @@ async def image_generate(req: ImageRequest, session_id: str = ""):
         out_dir = _media_output_dir(session_id, "images")
         output_path = out_dir / f"{suffix}_{asyncio.get_event_loop().time():.0f}.png"
 
+        # Resolve the optional style sheet and combine its body with the
+        # user prompt via {prompt} interpolation (or ", " concat). The
+        # frontend pre-checks the 1500-char budget; the check below is
+        # defensive for direct API callers.
+        final_prompt = req.prompt
+        style_sheet_used = None
+        if req.style_sheet:
+            from mini_agent.tools.style_sheet_loader import (
+                read_style_sheet_raw,
+                combine_prompt,
+                PROMPT_MAX,
+                StyleSheetValidationError,
+            )
+            try:
+                user_dir = _style_sheets_user_dir()
+                raw = read_style_sheet_raw(user_dir, req.style_sheet)
+            except StyleSheetValidationError as e:
+                raise HTTPException(status_code=400, detail=str(e))
+            if raw is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Style sheet {req.style_sheet!r} not found.",
+                )
+            _, style_body, _ = raw
+            final_prompt = combine_prompt(req.prompt, style_body)
+            if len(final_prompt) > PROMPT_MAX:
+                raise HTTPException(
+                    status_code=422,
+                    detail=(
+                        f"Combined prompt exceeds {PROMPT_MAX} chars "
+                        f"(got {len(final_prompt)}). Shorten the user "
+                        f"prompt or the style sheet body."
+                    ),
+                )
+            style_sheet_used = req.style_sheet
+
         success, result = image_sync(
-            api_key, api_base, req.prompt,
+            api_key, api_base, final_prompt,
             str(output_path),
             aspect_ratio=req.aspect_ratio,
             width=req.width,
@@ -3742,6 +3954,7 @@ async def image_generate(req: ImageRequest, session_id: str = ""):
                 "file_path": rel_path,
                 "count": n,
                 "model": model,
+                "style_sheet": style_sheet_used,
                 "workspace_dir": str(out_root),
                 **cost,
             }
@@ -4984,6 +5197,284 @@ async def video_download(req: dict):
             return {"success": False, "error": result}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+# --- Anchor library (video reference images) ---------------------------
+#
+# Reusable {image + description} cards persisted at workspace/anchors/.
+# Used as subject/scene references for video generation. The frontend
+# maps attached anchors onto the existing subject_reference[] /
+# first_frame_image params of /api/video; the video endpoint itself
+# is unchanged.
+
+ANCHORS_SUBDIR = "anchors"
+ANCHOR_DESCRIBE_PROMPT = (
+    "Describe this image for use as a video generation reference. "
+    "Focus on stable visual identity (appearance, clothing, setting, "
+    "lighting). 1-2 sentences, under 500 chars. No preamble."
+)
+
+
+def _anchors_dir() -> Path:
+    """workspace/anchors/ — created on first call."""
+    d = get_app_workspace_dir() / ANCHORS_SUBDIR
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _anchors_manifest_path() -> Path:
+    return _anchors_dir() / "anchors.json"
+
+
+def _load_anchors_manifest() -> dict:
+    """Read the anchor library manifest. Returns a dict with shape
+    ``{"version": 1, "anchors": [...]}``. Missing/corrupt file → empty."""
+    p = _anchors_manifest_path()
+    if not p.exists():
+        return {"version": 1, "anchors": []}
+    try:
+        data = json.loads(p.read_text(encoding="utf-8"))
+        if isinstance(data, dict) and isinstance(data.get("anchors"), list):
+            return data
+    except Exception:
+        pass
+    return {"version": 1, "anchors": []}
+
+
+def _save_anchors_manifest(data: dict) -> None:
+    """Write the manifest atomically (tmp + rename)."""
+    p = _anchors_manifest_path()
+    p.parent.mkdir(parents=True, exist_ok=True)
+    tmp = p.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp.replace(p)
+
+
+def _save_anchor_image(anchor_id: str, data_url: str) -> str:
+    """Decode a base64 data URL and save to ``anchors/<id>.<ext>``.
+    Returns the workspace-relative path."""
+    import base64
+    import re
+    m = re.match(r"^data:image/([a-zA-Z0-9.+-]+);base64,(.*)$", data_url)
+    if not m:
+        raise ValueError(
+            "image_data_url must be a base64 data URL "
+            "(data:image/<ext>;base64,...)"
+        )
+    mime_ext, b64 = m.group(1), m.group(2)
+    # Normalize: jpeg → jpg, svg+xml → svg, otherwise keep raw.
+    ext = "jpg" if mime_ext == "jpeg" else mime_ext.split("+")[0]
+    raw = base64.b64decode(b64)
+    img_path = _anchors_dir() / f"{anchor_id}.{ext}"
+    img_path.write_bytes(raw)
+    return str(img_path.relative_to(get_app_workspace_dir())).replace("\\", "/")
+
+
+def _serialize_anchor(a: dict) -> dict:
+    return {
+        "id": a["id"],
+        "name": a["name"],
+        "description": a.get("description", ""),
+        "image": a.get("image", {}),
+        "created_at": a.get("created_at"),
+        "updated_at": a.get("updated_at"),
+    }
+
+
+def _find_anchor(data: dict, anchor_id: str) -> dict | None:
+    return next((a for a in data["anchors"] if a["id"] == anchor_id), None)
+
+
+def _anchor_describe(image_path: str) -> tuple[bool, str]:
+    """Call MiniMax VLM (understand_image) on the given image path.
+    Returns (success, description_or_error)."""
+    minimax_config = get_minimax_config()
+    api_key = minimax_config["api_key"]
+    api_base = minimax_config["api_base"]
+    if not api_key:
+        return False, "API key not configured"
+    from mini_max_mcp.mcp_tools import MiniMaxMCPClient
+    client = MiniMaxMCPClient(api_key, api_base)
+    try:
+        return client.understand_image(
+            image_path=image_path,
+            prompt=ANCHOR_DESCRIBE_PROMPT,
+        )
+    finally:
+        # MiniMaxMCPClient uses requests (no persistent session to close
+        # in the current implementation), but keep the guard for safety.
+        pass
+
+
+class AnchorCreate(BaseModel):
+    name: str
+    description: str = ""
+    image_data_url: str
+    source: str = "upload"
+    source_ref: str = ""
+
+
+class AnchorUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+
+
+class AnchorDescribeRequest(BaseModel):
+    # Exactly one of anchor_id / image_data_url must be provided.
+    anchor_id: Optional[str] = None
+    image_data_url: Optional[str] = None
+
+
+@app.get("/api/anchors")
+async def list_anchors():
+    """List the anchor library, most-recently-updated first."""
+    data = _load_anchors_manifest()
+    anchors = sorted(
+        data.get("anchors", []),
+        key=lambda a: a.get("updated_at") or a.get("created_at") or "",
+        reverse=True,
+    )
+    return {"success": True, "anchors": [_serialize_anchor(a) for a in anchors]}
+
+
+@app.post("/api/anchors")
+async def create_anchor(req: AnchorCreate):
+    """Create a new anchor (image + description card)."""
+    name = req.name.strip()
+    if not name or len(name) > 60:
+        raise HTTPException(status_code=400, detail="name must be 1-60 chars")
+    if len(req.description) > 500:
+        raise HTTPException(status_code=400, detail="description must be <= 500 chars")
+    try:
+        anchor_id = str(uuid.uuid4())
+        img_rel = _save_anchor_image(anchor_id, req.image_data_url)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    now = datetime.utcnow().isoformat() + "Z"
+    anchor = {
+        "id": anchor_id,
+        "name": name,
+        "description": req.description,
+        "image": {
+            "path": img_rel,
+            "source": req.source,
+            "source_ref": req.source_ref or None,
+        },
+        "created_at": now,
+        "updated_at": now,
+    }
+    data = _load_anchors_manifest()
+    data["anchors"].append(anchor)
+    _save_anchors_manifest(data)
+    return {"success": True, "anchor": _serialize_anchor(anchor)}
+
+
+@app.put("/api/anchors/{anchor_id}")
+async def update_anchor(anchor_id: str, req: AnchorUpdate):
+    """Update name / type / description of an anchor."""
+    data = _load_anchors_manifest()
+    anchor = _find_anchor(data, anchor_id)
+    if anchor is None:
+        raise HTTPException(status_code=404, detail=f"Anchor {anchor_id} not found")
+    if req.name is not None:
+        name = req.name.strip()
+        if not name or len(name) > 60:
+            raise HTTPException(status_code=400, detail="name must be 1-60 chars")
+        anchor["name"] = name
+    if req.description is not None:
+        if len(req.description) > 500:
+            raise HTTPException(status_code=400, detail="description must be <= 500 chars")
+        anchor["description"] = req.description
+    anchor["updated_at"] = datetime.utcnow().isoformat() + "Z"
+    _save_anchors_manifest(data)
+    return {"success": True, "anchor": _serialize_anchor(anchor)}
+
+
+@app.delete("/api/anchors/{anchor_id}")
+async def delete_anchor(anchor_id: str):
+    """Delete an anchor and its image file (best-effort on the file)."""
+    data = _load_anchors_manifest()
+    anchor = _find_anchor(data, anchor_id)
+    if anchor is None:
+        raise HTTPException(status_code=404, detail=f"Anchor {anchor_id} not found")
+    img_rel = anchor.get("image", {}).get("path")
+    if img_rel:
+        try:
+            img_abs = get_app_workspace_dir() / img_rel
+            if img_abs.exists():
+                img_abs.unlink()
+        except Exception:
+            pass
+    data["anchors"] = [a for a in data["anchors"] if a["id"] != anchor_id]
+    _save_anchors_manifest(data)
+    return {"success": True, "deleted": anchor_id}
+
+
+@app.post("/api/anchors/describe")
+async def describe_anchor_image(req: AnchorDescribeRequest):
+    """Auto-describe an image via MiniMax VLM. Accepts either an
+    existing anchor_id (reads image from disk) or an inline data URL
+    (pre-commit describe from the editor modal). Returns the raw VLM
+    description; persistence is the caller's responsibility.
+    """
+    if not req.anchor_id and not req.image_data_url:
+        raise HTTPException(
+            status_code=400,
+            detail="Provide either anchor_id or image_data_url",
+        )
+    try:
+        if req.anchor_id:
+            data = _load_anchors_manifest()
+            anchor = _find_anchor(data, req.anchor_id)
+            if anchor is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Anchor {req.anchor_id} not found",
+                )
+            img_rel = anchor.get("image", {}).get("path")
+            if not img_rel:
+                raise HTTPException(status_code=400, detail="Anchor has no image")
+            img_abs = get_app_workspace_dir() / img_rel
+            if not img_abs.exists():
+                raise HTTPException(status_code=404, detail="Anchor image file missing")
+            image_path = str(img_abs)
+            success, description = _anchor_describe(image_path)
+        else:
+            # Inline data URL: decode to a temp file so understand_image
+            # (which expects a path or URL) can read it.
+            import base64
+            import re
+            import tempfile
+            m = re.match(r"^data:image/([a-zA-Z0-9.+-]+);base64,(.*)$", req.image_data_url)
+            if not m:
+                raise HTTPException(
+                    status_code=400,
+                    detail="image_data_url must be a base64 data URL",
+                )
+            mime_ext, b64 = m.group(1), m.group(2)
+            ext = "jpg" if mime_ext == "jpeg" else mime_ext.split("+")[0]
+            tmp = tempfile.NamedTemporaryFile(suffix=f".{ext}", delete=False)
+            try:
+                tmp.write(base64.b64decode(b64))
+                tmp.close()
+                image_path = tmp.name
+                success, description = _anchor_describe(image_path)
+            finally:
+                # Always unlink the temp file — VLM success or failure.
+                # The anchor_id branch reads a persistent workspace file
+                # and needs no cleanup, so this guard is local to the
+                # inline-data-URL branch only.
+                try:
+                    os.unlink(tmp.name)
+                except OSError:
+                    pass
+        if not success:
+            raise HTTPException(status_code=502, detail=f"VLM failed: {description}")
+        return {"success": True, "description": description.strip()[:500]}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 # --- Files / Shell / Git endpoints (v0.5 workspace redesign) ---
 #

@@ -271,8 +271,14 @@ export function useSessionActivity(sessionId) {
 
   return useMemo(() => {
     if (!session) {
+      // Spread EMPTY_SESSION *and* its nested .activity so the empty
+      // fallback has the same flat shape as a registered session
+      // (plan/steps/thinking/etc. at top level). Without this flatten,
+      // consumers reading `activity.plan.items` crash on first mount
+      // before the session is registered.
       return {
         ...EMPTY_SESSION,
+        ...EMPTY_SESSION.activity,
         sessionId,
         addStep: emptyActionShim,
         completeStep: emptyActionShim,

@@ -4,7 +4,7 @@ import {
   Globe, Moon, Sun, Key, Cpu, Shield, Keyboard,
   Info, Check, AlertCircle, Save, RotateCcw, Eye, EyeOff,
   MapPin, BarChart3, Lock, Unlock, Search, Monitor, Palette, User, Trash2, Pencil, Activity, Server,
-  Boxes, Sparkles, Github, Sliders, Loader2, Brain, ExternalLink, RefreshCw, Download
+  Boxes, Sparkles, Github, Sliders, Loader2, Brain, ExternalLink, RefreshCw, Download, Image as ImageIcon
 } from 'lucide-react'
 import { useTheme } from '../../context/ThemeContext'
 import { apiFetch } from '../../lib/api.js'
@@ -12,6 +12,7 @@ import pkg from '../../../package.json'
 import { check } from '@tauri-apps/plugin-updater'
 import { relaunch } from '@tauri-apps/plugin-process'
 import SkillsTab from './SkillsTab.jsx'
+import StyleSheetsTab from './StyleSheetsTab.jsx'
 import { useContextModal } from '../agent-context/ContextProvider.jsx'
 
 // Models available in the Token Plan. Chat models are the ones the user
@@ -485,7 +486,7 @@ export default function SettingsPanel({ onRestartSetup }) {
   // Scroll-spy: highlight the left-rail entry for whichever section is
   // currently in view. Each SectionHeader renders with id="settings-<key>".
   useEffect(() => {
-    const ids = ['about-you', 'appearance', 'default-model', 'agent', 'api-key', 'lang-region', 'generation-defaults', 'skills', 'mcp-servers', 'shortcuts', 'about-app']
+    const ids = ['about-you', 'appearance', 'default-model', 'agent', 'api-key', 'lang-region', 'generation-defaults', 'skills', 'style-sheets', 'mcp-servers', 'shortcuts', 'about-app']
     const observer = new IntersectionObserver(
       (entries) => {
         const visible = entries.filter((e) => e.isIntersecting)
@@ -525,6 +526,7 @@ export default function SettingsPanel({ onRestartSetup }) {
     { id: 'lang-region',         label: t('settings.langRegion'),          icon: Globe },
     { id: 'generation-defaults', label: t('settings.generationDefaults'),  icon: Sliders },
     { id: 'skills',              label: t('settings.skills') || 'Skills',  icon: Sparkles },
+    { id: 'style-sheets',      label: t('settings.styleSheets') || 'Style Sheets', icon: ImageIcon },
     { id: 'mcp-servers',         label: t('settings.mcpServers'),          icon: Server },
     { id: 'shortcuts',           label: t('settings.shortcuts'),           icon: Keyboard },
     { id: 'about-app',           label: t('settings.about'),               icon: Info },
@@ -1035,6 +1037,12 @@ export default function SettingsPanel({ onRestartSetup }) {
         <SectionHeader id="settings-skills" icon={Sparkles} title={t('settings.skills') || 'Skills'} />
         <Card>
           <SkillsTab />
+        </Card>
+
+        {/* ─── 8b. Style Sheets ────────────────────────────────────────── */}
+        <SectionHeader id="settings-style-sheets" icon={ImageIcon} title={t('settings.styleSheets') || 'Style Sheets'} />
+        <Card>
+          <StyleSheetsTab />
         </Card>
 
         {/* ─── 9. MCP Servers ─────────────────────────────────────────────── */}

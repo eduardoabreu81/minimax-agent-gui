@@ -268,6 +268,7 @@
     "selectPalette": "选择面板项",
     "newLine": "在输入中换行",
     "skills": "技能",
+    "styleSheets": "样式表",
     "personality": {
       "preset": "预设"
     },
@@ -317,6 +318,9 @@
     "promptTransform": "提示词(描述转换)",
     "promptPlaceholder": "描述你想生成的图像...",
     "promptTransformPlaceholder": "描述如何转换参考图...",
+    "styleSheet": "样式表",
+    "styleSheetNone": "无",
+    "styleSheetOverBudget": "组合提示词超过 1500 字符。请缩短提示词或选择其他样式表。",
     "characters": "{count} / 2,000 字符",
     "exceedsLimit": "超出限制!",
     "uploadImage": "上传图片",
@@ -403,5 +407,25 @@
     "destructiveDescription": "此操作将停止当前运行并丢弃正在输出的内容。",
     "stay": "保持运行",
     "stopAndContinue": "停止并继续"
+  },
+  "anchor": {
+    "libraryLabel": "锚点",
+    "new": "新建",
+    "createNew": "新建锚点",
+    "emptyHint": "暂无锚点。创建一个以在多次生成中锁定主体或场景。",
+    "createTitle": "新建锚点",
+    "editTitle": "编辑\"{{name}}\"",
+    "imageLabel": "图像",
+    "imageLocked": "创建后无法更改图像。删除并重新创建以更换。",
+    "dropHint": "拖放图像或点击浏览",
+    "nameLabel": "名称",
+    "namePlaceholder": "例如\"主角 — 红夹克\"",
+    "descriptionLabel": "描述",
+    "descriptionPlaceholder": "稳定的视觉身份 — 外观、服装、场景、光线。",
+    "autoDescribe": "自动描述",
+    "autoDescribeHint": "通过 MiniMax VLM 生成描述",
+    "create": "创建锚点",
+    "confirmDelete": "删除锚点\"{{name}}\"？此操作不可撤销。",
+    "capExceeded": "每次生成最多 {{cap}} 个 {{type}} 锚点"
   }
 }

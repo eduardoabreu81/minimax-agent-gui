@@ -124,6 +124,11 @@ export default function ImagePanel() {
   const [results, setResults] = useState([])
   const [error, setError] = useState(null)
   const [gallery, setGallery] = useState([])
+  const [styleSheets, setStyleSheets] = useState([])
+  // Persisted selection (panel-local, same pattern as chat-model-override).
+  const [styleSheet, setStyleSheet] = useState(
+    () => (typeof localStorage !== 'undefined' && localStorage.getItem('image-style-sheet')) || ''
+  )
   const [galleryLoading, setGalleryLoading] = useState(false)
 
   const { register } = useSessionProtection()
@@ -137,6 +142,42 @@ export default function ImagePanel() {
   }, [prompt, register, t])
 
   useEffect(() => { fetchGallery() }, [])
+  // Load style sheets once on mount. If the persisted selection was
+  // deleted out-of-band, clear it so the dropdown doesn't point at a
+  // ghost. The body lengths power the char-budget indicator below.
+  useEffect(() => {
+    let cancelled = false
+    apiFetch('/api/style-sheets')
+      .then((r) => r.json())
+      .then((data) => {
+        if (cancelled || !data.success) return
+        const sheets = data.style_sheets || []
+        setStyleSheets(sheets)
+        const current =
+          (typeof localStorage !== 'undefined' && localStorage.getItem('image-style-sheet')) || ''
+        if (current && !sheets.find((s) => s.name === current)) {
+          if (typeof localStorage !== 'undefined')
+            localStorage.removeItem('image-style-sheet')
+          setStyleSheet('')
+        }
+      })
+      .catch(() => { /* style sheets are optional — never block the panel */ })
+    return () => { cancelled = true }
+  }, [])
+  // Mirror backend combine_prompt so the char-budget indicator matches
+  // what the server will actually send to MiniMax.
+  const computeCombinedLen = (userPrompt, sheet) => {
+    if (!sheet) return userPrompt.length
+    const body = sheet.body || ''
+    if (body.includes('{prompt}'))
+      return body.replace('{prompt}', userPrompt).length
+    if (!userPrompt.trim()) return body.length
+    if (!body.trim()) return userPrompt.length
+    return (userPrompt + ', ' + body).length
+  }
+  const selectedSheet = styleSheets.find((s) => s.name === styleSheet) || null
+  const combinedLen = computeCombinedLen(prompt, selectedSheet)
+  const overBudget = combinedLen > PROMPT_MAX
 
   // Close aspect dropdown on outside click / Escape (mockup L416-429 menu).
   useEffect(() => {
@@ -214,6 +255,8 @@ export default function ImagePanel() {
         prompt_optimizer: promptOptimizer,
         model: modeConfig.model,
       }
+      // Optional style sheet — backend resolves + combines via {prompt}.
+      if (styleSheet) body.style_sheet = styleSheet
 
       // Seed — empty means "random per request" (matches §6 spec:
       // "OMIT for a random seed each image"). Only send when parseable.
@@ -319,6 +362,64 @@ export default function ImagePanel() {
           <SubjectDropzone file={referenceImage} onPick={setReferenceImage} />
         </div>
       )}
+      {/* (a2) Style sheet — reusable prompt fragment. Optional.
+          The {prompt} placeholder in the sheet body is interpolated
+          server-side; the char-budget chip on the right mirrors that
+          combination so the user sees the real total. */}
+      <div>
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 7 }}>
+          <label style={{ ...labelStyle, marginBottom: 0 }}>{t('image.styleSheet')}</label>
+          {styleSheet && (
+            <span
+              style={{
+                fontSize: 10.5,
+                color: overBudget
+                  ? 'hsl(var(--destructive))'
+                  : combinedLen > PROMPT_MAX * 0.8
+                    ? 'hsl(var(--primary))'
+                    : 'var(--app-text-2)',
+                fontVariantNumeric: 'tabular-nums',
+              }}
+              title={overBudget ? t('image.styleSheetOverBudget') : undefined}
+            >
+              {combinedLen} / {PROMPT_MAX}
+            </span>
+          )}
+        </div>
+        <select
+          value={styleSheet}
+          onChange={(e) => {
+            const v = e.target.value
+            setStyleSheet(v)
+            if (typeof localStorage !== 'undefined') {
+              if (v) localStorage.setItem('image-style-sheet', v)
+              else localStorage.removeItem('image-style-sheet')
+            }
+          }}
+          style={{
+            width: '100%',
+            height: 38,
+            boxSizing: 'border-box',
+            background: 'hsl(var(--card))',
+            border: '1px solid var(--app-border-2)',
+            borderRadius: 10,
+            padding: '0 11px',
+            fontSize: 13,
+            color: 'var(--app-text)',
+            fontFamily: 'inherit',
+            outline: 'none',
+            cursor: 'pointer',
+          }}
+        >
+          <option value="">{t('image.styleSheetNone')}</option>
+          {styleSheets.map((s) => (
+            <option key={s.name} value={s.name}>
+              {s.description || s.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
 
       {/* (b) Prompt + counter (mockup L404-407 + counter on the right) */}
       <div>
@@ -633,7 +734,7 @@ export default function ImagePanel() {
       <button
         type="button"
         onClick={generate}
-        disabled={loading || !prompt.trim() || (mode === 'subject' && !referenceImage)}
+        disabled={loading || !prompt.trim() || (mode === 'subject' && !referenceImage) || overBudget}
         style={{
           width: '100%',
           height: 42,
@@ -677,6 +778,24 @@ export default function ImagePanel() {
       loading={galleryLoading}
       onRefresh={fetchGallery}
       emptyMessage={t('image.noGenerated')}
+      onPromoteToAnchor={(item) => {
+        // Cross-tab promotion to the Video panel's AnchorLibrary.
+        // We can't rely on a window event alone: only the active tab is
+        // mounted (App.jsx line ~385), so when the user clicks this button
+        // on the Image tab, AnchorLibrary isn't listening yet — the event
+        // would be lost in the unmount/remount race. Write a pending token
+        // to sessionStorage first; AnchorLibrary checks for it on mount.
+        try {
+          sessionStorage.setItem(
+            'minimax:pendingAnchorPromote',
+            JSON.stringify({ imagePath: item.path }),
+          )
+        } catch { /* sessionStorage may be unavailable in some contexts */ }
+        // Flip to Video tab. AnchorLibrary's mount effect picks up the token.
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('minimax:nav-to-video'))
+        }
+      }}
     />
   )
 

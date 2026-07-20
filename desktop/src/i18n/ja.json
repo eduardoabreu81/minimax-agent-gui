@@ -268,6 +268,7 @@
     "selectPalette": "パレット項目を選択",
     "newLine": "入力欄に改行",
     "skills": "スキル",
+    "styleSheets": "スタイルシート",
     "personality": {
       "preset": "プリセット"
     },
@@ -317,6 +318,9 @@
     "promptTransform": "プロンプト(変換内容を説明)",
     "promptPlaceholder": "生成したい画像を説明してください...",
     "promptTransformPlaceholder": "参照画像をどのように変換するかを説明...",
+    "styleSheet": "スタイルシート",
+    "styleSheetNone": "なし",
+    "styleSheetOverBudget": "結合されたプロンプトが1500文字を超えています。プロンプトを短くするか、別のスタイルシートを選択してください。",
     "characters": "{count} / 2,000 文字",
     "exceedsLimit": "上限を超えました!",
     "uploadImage": "画像をアップロード",
@@ -403,5 +407,25 @@
     "destructiveDescription": "この操作は現在の実行を停止し、処理中の出力を破棄します。",
     "stay": "実行を継続",
     "stopAndContinue": "停止して続行"
+  },
+  "anchor": {
+    "libraryLabel": "アンカー",
+    "new": "新規",
+    "createNew": "新規アンカー",
+    "emptyHint": "アンカーがありません。生成間で主体やシーンを固定するには作成してください。",
+    "createTitle": "新規アンカー",
+    "editTitle": "\"{{name}}\" を編集",
+    "imageLabel": "画像",
+    "imageLocked": "作成後に画像は変更できません。差し替えるには削除して再作成してください。",
+    "dropHint": "画像をドロップまたはクリックして選択",
+    "nameLabel": "名前",
+    "namePlaceholder": "例: \"主人公 — レッドジャケット\"",
+    "descriptionLabel": "説明",
+    "descriptionPlaceholder": "安定した視覚的アイデンティティ — 外見、衣装、場面、照明。",
+    "autoDescribe": "自動記述",
+    "autoDescribeHint": "MiniMax VLM で説明を生成",
+    "create": "アンカー作成",
+    "confirmDelete": "アンカー \"{{name}}\" を削除しますか？元に戻せません。",
+    "capExceeded": "生成あたり最大 {{cap}} 個の {{type}} アンカー"
   }
 }
