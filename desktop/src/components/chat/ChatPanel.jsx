@@ -81,6 +81,7 @@ export default function ChatPanel({
   // Read-only tools (risk === "low") are auto-approved; medium/high risk
   // surface here so the user can approve or reject.
   const [artifact, setArtifact] = useState(null)
+  const [permissionRequest, setPermissionRequest] = useState(null)
   const wsRef = useRef(null)
   const scrollRef = useRef(null)
   const convListRef = useRef(null)
