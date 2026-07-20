@@ -5,6 +5,7 @@ import { Plus, User, Bot, Loader2, FileText, MessageSquarePlus, Trash2, ChevronD
 import { Composer } from './Composer'
 import { useSessionProtection } from '../../hooks/useSessionProtection'
 import { useSessionTokens } from '../../context/SessionTokensContext'
+import { useAgentActivity } from '../../context/AgentActivityContext'
 import ThinkingBlock from '../shared/ThinkingBlock'
 import CopyButton from '../shared/CopyButton'
 import MarkdownRenderer from '../MarkdownRenderer'
@@ -17,6 +18,7 @@ function generateId() {
 }
 
 export default function ChatPanel({
+  active,
   onProcessingChange,
   onSessionIdChange,
   activeModel: activeModelProp,
@@ -83,6 +85,22 @@ export default function ChatPanel({
   const convListRef = useRef(null)
   const searchTimeoutRef = useRef(null)
 
+
+  const activity = useAgentActivity()
+
+  // Register this Chat session on mount/change and notify the
+  // keep-alive host about the session ID for token ownership.
+  useEffect(() => {
+    const title = conversations.find(c => c.id === sessionId)?.title || 'Chat'
+    activity.registerSession({ sessionId, tabId: 'chat', kind: 'chat', title })
+    onSessionIdChange?.(sessionId)
+    return () => activity.removeSession?.(sessionId)
+  }, [sessionId])
+
+  // Acknowledge unread completion when this panel becomes visible.
+  useEffect(() => {
+    if (active) activity.acknowledgeSession(sessionId)
+  }, [active])
   const { register } = useSessionProtection()
 
   useEffect(() => {
@@ -498,48 +516,26 @@ export default function ChatPanel({
     }))
     setMessages(prev => [...prev, { type: 'system', content: `Tool approved: ${permissionRequest.tool_name}` }])
     setPermissionRequest(null)
-  }, [permissionRequest])
-
-  const handlePermissionReject = useCallback(() => {
-    if (!permissionRequest || !wsRef.current) return
-    wsRef.current.send(JSON.stringify({
-      type: 'permission_response',
-      request_id: permissionRequest.request_id,
-      approved: false,
-    }))
-    setMessages(prev => [...prev, { type: 'system', content: `Tool rejected: ${permissionRequest.tool_name}` }])
-    setPermissionRequest(null)
-  }, [permissionRequest])
-
-  // Called by Composer via onSend. The `text` argument is already
-  // augmented with the "--- Attached Context ---" block from
-  // @-ref expansion (Composer does the expand and hard-limit check
-  // before calling). The `attachment` is the file the user picked
-  // via the paperclip button.
   const sendMessage = useCallback((text, attachment) => {
     if (!wsRef.current) return
     const payload = {
       message: text,
       permission_mode: 'agent',
-      // Per-turn model + thinking override. The backend uses these to
-      // choose which LLM to call and whether to inject the Anthropic
-      // `thinking` param for this message.
       model: activeModel,
       thinking: supportsThinking ? thinkingEnabled : false,
     }
     if (attachment) payload.attachment = attachment.path
-    // Show user message immediately before sending. The original
-    // (text) is shown — the attached context is for the agent only.
     setMessages(prev => [...prev, {
       type: 'user',
       content: text || '📎 Attachment sent',
       attachment: attachment?.path,
     }])
     streamingThinkingRef.current = ''
+    activity.startRun(sessionId)
     wsRef.current.send(JSON.stringify(payload))
     setIsThinking(true)
     onProcessingChange?.(true)
-  }, [onProcessingChange, activeModel, supportsThinking, thinkingEnabled])
+  }, [onProcessingChange, activeModel, supportsThinking, thinkingEnabled, sessionId])
 
   const currentTitle = conversations.find(c => c.id === sessionId)?.title || 'Chat'
 
