@@ -344,7 +344,10 @@
     "recentGenerations": "Generaciones Recientes",
     "noGenerated": "Aún no hay imágenes generadas",
     "pleaseUpload": "Sube una imagen de referencia o proporciona una URL",
-    "failed": "Falló la generación de imagen"
+    "failed": "Falló la generación de imagen",
+    "confirmDelete": "¿Eliminar la imagen \"{name}\"? Esta acción no se puede deshacer.",
+    "toastDeleted": "Imagen \"{name}\" eliminada.",
+    "toastDeleteFailed": "No se pudo eliminar la imagen: {message}"
   },
   "music": {
     "title": "Generación de Música",

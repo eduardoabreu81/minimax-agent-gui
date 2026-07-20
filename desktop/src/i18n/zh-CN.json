@@ -344,7 +344,10 @@
     "recentGenerations": "最近生成",
     "noGenerated": "暂无生成图片",
     "pleaseUpload": "请上传参考图或提供 URL",
-    "failed": "图像生成失败"
+    "failed": "图像生成失败",
+    "confirmDelete": "确定删除图片 \"{name}\"？此操作不可撤销。",
+    "toastDeleted": "图片 \"{name}\" 已删除。",
+    "toastDeleteFailed": "无法删除图片：{message}"
   },
   "music": {
     "title": "音乐生成",

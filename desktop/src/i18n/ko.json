@@ -457,7 +457,10 @@
     "referenceHint": " · 얼굴 1개",
     "imagesLabel": "이미지 수 · n",
     "seedBlank": " · 비워두면 무작위",
-    "promptOptimizerHint": "생성 전에 프롬프트 강화"
+    "promptOptimizerHint": "생성 전에 프롬프트 강화",
+    "confirmDelete": "이미지 \"{name}\"을(를) 삭제할까요? 되돌릴 수 없습니다.",
+    "toastDeleted": "이미지 \"{name}\"이(가) 삭제되었습니다.",
+    "toastDeleteFailed": "이미지 삭제 실패: {message}"
   },
   "music": {
     "title": "음악 생성",

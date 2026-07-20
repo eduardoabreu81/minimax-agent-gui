@@ -362,7 +362,10 @@
     "recentGenerations": "Gerações Recentes",
     "noGenerated": "Nenhuma imagem gerada ainda",
     "pleaseUpload": "Envie uma imagem de referência ou forneça uma URL",
-    "failed": "Falha na geração de imagem"
+    "failed": "Falha na geração de imagem",
+    "confirmDelete": "Excluir a imagem \"{name}\"? Esta ação não pode ser desfeita.",
+    "toastDeleted": "Imagem \"{name}\" excluída.",
+    "toastDeleteFailed": "Não foi possível excluir a imagem: {message}"
   },
   "music": {
     "title": "Geração de Música",

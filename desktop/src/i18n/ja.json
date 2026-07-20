@@ -344,7 +344,10 @@
     "recentGenerations": "最近の生成",
     "noGenerated": "まだ生成された画像がありません",
     "pleaseUpload": "参照画像をアップロードするか URL を指定してください",
-    "failed": "画像生成に失敗しました"
+    "failed": "画像生成に失敗しました",
+    "confirmDelete": "画像 \"{name}\" を削除しますか？元に戻せません。",
+    "toastDeleted": "画像 \"{name}\" を削除しました。",
+    "toastDeleteFailed": "画像を削除できませんでした: {message}"
   },
   "music": {
     "title": "音楽生成",

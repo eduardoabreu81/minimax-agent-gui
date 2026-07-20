@@ -457,7 +457,10 @@
     "referenceHint": " · single face",
     "imagesLabel": "Images · n",
     "seedBlank": " · blank = random",
-    "promptOptimizerHint": "Enhance prompt before generating"
+    "promptOptimizerHint": "Enhance prompt before generating",
+    "confirmDelete": "Delete image \"{name}\"? This cannot be undone.",
+    "toastDeleted": "Image \"{name}\" deleted.",
+    "toastDeleteFailed": "Could not delete image: {message}"
   },
   "music": {
     "title": "Music Generation",
