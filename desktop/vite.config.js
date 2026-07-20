@@ -17,6 +17,32 @@ export default defineConfig({
     },
   },
   clearScreen: false,
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('micromark')) {
+              return 'vendor-micromark';
+            }
+            if (id.includes('xterm')) {
+              return 'vendor-xterm';
+            }
+            if (id.includes('lucide-react') || id.includes('lucide-static')) {
+              return 'vendor-lucide';
+            }
+            if (id.includes('i18next') || id.includes('react-i18next')) {
+              return 'vendor-i18n';
+            }
+            if (id.includes('react-markdown') || id.includes('remark-') || id.includes('unified') || id.includes('hast') || id.includes('mdast') || id.includes('vfile') || id.includes('bail') || id.includes('trough') || id.includes('trim-lines')) {
+              return 'vendor-markdown';
+            }
+            return 'vendor';
+          }
+        },
+      },
+    },
+  },
   server: {
     port: 1420,
     strictPort: true,
