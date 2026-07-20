@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import QuotaDashboard from './QuotaDashboard'
 import CreditBalanceWidget from './CreditBalanceWidget'
+import { apiFetch } from '../lib/api.js'
 import { useAgentActivity } from '../context/AgentActivityContext'
 
 const PLAN_ORDER = { plus: 0, max: 1, ultra: 2 }
