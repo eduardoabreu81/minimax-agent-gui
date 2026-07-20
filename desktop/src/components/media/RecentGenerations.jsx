@@ -1,4 +1,5 @@
-import { RefreshCw, Save, Loader2, Anchor, Trash2 } from 'lucide-react'
+import { RefreshCw, Save, Loader2, Anchor, Trash2, Info, Sparkles } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { assetUrl } from '../../lib/api.js'
 
 /**
@@ -21,9 +22,11 @@ export default function RecentGenerations({
   error = null,
   onRefresh,
   emptyMessage = 'No recent generations',
-  onPromoteToAnchor,
+  onSaveAsStyle,
   onDeleteImage,
+  onShowMeta,
 }) {
+  const { t } = useTranslation()
   const mediaUrl = (path) => assetUrl(`/api/files/download?path=${encodeURIComponent(path)}`)
 
   const formatSize = (size) => {
@@ -103,6 +106,15 @@ export default function RecentGenerations({
                           <Anchor size={12} className="text-white" />
                         </button>
                       )}
+                      {onSaveAsStyle && (
+                        <button
+                          onClick={() => onSaveAsStyle(item)}
+                          className="p-1.5 bg-primary hover:bg-primary-hover rounded-lg transition-colors"
+                          title="Save as style"
+                        >
+                          <Sparkles size={12} className="text-white" />
+                        </button>
+                      )}
                       {onDeleteImage && (
                         <button
                           type="button"
@@ -112,6 +124,22 @@ export default function RecentGenerations({
                           aria-label={`Delete ${item.name}`}
                         >
                           <Trash2 size={12} className="text-white" />
+                        </button>
+                      )}
+                      {onShowMeta && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); onShowMeta(item) }}
+                          disabled={!item.meta}
+                          className={`p-1.5 rounded-lg transition-colors ${
+                            item.meta
+                              ? 'bg-white/90 hover:bg-white text-black'
+                              : 'bg-white/40 text-black/40 cursor-not-allowed'
+                          }`}
+                          title={item.meta ? t('generationMeta.showMeta', { defaultValue: 'View prompt & settings' }) : t('generationMeta.noMeta', { defaultValue: 'No saved metadata' })}
+                          aria-label={item.meta ? 'View metadata' : 'No metadata'}
+                        >
+                          <Info size={12} />
                         </button>
                       )}
                     </div>
@@ -141,13 +169,31 @@ export default function RecentGenerations({
                   />
                   <div className="flex items-center justify-between">
                     <p className="text-[10px] text-muted-foreground">{formatSize(item.size)}</p>
-                    <a
-                      href={mediaUrl(item.path)}
-                      download={item.name}
-                      className="px-3 py-1 bg-primary hover:bg-primary-hover text-white text-xs rounded-lg transition-colors flex items-center gap-1"
-                    >
-                      <Save size={10} /> Download
-                    </a>
+                    <div className="flex items-center gap-2">
+                      {onShowMeta && (
+                        <button
+                          type="button"
+                          onClick={() => onShowMeta(item)}
+                          disabled={!item.meta}
+                          className={`p-1.5 rounded-lg transition-colors ${
+                            item.meta
+                              ? 'bg-surface hover:bg-surface-hover text-foreground border border-border'
+                              : 'bg-surface text-muted-foreground/40 cursor-not-allowed border border-border'
+                          }`}
+                          title={item.meta ? t('generationMeta.showMeta', { defaultValue: 'View prompt & settings' }) : t('generationMeta.noMeta', { defaultValue: 'No saved metadata' })}
+                          aria-label={item.meta ? 'View metadata' : 'No metadata'}
+                        >
+                          <Info size={12} />
+                        </button>
+                      )}
+                      <a
+                        href={mediaUrl(item.path)}
+                        download={item.name}
+                        className="px-3 py-1 bg-primary hover:bg-primary-hover text-white text-xs rounded-lg transition-colors flex items-center gap-1"
+                      >
+                        <Save size={10} /> Download
+                      </a>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -171,13 +217,31 @@ export default function RecentGenerations({
                   />
                   <div className="flex items-center justify-between">
                     <p className="text-[10px] text-muted-foreground">{formatSize(item.size)}</p>
-                    <a
-                      href={mediaUrl(item.path)}
-                      download={item.name}
-                      className="px-3 py-1 bg-primary hover:bg-primary-hover text-white text-xs rounded-lg transition-colors flex items-center gap-1"
-                    >
-                      <Save size={10} /> Download
-                    </a>
+                    <div className="flex items-center gap-2">
+                      {onShowMeta && (
+                        <button
+                          type="button"
+                          onClick={() => onShowMeta(item)}
+                          disabled={!item.meta}
+                          className={`p-1.5 rounded-lg transition-colors ${
+                            item.meta
+                              ? 'bg-surface hover:bg-surface-hover text-foreground border border-border'
+                              : 'bg-surface text-muted-foreground/40 cursor-not-allowed border border-border'
+                          }`}
+                          title={item.meta ? t('generationMeta.showMeta', { defaultValue: 'View prompt & settings' }) : t('generationMeta.noMeta', { defaultValue: 'No saved metadata' })}
+                          aria-label={item.meta ? 'View metadata' : 'No metadata'}
+                        >
+                          <Info size={12} />
+                        </button>
+                      )}
+                      <a
+                        href={mediaUrl(item.path)}
+                        download={item.name}
+                        className="px-3 py-1 bg-primary hover:bg-primary-hover text-white text-xs rounded-lg transition-colors flex items-center gap-1"
+                      >
+                        <Save size={10} /> Download
+                      </a>
+                    </div>
                   </div>
                 </div>
               ))}

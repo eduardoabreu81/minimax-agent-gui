@@ -854,6 +854,11 @@ export default function ImagePanel() {
         }
       }}
       onDeleteImage={handleDeleteImage}
+      onSaveAsStyle={(item) => setStyleEditorState({
+        mode: 'create',
+        source: 'image',
+        initialImagePath: item.path,
+      })}
     />
   )
 
@@ -895,6 +900,8 @@ export default function ImagePanel() {
           <StyleSheetEditor
             mode={styleEditorState.mode}
             sheet={styleEditorState.sheet}
+            source={styleEditorState.source || 'direct'}
+            initialImagePath={styleEditorState.initialImagePath || ''}
             imagePrompt={prompt}
             saveLabel={t('image.saveAndApply')}
             onClose={() => setStyleEditorState(null)}
