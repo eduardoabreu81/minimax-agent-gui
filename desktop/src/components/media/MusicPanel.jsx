@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { Music, Loader2, Save, Wand2, Guitar, AudioLines, Check, Coins, FileAudio, Upload, Disc3, X, Link2, AlertCircle, Mic, NotebookPen, Copy, Sparkles } from 'lucide-react'
 import { useSessionProtection } from '../../hooks/useSessionProtection'
 import RecentGenerations from './RecentGenerations'
+import GenerationMetaModal from './GenerationMetaModal'
 import ModeTabBar from '../shared/ModeTabBar'
 import { apiFetch, assetUrl } from '../../lib/api.js'
 
@@ -97,6 +98,8 @@ export default function MusicPanel() {
   // panel reflects what the backend will actually use. Refreshed on
   // mount; not re-fetched per-keystroke (would be overkill).
   const [audioSetting, setAudioSetting] = useState(AUDIO_SETTING_DEFAULT)
+  // Currently-open GenerationMetaModal item (null = closed).
+  const [metaItem, setMetaItem] = useState(null)
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState(null)
   // ---- Cover (music-cover / music-cover-free) state ----
@@ -546,6 +549,7 @@ export default function MusicPanel() {
     // is from our own Phase 1 spec because the API requires prompt/model
     // and the user wants the Instrumental as a checkbox. All state, fetch
     // and validation logic above stays untouched.
+    <>
     <div className="flex flex-col h-full bg-card">
       {/* ============ TOP BAR (full-width) ============ */}
       <div className="h-[56px] shrink-0 flex items-center justify-between px-[22px] border-b border-border">
@@ -1150,10 +1154,15 @@ export default function MusicPanel() {
             loading={historyLoading}
             onRefresh={fetchHistory}
             emptyMessage={t('music.noGenerated')}
+            onShowMeta={setMetaItem}
           />
         </div>
       </div>
       </div>
     </div>
+      {metaItem && (
+        <GenerationMetaModal item={metaItem} onClose={() => setMetaItem(null)} />
+      )}
+    </>
   )
 }

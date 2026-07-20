@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { useSessionProtection } from '../../hooks/useSessionProtection'
 import RecentGenerations from './RecentGenerations'
+import GenerationMetaModal from './GenerationMetaModal'
 import MediaPanelLayout from '../shared/MediaPanelLayout'
 import ModeTabBar from '../shared/ModeTabBar'
 import { apiFetch } from '../../lib/api.js'
@@ -275,6 +276,8 @@ function LanguageFilter({ value, options, open, onOpenChange, onChange }) {
 export default function SpeechPanel() {
   const { t } = useTranslation()
   const [mode, setMode] = useState('synthesize')
+  // Currently-open GenerationMetaModal item (null = closed).
+  const [metaItem, setMetaItem] = useState(null)
 
   // Synthesize state
   const [delivery, setDelivery] = useState('standard')
@@ -1075,6 +1078,7 @@ export default function SpeechPanel() {
         loading={historyLoading}
         onRefresh={fetchHistory}
         emptyMessage={t('speech.emptyRecentSpeech')}
+        onShowMeta={setMetaItem}
       />
     </div>
   )
@@ -1669,38 +1673,43 @@ export default function SpeechPanel() {
     : synthesizeCanvas
 
   return (
-    <MediaPanelLayout
-      layout={isVoices ? 'full' : 'split'}
-      controlsWidth={400}
-      topBar={
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, width: '100%' }}>
-          {/* Left: icon + title (mockup L879-885) */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 11, minWidth: 0 }}>
-            <div
-              style={{
-                width: 34, height: 34, flexShrink: 0, borderRadius: 9,
-                background: 'hsl(var(--primary) / 0.14)',
-                color: 'hsl(var(--primary))',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}
-            >
-              <Volume2 size={18} strokeWidth={2} />
+    <>
+      <MediaPanelLayout
+        layout={isVoices ? 'full' : 'split'}
+        controlsWidth={400}
+        topBar={
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, width: '100%' }}>
+            {/* Left: icon + title (mockup L879-885) */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 11, minWidth: 0 }}>
+              <div
+                style={{
+                  width: 34, height: 34, flexShrink: 0, borderRadius: 9,
+                  background: 'hsl(var(--primary) / 0.14)',
+                  color: 'hsl(var(--primary))',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}
+              >
+                <Volume2 size={18} strokeWidth={2} />
+              </div>
+              <span style={{
+                fontSize: 15, fontWeight: 600, color: 'var(--app-text)',
+                whiteSpace: 'nowrap',
+              }}>
+                {t('speech.title')}
+              </span>
             </div>
-            <span style={{
-              fontSize: 15, fontWeight: 600, color: 'var(--app-text)',
-              whiteSpace: 'nowrap',
-            }}>
-              {t('speech.title')}
-            </span>
+            {/* Right: sub-mode pills (mockup L886-892) */}
+            <div style={{ flexShrink: 0 }}>
+              <ModeTabBar modes={SPEECH_MODES} active={mode} onChange={setMode} />
+            </div>
           </div>
-          {/* Right: sub-mode pills (mockup L886-892) */}
-          <div style={{ flexShrink: 0 }}>
-            <ModeTabBar modes={SPEECH_MODES} active={mode} onChange={setMode} />
-          </div>
-        </div>
-      }
-      controls={controls}
-      canvas={isVoices ? null : canvas}
-    />
+        }
+        controls={controls}
+        canvas={isVoices ? null : canvas}
+      />
+      {metaItem && (
+        <GenerationMetaModal item={metaItem} onClose={() => setMetaItem(null)} />
+      )}
+    </>
   )
 }

@@ -19,17 +19,16 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "web" / "backend"))
 
-# Point MINIMAX_PROJECT_ROOT at a temp dir BEFORE importing main.
-TMP_ROOT = Path(tempfile.mkdtemp(prefix="minimax_imgdel_"))
-os.environ["MINIMAX_PROJECT_ROOT"] = str(TMP_ROOT)
-
+# conftest.py (tests/) sets MINIMAX_PROJECT_ROOT before any module
+# imports main. We reuse that shared workspace instead of creating our
+# own, so writes and API-handled reads/deletes share the same root.
 import web.backend.main as _main  # noqa: E402
-
 client = TestClient(_main.app)
+TMP_ROOT = _main.get_app_workspace_dir().parent  # PROJECT_ROOT/workspace/..
 
 
 def _write_image(name: str = "image_test.png") -> str:
-    p = TMP_ROOT / "workspace" / "generations" / "images" / name
+    p = _main.get_app_workspace_dir() / "generations" / "images" / name
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_bytes(b"\x89PNG\r\n\x1a\n")
     return f"generations/images/{name}"
@@ -37,7 +36,7 @@ def _write_image(name: str = "image_test.png") -> str:
 
 def test_delete_removes_file_and_returns_path():
     rel = _write_image()
-    img_path = TMP_ROOT / "workspace" / "generations" / "images" / "image_test.png"
+    img_path = _main.get_app_workspace_dir() / "generations" / "images" / "image_test.png"
     assert img_path.exists()
 
     res = client.delete(f"/api/generations/image?path={rel}")
@@ -59,7 +58,7 @@ def test_delete_rejects_path_outside_workspace():
 
 def test_delete_rejects_path_outside_images_dir():
     # music file is a sibling dir; must NOT be deletable through this endpoint
-    music = TMP_ROOT / "workspace" / "generations" / "music" / "track.mp3"
+    music = _main.get_app_workspace_dir() / "generations" / "music" / "track.mp3"
     music.parent.mkdir(parents=True, exist_ok=True)
     music.write_bytes(b"mp3")
 

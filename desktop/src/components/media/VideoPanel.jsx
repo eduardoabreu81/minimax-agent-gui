@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Video, Loader2, Save, RefreshCw, Image as ImageIcon, Film, User, Check, Coins, AlertTriangle,
-  Upload, X, ChevronDown, Play, Download, Search, Sliders, FileVideo,
+  Upload, X, ChevronDown, Play, Download, Search, Sliders, FileVideo, Info,
 } from 'lucide-react'
 import { useSessionProtection } from '../../hooks/useSessionProtection'
 import MediaPanelLayout from '../shared/MediaPanelLayout'
@@ -10,6 +10,7 @@ import ModeTabBar from '../shared/ModeTabBar'
 import { apiFetch, assetUrl } from '../../lib/api.js'
 import AnchorLibrary from './AnchorLibrary.jsx'
 import { anchorToDataUrl } from '../../lib/anchors.js'
+import GenerationMetaModal from './GenerationMetaModal'
 
 // ───────────────────────────────────────────────────────────────────────────
 // Constants — TAURI_SPEC §5b
@@ -388,7 +389,7 @@ function RenderQueueSkeleton() {
 // "History" + recent generations — same as the mockup's old fallback but
 // tucked below the render queue. We use the existing RecentGenerations
 // component for the list, since the user can't test new videos here.
-function VideoHistory({ history, historyLoading, onRefresh }) {
+function VideoHistory({ history, historyLoading, onRefresh, onShowMeta }) {
   const { t } = useTranslation()
   return (
     <div style={{ marginTop: 26 }}>
@@ -410,18 +411,36 @@ function VideoHistory({ history, historyLoading, onRefresh }) {
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 10 }}>
           {history.slice(0, 6).map(item => (
-            <a
-              key={item.path}
-              href={assetUrl(`/api/files/content?path=${encodeURIComponent(item.path)}`)}
-              target="_blank"
-              rel="noreferrer"
-              style={{ aspectRatio: '16/9', borderRadius: 10, border: '0.5px solid var(--app-border)', background: 'linear-gradient(135deg,#0b1e3a,#1d4ed8 60%,#7c3aed)', position: 'relative', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none' }}
-            >
-              <Play size={20} fill="rgba(255,255,255,0.92)" />
-              <span style={{ position: 'absolute', bottom: 6, right: 8, fontSize: 10, color: '#fff', background: 'rgba(0,0,0,0.5)', padding: '1px 6px', borderRadius: 5 }}>
-                {item.name.replace(/^video_/, '').slice(0, 8)}
-              </span>
-            </a>
+            <div key={item.path} style={{ position: 'relative' }}>
+              <a
+                href={assetUrl(`/api/files/content?path=${encodeURIComponent(item.path)}`)}
+                target="_blank"
+                rel="noreferrer"
+                style={{ aspectRatio: '16/9', borderRadius: 10, border: '0.5px solid var(--app-border)', background: 'linear-gradient(135deg,#0b1e3a,#1d4ed8 60%,#7c3aed)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none' }}
+              >
+                <Play size={20} fill="rgba(255,255,255,0.92)" />
+                <span style={{ position: 'absolute', bottom: 6, right: 8, fontSize: 10, color: '#fff', background: 'rgba(0,0,0,0.5)', padding: '1px 6px', borderRadius: 5 }}>
+                  {item.name.replace(/^video_/, '').slice(0, 8)}
+                </span>
+              </a>
+              {onShowMeta && (
+                <button
+                  type="button"
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); onShowMeta(item) }}
+                  disabled={!item.meta}
+                  style={{
+                    position: 'absolute', top: 6, left: 6,
+                    background: item.meta ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.35)',
+                    color: item.meta ? '#000' : 'rgba(0,0,0,0.4)',
+                    border: 'none', borderRadius: 6, padding: 4, cursor: item.meta ? 'pointer' : 'not-allowed',
+                  }}
+                  title={item.meta ? t('generationMeta.showMeta', { defaultValue: 'View prompt & settings' }) : t('generationMeta.noMeta', { defaultValue: 'No saved metadata' })}
+                  aria-label={item.meta ? t('generationMeta.showMeta', { defaultValue: 'View prompt & settings' }) : t('generationMeta.noMeta', { defaultValue: 'No saved metadata' })}
+                >
+                  <Info size={12} />
+                </button>
+              )}
+            </div>
           ))}
         </div>
       )}
@@ -445,6 +464,8 @@ export default function VideoPanel() {
   const [model, setModel] = useState('MiniMax-Hailuo-2.3')
   const [duration, setDuration] = useState('6')
   const [resolution, setResolution] = useState('1080P')
+  // Currently-open GenerationMetaModal item (null = closed).
+  const [metaItem, setMetaItem] = useState(null)
   const [promptOptimizer, setPromptOptimizer] = useState(false)
   const [cameraCommands, setCameraCommands] = useState([])
 
@@ -1021,16 +1042,22 @@ export default function VideoPanel() {
         history={history}
         historyLoading={historyLoading}
         onRefresh={fetchHistory}
+        onShowMeta={setMetaItem}
       />
     </div>
   )
 
   return (
-    <MediaPanelLayout
-      controlsWidth={400}
-      topBar={topBar}
-      controls={controls}
-      canvas={canvas}
-    />
+    <>
+      <MediaPanelLayout
+        controlsWidth={400}
+        topBar={topBar}
+        controls={controls}
+        canvas={canvas}
+      />
+      {metaItem && (
+        <GenerationMetaModal item={metaItem} onClose={() => setMetaItem(null)} />
+      )}
+    </>
   )
 }

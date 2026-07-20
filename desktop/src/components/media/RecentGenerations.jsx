@@ -22,6 +22,7 @@ export default function RecentGenerations({
   error = null,
   onRefresh,
   emptyMessage = 'No recent generations',
+  onPromoteToAnchor,
   onSaveAsStyle,
   onDeleteImage,
   onShowMeta,

@@ -10,6 +10,7 @@ Covers:
 import json
 import os
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -19,9 +20,8 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "web" / "backend"))
 
-TMP_ROOT = Path(__file__).resolve().parent.parent / "workspace_test_meta"
-TMP_ROOT.mkdir(exist_ok=True)
-os.environ["MINIMAX_PROJECT_ROOT"] = str(TMP_ROOT)
+# conftest.py (tests/) sets MINIMAX_PROJECT_ROOT before any module
+# imports main. We reuse that shared workspace for all file operations.
 
 import web.backend.main as _main  # noqa: E402
 
