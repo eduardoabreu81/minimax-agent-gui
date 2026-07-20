@@ -126,6 +126,14 @@ export default function XTermTerminal({ onReady }) {
       }
     }
     window.addEventListener('resize', handleResize)
+    // ResizeObserver: auto-fit whenever the container dimensions change,
+    // including after `display:none` → visible transitions.
+    const resizeObserver = new ResizeObserver(() => {
+      fitAddon.fit()
+    })
+    if (containerRef.current) {
+      resizeObserver.observe(containerRef.current)
+    }
 
     // Auto-connect
     connect()
@@ -133,6 +141,7 @@ export default function XTermTerminal({ onReady }) {
     if (onReady) onReady(term)
 
     return () => {
+      resizeObserver.disconnect()
       window.removeEventListener('resize', handleResize)
       disconnect()
       term.dispose()

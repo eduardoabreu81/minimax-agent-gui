@@ -246,23 +246,7 @@ export function useAgentActivity() {
   if (!ctx) {
     throw new Error('useAgentActivity must be used inside AgentActivityProvider')
   }
-  // COMPAT SHIM: spread the first registered session's activity fields
-  // so legacy consumers (StatusBar, Titlebar, CodingPanel, WorkspaceSidebar,
-  // AgentChatPanel) do not crash on destructuring { thinking, steps,
-  // toolResults, plan, hasNewActivity }. Remove after Tasks 4-6 migrate
-  // all consumers to useSessionActivity().
-  const firstKey = Object.keys(ctx.sessions)[0]
-  if (firstKey) {
-    return { ...ctx.sessions[firstKey].activity, ...ctx }
-  }
-  return {
-    steps: [],
-    toolResults: [],
-    thinking: { active: false, duration: 0, content: '' },
-    plan: { items: [], sourcePrompt: '', sourceAttachment: null, approved: false },
-    hasNewActivity: false,
-    ...ctx,
-  }
+  return ctx
 }
 
 // useSessionActivity — flatten the session's `activity` container and bind

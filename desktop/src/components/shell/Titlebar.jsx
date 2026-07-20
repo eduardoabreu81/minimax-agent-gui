@@ -2,12 +2,10 @@ import { useMemo } from 'react'
 import { Search } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAgentActivity } from '../../context/AgentActivityContext'
-
-// Agent status surfaced in the titlebar chip. Bound to AgentActivityContext
 // (thinking + steps + toolResults) instead of the Python backend process —
 // this matches the mockup's "Agent running" semantics and reads identically
 // regardless of which panel is open.
-const STATUS = {
+const TITLEBAR_STATUS = {
   idle:    { hsl: '215 18% 68%',     labelKey: 'titlebar.status.idle',    pulse: false },
   running: { hsl: '142 71% 45%',     labelKey: 'titlebar.status.running', pulse: true  },
   error:   { hsl: '0 63% 51%',       labelKey: 'titlebar.status.error',   pulse: false },
@@ -15,19 +13,14 @@ const STATUS = {
 
 export default function Titlebar({ onOpenPalette }) {
   const { t } = useTranslation()
-  const { thinking, steps, toolResults } = useAgentActivity()
+  const { selectGlobalSummary } = useAgentActivity()
+  const summary = selectGlobalSummary()
 
-  // Derived status: thinking or any running step → running; recent failed
-  // tool call → error; otherwise idle. `running` and `error` are sticky
-  // for the duration of the activity so the chip doesn't flicker.
   const status = useMemo(() => {
-    if (thinking.active) return 'running'
-    if (steps.some((s) => s.status === 'running')) return 'running'
-    if (toolResults.some((r) => !r.success)) return 'error'
-    return 'idle'
-  }, [thinking.active, steps, toolResults])
+    return summary.status === 'idle' ? 'idle' : summary.runningCount > 0 || summary.attentionCount > 0 ? 'running' : summary.errorCount > 0 ? 'error' : 'idle'
+  }, [summary])
 
-  const s = STATUS[status]
+  const s = TITLEBAR_STATUS[status]
 
   const winAction = async (action) => {
     try {

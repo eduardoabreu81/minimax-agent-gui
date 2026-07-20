@@ -15,13 +15,13 @@ import WorkspaceSidebar from './WorkspaceSidebar'
 import WorkspacePicker from './WorkspacePicker'
 import AgentChatPanel from './AgentChatPanel'
 import { useCodingChat } from './useCodingChat'
-import { useAgentActivity } from '../../context/AgentActivityContext'
+import { useSessionActivity, useAgentActivity } from '../../context/AgentActivityContext'
 import { useSessionProtection } from '../../hooks/useSessionProtection'
 import { useSessionTokens } from '../../context/SessionTokensContext'
 import ThinkingBlock from '../shared/ThinkingBlock'
 import { Composer } from '@/components/chat/Composer.tsx'
 import CopyButton from '../shared/CopyButton'
-
+import SessionActionGuard from '../shared/SessionActionGuard'
 /**
  * Build the system prompt for the coding agent. The model is interpolated
  * at call time so the prompt never references a stale hardcoded model id.
@@ -56,6 +56,7 @@ Always be concise but thorough. Use markdown for code blocks.`
 
 export default function CodingPanel({
   onSessionIdChange,
+  active = true,
   activeModel: activeModelProp,
   setActiveModel,
   thinkingEnabled: thinkingEnabledProp,
@@ -63,7 +64,16 @@ export default function CodingPanel({
   supportsThinking: supportsThinkingProp,
 } = {}) {
   const { t } = useTranslation()
-  const activity = useAgentActivity()
+  const activity = useSessionActivity(codingSessionId)
+  const activityRef = useRef(activity)
+  activityRef.current = activity
+  const activeRef = useRef(active)
+  activeRef.current = active
+  const { registerSession, removeSession } = useAgentActivity()
+  useEffect(() => {
+    registerSession({ sessionId: codingSessionId, tabId: 'code' })
+    return () => removeSession(codingSessionId)
+  }, [codingSessionId, registerSession, removeSession])
   // Per-turn model + thinking controls are owned by App.jsx (shared with
   // StatusBar and ChatPanel). Props are required — App.jsx always passes.
   const activeModel = activeModelProp ?? 'MiniMax-M3'
@@ -103,6 +113,8 @@ export default function CodingPanel({
     setAgentMode(next.id)
     try { localStorage.setItem('agent-mode', next.id) } catch {}
   }
+  const [guardAction, setGuardAction] = useState(null)
+  const [guardPayload, setGuardPayload] = useState(null)
 
   // Coding Agent Chat state
   const [codingMessages, setCodingMessages] = useState([])
@@ -328,15 +340,17 @@ export default function CodingPanel({
 
   const handleRemoveRecent = async (path) => {
     try {
-      const res = await apiFetch(`/api/coding/recent-workspaces?path=${encodeURIComponent(path)}`, {
-        method: 'DELETE',
-      })
+      const res = await apiFetch(`/api/coding/recent-workspaces?path=${encodeURIComponent(path)}`, { method: 'DELETE' })
       const data = await res.json()
       if (data.success) setRecentWorkspaces(data.workspaces || [])
     } catch (e) { /* ignore */ }
   }
 
   const startNewCodingChat = () => {
+    if (activity.status === 'running' || activity.status === 'needs_input') {
+      setGuardAction('new')
+      return
+    }
     const newId = 'coding-' + Math.random().toString(36).substring(2, 10)
     setCodingMessages([])
     setCodingSessionId(newId)
@@ -349,6 +363,11 @@ export default function CodingPanel({
   }
 
   const loadCodingConversation = (conv) => {
+    if (activity.status === 'running' || activity.status === 'needs_input') {
+      setGuardAction('load')
+      setGuardPayload(conv)
+      return
+    }
     setCodingMessages([])
     setCodingSessionId(conv.id)
     setShowCodingConvList(false)
@@ -361,6 +380,11 @@ export default function CodingPanel({
 
   const deleteCodingConversation = async (e, convId) => {
     e.stopPropagation()
+    if (activity.status === 'running' || activity.status === 'needs_input') {
+      setGuardAction('delete')
+      setGuardPayload(convId)
+      return
+    }
     try {
       await apiFetch(`/api/conversations/${convId}`, { method: 'DELETE' })
       setCodingConversations(prev => prev.filter(c => c.id !== convId))
@@ -424,7 +448,10 @@ export default function CodingPanel({
       setCodingWs(ws)
 
     ws.onopen = () => setCodingConnected(true)
-    ws.onclose = () => setCodingConnected(false)
+    ws.onclose = () => {
+      setCodingConnected(false)
+      activityRef.current.failRunIfActive('Connection closed', { unread: !activeRef.current })
+    }
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data)
       if (data.type === 'history') {
@@ -529,8 +556,17 @@ export default function CodingPanel({
         setCodingMessages((prev) => [...prev, { type: 'system', content: `Skill '${data.skill}' activated` }])
         activity.setThinkingState(false)
       } else if (data.type === 'permission_request') {
+        const permInfo = {
+          requestId: data.request_id,
+          toolName: data.tool_name,
+          risk: data.classification?.risk,
+          expiresAt: Date.now() + 120000,
+        }
+        activityRef.current.requestAttention(permInfo)
         setPermissionRequest(data)
         activity.setThinkingState(false)
+      } else if (data.type === 'permission_expired') {
+        activityRef.current.expireAttention(data.request_id, data.reason || 'Timed out')
       } else if (data.type === 'usage') {
         // Backend pushes per-turn usage so StatusBar context chip
         // reflects real numbers as the agent streams.
@@ -588,6 +624,7 @@ export default function CodingPanel({
           return frozen
         })
         activity.setThinkingState(false)
+        activityRef.current.completeRun({ unread: !activeRef.current })
       }
     }
     })
@@ -724,6 +761,7 @@ const sendCodingMessage = useCallback((text, attachment) => {
       content: trimmed || '📎 Attachment sent',
       attachment: attachment?.path
     }])
+    activityRef.current.startRun()
     codingStreamingThinkingRef.current = ''
     codingWs.send(JSON.stringify(payload))
     // Defensive lock: also fire the lock endpoint client-side so the
@@ -1242,9 +1280,9 @@ const sendCodingMessage = useCallback((text, attachment) => {
       </div>
     )
   }
-
   const handlePermissionApprove = () => {
     if (!permissionRequest || !codingWs) return
+    activityRef.current.resolveAttention(permissionRequest.request_id, 'approved')
     codingWs.send(JSON.stringify({
       type: 'permission_response',
       request_id: permissionRequest.request_id,
@@ -1257,6 +1295,7 @@ const sendCodingMessage = useCallback((text, attachment) => {
 
   const handlePermissionReject = () => {
     if (!permissionRequest || !codingWs) return
+    activityRef.current.resolveAttention(permissionRequest.request_id, 'rejected')
     codingWs.send(JSON.stringify({
       type: 'permission_response',
       request_id: permissionRequest.request_id,
@@ -1444,6 +1483,25 @@ const sendCodingMessage = useCallback((text, attachment) => {
             </div>
           </div>
         )}
+
+        <SessionActionGuard
+          open={!!guardAction}
+          title="Stop the active agent?"
+          description="This action will stop the current run and discard in-flight output."
+          confirmLabel="Stop and continue"
+          cancelLabel="Keep running"
+          onConfirm={() => {
+            if (guardAction === 'new') startNewCodingChat()
+            else if (guardAction === 'load' && guardPayload) loadCodingConversation(guardPayload)
+            else if (guardAction === 'delete' && guardPayload) deleteCodingConversation(null, guardPayload)
+            setGuardAction(null)
+            setGuardPayload(null)
+          }}
+          onCancel={() => {
+            setGuardAction(null)
+            setGuardPayload(null)
+          }}
+        />
       </div>
     </div>
   )

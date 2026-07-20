@@ -397,5 +397,11 @@
       "expert": "Denso y técnico. Cita compensaciones y casos límite.",
       "creative": "Genera opciones, explora ángulos inesperados."
     }
+  },
+  "agentRuns": {
+    "destructiveTitle": "¿Detener el agente activo?",
+    "destructiveDescription": "Esta acción detendrá la ejecución actual y descartará la salida en curso.",
+    "stay": "Mantener ejecución",
+    "stopAndContinue": "Detener y continuar"
   }
 }

@@ -7,7 +7,6 @@ import {
 import MarkdownRenderer from '../MarkdownRenderer'
 import XTermTerminal from './XTermTerminal'
 import { useCodingChat } from './useCodingChat'
-import { useAgentActivity } from '../../context/AgentActivityContext'
 import { useSelectedModel } from '../../hooks/useSelectedModel'
 import { useState } from 'react'
 
@@ -30,7 +29,6 @@ export default function AgentChatPanel({
       }
     }
   })
-  const activity = useAgentActivity()
   const [showEditorDrawer, setShowEditorDrawer] = useState(false)
   const [activeBottomTab, setActiveBottomTab] = useState('editor')
   const [commitMessage, setCommitMessage] = useState('')

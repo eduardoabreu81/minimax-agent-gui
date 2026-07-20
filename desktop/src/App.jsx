@@ -29,6 +29,7 @@ import IncompleteContextBanner from './components/agent-context/IncompleteContex
 import ContextModal from './components/agent-context/ContextModal.jsx'
 import CommandPalette from './components/command-palette/CommandPalette'
 import StatusBar from './components/shared/StatusBar'
+import GlobalAgentAttention from './components/shared/GlobalAgentAttention'
 
 // App — healthcheck gate.
 //
@@ -391,6 +392,7 @@ function AppShell() {
             setThinkingEnabled={setThinkingEnabled}
             supportsThinking={supportsThinking}
           />
+          <GlobalAgentAttention />
           {showSetup && <FirstRunSetup onComplete={() => setShowSetup(false)} />}
           <IncompleteContextBanner
             status={agentContext.status}

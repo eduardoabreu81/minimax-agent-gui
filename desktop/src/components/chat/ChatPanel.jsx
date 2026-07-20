@@ -4,13 +4,14 @@ import { useTranslation } from 'react-i18next'
 import { Plus, User, Bot, Loader2, FileText, MessageSquarePlus, Trash2, ChevronDown, Pencil } from 'lucide-react'
 import { Composer } from './Composer'
 import { useSessionProtection } from '../../hooks/useSessionProtection'
-import { useSessionTokens } from '../../context/SessionTokensContext'
+import { useSessionActivity, useAgentActivity } from '../../context/AgentActivityContext'
 import ThinkingBlock from '../shared/ThinkingBlock'
 import CopyButton from '../shared/CopyButton'
 import MarkdownRenderer from '../MarkdownRenderer'
 import ArtifactViewerModal from '../artifact/ArtifactViewerModal.jsx'
 import ContextWarningBanner from '../shared/ContextWarningBanner'
 import { getCompactThresholds, getContextLimit } from '../../lib/modelLimits'
+import SessionActionGuard from '../shared/SessionActionGuard'
 
 function generateId() {
   return Math.random().toString(36).substring(2, 10)
@@ -19,6 +20,7 @@ function generateId() {
 export default function ChatPanel({
   onProcessingChange,
   onSessionIdChange,
+  active = true,
   activeModel: activeModelProp,
   setActiveModel,
   thinkingEnabled: thinkingEnabledProp,
@@ -82,9 +84,63 @@ export default function ChatPanel({
   const scrollRef = useRef(null)
   const convListRef = useRef(null)
   const searchTimeoutRef = useRef(null)
-
+  const activity = useSessionActivity(sessionId)
+  const activityRef = useRef(activity)
+  activityRef.current = activity
+  const activeRef = useRef(active)
+  activeRef.current = active
   const { register } = useSessionProtection()
+  const [guardAction, setGuardAction] = useState(null)
+  const [guardPayload, setGuardPayload] = useState(null)
 
+  const startNewChat = () => {
+    if (activity.status === 'running' || activity.status === 'needs_input') {
+      setGuardAction('new')
+      return
+    }
+    const newId = generateId()
+    setSessionId(newId)
+    setMessages([])
+    setShowConvList(false)
+    setSearchQuery('')
+    setSearchResults(null)
+    try { localStorage.setItem('chat-session-id', newId) } catch {}
+  }
+
+  const loadConversation = (conv) => {
+    if (activity.status === 'running' || activity.status === 'needs_input') {
+      setGuardAction('load')
+      setGuardPayload(conv)
+      return
+    }
+    setMessages([])
+    setSessionId(conv.id)
+    setShowConvList(false)
+    setSearchQuery('')
+    setSearchResults(null)
+  }
+
+  const deleteConversation = async (e, convId) => {
+    e.stopPropagation()
+    if (activity.status === 'running' || activity.status === 'needs_input') {
+      setGuardAction('delete')
+      setGuardPayload(convId)
+      return
+    }
+    try {
+      await apiFetch(`/api/conversations/${convId}`, { method: 'DELETE' })
+      setConversations(prev => prev.filter(c => c.id !== convId))
+      if (convId === sessionId) {
+        startNewChat()
+      }
+    } catch (err) { console.error('Delete failed:', err) }
+  }
+
+  const { registerSession, removeSession } = useAgentActivity()
+  useEffect(() => {
+    registerSession({ sessionId, tabId: 'chat' })
+    return () => removeSession(sessionId)
+  }, [sessionId, registerSession, removeSession])
   useEffect(() => {
     register('chat-thinking', isThinking, 'Agent is thinking')
   }, [isThinking, register])
@@ -123,7 +179,10 @@ export default function ChatPanel({
     wsRef.current = ws
 
     ws.onopen = () => setIsConnected(true)
-    ws.onclose = () => setIsConnected(false)
+    ws.onclose = () => {
+      setIsConnected(false)
+      activityRef.current.failRunIfActive('Connection closed', { unread: !activeRef.current })
+    }
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data)
       console.log('[WS RECV]', data.type, data.usage ? `usage: ${JSON.stringify(data.usage)}` : '', data.model ? `model: ${data.model}` : '')
@@ -227,7 +286,15 @@ export default function ChatPanel({
         // understand_image, bash_output, …). Destructive / medium+high
         // risk surface as an inline modal so the user can decide.
         const risk = data.classification?.risk
+        const permInfo = {
+          requestId: data.request_id,
+          toolName: data.tool_name,
+          risk,
+          expiresAt: Date.now() + 120000,
+        }
+        activityRef.current.requestAttention(permInfo)
         if (risk === 'low') {
+          activityRef.current.resolveAttention(data.request_id, 'approved')
           wsRef.current?.send(JSON.stringify({
             type: 'permission_response',
             request_id: data.request_id,
@@ -244,6 +311,8 @@ export default function ChatPanel({
             content: `Permission requested for ${data.tool_name} (${risk ?? 'unknown'} risk).`,
           }])
         }
+      } else if (data.type === 'permission_expired') {
+        activityRef.current.expireAttention(data.request_id, data.reason || 'Timed out')
       } else if (data.type === 'usage') {
         // Backend sends per-turn token usage so the StatusBar's context
         // chip can show live progress. Anthropic usage shape:
@@ -348,6 +417,7 @@ export default function ChatPanel({
           frozen.push({ ...data, thinking: undefined })
           return frozen
         })
+        activityRef.current.completeRun({ unread: !activeRef.current })
       }
     }
   }, [onProcessingChange])
@@ -433,34 +503,6 @@ export default function ChatPanel({
     return () => document.removeEventListener('mousedown', handleClick)
   }, [])
 
-  const startNewChat = () => {
-    try { localStorage.removeItem('chat-session-id') } catch { /* ignore */ }
-    const newId = generateId()
-    setMessages([])
-    setSessionId(newId)
-    setShowConvList(false)
-    fetchConversations()
-  }
-
-  const loadConversation = (conv) => {
-    setMessages([])
-    setSessionId(conv.id)
-    setShowConvList(false)
-    setSearchQuery('')
-    setSearchResults(null)
-  }
-
-  const deleteConversation = async (e, convId) => {
-    e.stopPropagation()
-    try {
-      await apiFetch(`/api/conversations/${convId}`, { method: 'DELETE' })
-      setConversations(prev => prev.filter(c => c.id !== convId))
-      if (convId === sessionId) {
-        startNewChat()
-      }
-    } catch (err) { console.error('Delete failed:', err) }
-  }
-
   const startRename = (e, conv) => {
     e.stopPropagation()
     setEditingId(conv.id)
@@ -491,6 +533,7 @@ export default function ChatPanel({
 
   const handlePermissionApprove = useCallback(() => {
     if (!permissionRequest || !wsRef.current) return
+    activityRef.current.resolveAttention(permissionRequest.request_id, 'approved')
     wsRef.current.send(JSON.stringify({
       type: 'permission_response',
       request_id: permissionRequest.request_id,
@@ -502,6 +545,7 @@ export default function ChatPanel({
 
   const handlePermissionReject = useCallback(() => {
     if (!permissionRequest || !wsRef.current) return
+    activityRef.current.resolveAttention(permissionRequest.request_id, 'rejected')
     wsRef.current.send(JSON.stringify({
       type: 'permission_response',
       request_id: permissionRequest.request_id,
@@ -510,6 +554,7 @@ export default function ChatPanel({
     setMessages(prev => [...prev, { type: 'system', content: `Tool rejected: ${permissionRequest.tool_name}` }])
     setPermissionRequest(null)
   }, [permissionRequest])
+
 
   // Called by Composer via onSend. The `text` argument is already
   // augmented with the "--- Attached Context ---" block from
@@ -536,6 +581,7 @@ export default function ChatPanel({
       attachment: attachment?.path,
     }])
     streamingThinkingRef.current = ''
+    activityRef.current.startRun()
     wsRef.current.send(JSON.stringify(payload))
     setIsThinking(true)
     onProcessingChange?.(true)
@@ -833,6 +879,25 @@ export default function ChatPanel({
           </div>
         </div>
       )}
+
+        <SessionActionGuard
+          open={!!guardAction}
+          title="Stop the active agent?"
+          description="This action will stop the current run and discard in-flight output."
+          confirmLabel="Stop and continue"
+          cancelLabel="Keep running"
+          onConfirm={() => {
+            if (guardAction === 'new') startNewChat()
+            else if (guardAction === 'load' && guardPayload) loadConversation(guardPayload)
+            else if (guardAction === 'delete' && guardPayload) deleteConversation(null, guardPayload)
+            setGuardAction(null)
+            setGuardPayload(null)
+          }}
+          onCancel={() => {
+            setGuardAction(null)
+            setGuardPayload(null)
+          }}
+        />
     </div>
   )
 }

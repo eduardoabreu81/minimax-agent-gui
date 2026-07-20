@@ -1153,4 +1153,11 @@
       "mcpTools": "MCP tools"
     }
   }
+,
+  "agentRuns": {
+    "destructiveTitle": "Stop the active agent?",
+    "destructiveDescription": "This action will stop the current run and discard in-flight output.",
+    "stay": "Keep running",
+    "stopAndContinue": "Stop and continue"
+  }
 }

@@ -36,7 +36,19 @@ vi.mock('../../lib/api.js', () => ({
 
 // Stub AgentActivityContext — used by AgentStatus, harmless default.
 vi.mock('../../context/AgentActivityContext.jsx', () => ({
-  useAgentActivity: () => ({ thinking: { active: false }, steps: [] }),
+  useAgentActivity: () => ({
+    sessions: {},
+    selectGlobalSummary: () => ({
+      status: 'idle',
+      runningCount: 0,
+      attentionCount: 0,
+      errorCount: 0,
+      completedCount: 0,
+      sessions: [],
+    }),
+    selectSession: () => null,
+    selectTabSummary: () => ({ status: 'idle', runningCount: 0, errorCount: 0, completedCount: 0, attentionCount: 0, sessions: [] }),
+  }),
 }))
 
 beforeEach(() => {

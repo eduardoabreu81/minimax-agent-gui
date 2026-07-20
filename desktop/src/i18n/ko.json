@@ -1153,4 +1153,11 @@
       "mcpTools": "MCP 도구"
     }
   }
+,
+  "agentRuns": {
+    "destructiveTitle": "실행 중인 에이전트를 중단할까요?",
+    "destructiveDescription": "이 작업은 현재 실행 중인 작업을 중단하고 진행 중인 출력을 삭제합니다.",
+    "stay": "계속 실행",
+    "stopAndContinue": "중단하고 계속"
+  }
 }

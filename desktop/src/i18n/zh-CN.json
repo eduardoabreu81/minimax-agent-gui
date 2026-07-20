@@ -397,5 +397,11 @@
       "expert": "密集且技术性强。指出权衡与边界情况。",
       "creative": "生成多种选项，探索意想不到的角度。"
     }
+  },
+  "agentRuns": {
+    "destructiveTitle": "停止当前运行的智能体？",
+    "destructiveDescription": "此操作将停止当前运行并丢弃正在输出的内容。",
+    "stay": "保持运行",
+    "stopAndContinue": "停止并继续"
   }
 }

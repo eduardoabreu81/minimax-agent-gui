@@ -5,7 +5,7 @@ import {
   Loader2, Circle, CircleDot, Sparkles, CheckCircle2, XCircle,
   Wrench, Clock, Terminal
 } from 'lucide-react'
-import { useAgentActivity } from '../../context/AgentActivityContext'
+import { useSessionActivity } from '../../context/AgentActivityContext'
 import { useSelectedModel } from '../../hooks/useSelectedModel'
 import { useLiveTodos } from '../../hooks/useLiveTodos'
 import { LiveTodoProgress } from '../taskboard/LiveTodoProgress'
@@ -32,7 +32,7 @@ export default function WorkspaceSidebar({
 }) {
   const { t } = useTranslation()
   const [activeTab, setActiveTab] = useState('tasks')
-  const activity = useAgentActivity()
+  const activity = useSessionActivity(sessionId)
 
   useEffect(() => {
     const handleOpenTab = (e) => {
@@ -94,20 +94,19 @@ export default function WorkspaceSidebar({
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-3">
-        {activeTab === 'plan' && <PlanPanel />}
+        {activeTab === 'plan' && <PlanPanel activity={activity} />}
         {activeTab === 'todos' && (
           <TodosPanel websocket={websocket} sessionId={sessionId} />
         )}
-        {activeTab === 'tasks' && <TasksPanel />}
-        {activeTab === 'agents' && <AgentsPanel />}
+        {activeTab === 'tasks' && <TasksPanel activity={activity} />}
+        {activeTab === 'agents' && <AgentsPanel activity={activity} />}
       </div>
     </div>
   )
 }
 
-function PlanPanel() {
+function PlanPanel({ activity }) {
   const { t } = useTranslation()
-  const activity = useAgentActivity()
   const [editingId, setEditingId] = useState(null)
   const [editingText, setEditingText] = useState('')
   const [copied, setCopied] = useState(false)
@@ -325,9 +324,8 @@ function TodosPanel({ websocket, sessionId }) {
   )
 }
 
-function TasksPanel() {
+function TasksPanel({ activity }) {
   const { t } = useTranslation()
-  const activity = useAgentActivity()
 
   if (activity.steps.length === 0 && activity.toolResults.length === 0) {
     return (
@@ -408,9 +406,8 @@ function TasksPanel() {
   )
 }
 
-function AgentsPanel() {
+function AgentsPanel({ activity }) {
   const { t } = useTranslation()
-  const activity = useAgentActivity()
   const { model: selectedModel } = useSelectedModel({ fallback: 'MiniMax-M3' })
 
   return (

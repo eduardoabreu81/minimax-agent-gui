@@ -5,6 +5,7 @@ import { useSessionTokens } from '../../context/SessionTokensContext'
 import { useAgentActivity } from '../../context/AgentActivityContext'
 import { useTheme, THEMES } from '../../context/ThemeContext'
 import { getContextLimit, formatTokenCount, formatByteCount, DEFAULT_MODEL } from '../../lib/modelLimits'
+import AgentRunStatus from './AgentRunStatus'
 import { apiFetch } from '../../lib/api.js'
 
 // StatusBar — global footer anchored above the bottom of the app.
@@ -618,34 +619,11 @@ function ThinkingToggle({ thinkingEnabled, setThinkingEnabled, supportsThinking 
     </button>
   )
 }
-
 // ─────────────────────────────────────────────────────────────────────────────
-// AgentStatus — conic-gradient spinner + label. Active when AgentActivity
-// context says thinking/steps running; idle otherwise.
+// AgentRunStatus — imported from ./AgentRunStatus. Orb + popover listing
+// all active sessions (running, needs_input, unread errors/completions).
+// Replaces the legacy AgentStatus component.
 // ─────────────────────────────────────────────────────────────────────────────
-
-function AgentStatus() {
-  const { thinking, steps } = useAgentActivity()
-  const active = thinking.active || steps.some((s) => s.status === 'running')
-  const color = active ? 'text-success' : 'text-muted-foreground'
-  return (
-    <div
-      title={active ? 'Agent is processing' : 'Agent idle'}
-      className="flex items-center gap-1.5 h-[22px] px-2 rounded-md text-[11.5px] font-medium"
-    >
-      <span
-        className="w-[13px] h-[13px] rounded-full"
-        style={{
-          background: active
-            ? 'conic-gradient(from 0deg, hsl(var(--primary)), hsl(var(--success)), hsl(var(--primary)))'
-            : 'hsl(var(--muted))',
-          animation: active ? 'mmpulse 1.6s ease-in-out infinite' : 'none',
-        }}
-      />
-      <span className={color}>{active ? 'Agent running' : 'Agent idle'}</span>
-    </div>
-  )
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Top-level StatusBar — mounted by App.jsx below the main panel.
@@ -681,7 +659,7 @@ export default function StatusBar({
 
         <div className="w-px h-4 bg-border mx-1" />
 
-        <AgentStatus />
+        <AgentRunStatus />
       </div>
     </footer>
   )

@@ -18,17 +18,24 @@ vi.mock("../../hooks/useLiveTodos", () => ({
   useLiveTodos: vi.fn(),
 }));
 
-// Mock useAgentActivity (used by other tabs)
+// Mock useSessionActivity (used by PlanPanel, TasksPanel, AgentsPanel tabs)
 vi.mock("../../context/AgentActivityContext", () => ({
-  useAgentActivity: () => ({
-    plan: { items: [], sourcePrompt: "" },
+  useSessionActivity: () => ({
+    sessionId: 'coding-test',
+    status: 'idle',
+    plan: { items: [], sourcePrompt: "", sourceAttachment: null, approved: false },
     steps: [],
     toolResults: [],
     hasNewActivity: false,
-    acknowledgeActivity: vi.fn(),
+    thinking: { active: false, duration: 0, content: '' },
+    lastTool: null,
     updatePlanItem: vi.fn(),
+    togglePlanItem: vi.fn(),
+    removePlanItem: vi.fn(),
+    addPlanItem: vi.fn(),
+    clearPlan: vi.fn(),
   }),
-}));
+}))
 
 // Mock useSelectedModel
 vi.mock("../../hooks/useSelectedModel", () => ({

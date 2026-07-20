@@ -6,7 +6,7 @@ import {
 } from 'lucide-react'
 import QuotaDashboard from './QuotaDashboard'
 import CreditBalanceWidget from './CreditBalanceWidget'
-import { apiFetch, apiWebSocketUrl } from '../lib/api.js'
+import { useAgentActivity } from '../context/AgentActivityContext'
 
 const PLAN_ORDER = { plus: 0, max: 1, ultra: 2 }
 const PLAN_LABELS = { plus: 'Plus', max: 'Max', ultra: 'Ultra' }
@@ -26,6 +26,7 @@ const NAV_META = {
 
 export default function Sidebar({ activeTab, onTabChange }) {
   const { t } = useTranslation()
+  const { selectTabSummary } = useAgentActivity()
   // Default to the lowest paid tier (Plus). When the API is reachable,
   // the auto-detected plan overrides this; when it isn't, we still show
   // a tier that matches what every paying subscriber has.
@@ -142,6 +143,24 @@ export default function Sidebar({ activeTab, onTabChange }) {
               <Icon size={18} aria-hidden="true" />
               {!collapsed && (
                 <span className="flex-1 text-left text-[13px] font-medium truncate">{item.label}</span>
+              )}
+              {!collapsed && item.id === 'chat' && selectTabSummary('chat').status !== 'idle' && (
+                <span className={`
+                  w-1.5 h-1.5 rounded-full shrink-0
+                  ${selectTabSummary('chat').status === 'needs_input' ? 'bg-amber-500' : ''}
+                  ${selectTabSummary('chat').status === 'error' ? 'bg-red-500' : ''}
+                  ${selectTabSummary('chat').status === 'running' ? 'bg-primary animate-mmpulse' : ''}
+                  ${selectTabSummary('chat').status === 'completed' ? 'bg-green-500' : ''}
+                `} />
+              )}
+              {!collapsed && item.id === 'code' && selectTabSummary('code').status !== 'idle' && (
+                <span className={`
+                  w-1.5 h-1.5 rounded-full shrink-0
+                  ${selectTabSummary('code').status === 'needs_input' ? 'bg-amber-500' : ''}
+                  ${selectTabSummary('code').status === 'error' ? 'bg-red-500' : ''}
+                  ${selectTabSummary('code').status === 'running' ? 'bg-primary animate-mmpulse' : ''}
+                  ${selectTabSummary('code').status === 'completed' ? 'bg-green-500' : ''}
+                `} />
               )}
               {!collapsed && item.badge && (
                 <span className="text-[9px] font-bold tracking-wide px-1.5 py-0.5 rounded bg-primary/[0.16] text-primary">{item.badge}</span>

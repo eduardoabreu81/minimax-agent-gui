@@ -397,5 +397,11 @@
       "expert": "濃密で技術的。トレードオフやエッジケースに言及。",
       "creative": "選択肢を生み出し、意外な視点を探る。"
     }
+  },
+  "agentRuns": {
+    "destructiveTitle": "アクティブなエージェントを停止しますか？",
+    "destructiveDescription": "この操作は現在の実行を停止し、処理中の出力を破棄します。",
+    "stay": "実行を継続",
+    "stopAndContinue": "停止して続行"
   }
 }

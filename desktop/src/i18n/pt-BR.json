@@ -520,5 +520,11 @@
       "expert": "Denso e técnico. Cita trade-offs e casos extremos.",
       "creative": "Gera opções, explora ângulos inesperados."
     }
+  },
+  "agentRuns": {
+    "destructiveTitle": "Parar o agente ativo?",
+    "destructiveDescription": "Esta ação interromperá a execução atual e descartará a saída em andamento.",
+    "stay": "Manter em execução",
+    "stopAndContinue": "Parar e continuar"
   }
 }
