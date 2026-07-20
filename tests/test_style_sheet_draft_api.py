@@ -199,7 +199,8 @@ def test_image_draft_from_workspace_path_calls_vlm(monkeypatch):
         })
     assert res.status_code == 200
     assert res.json()["draft"]["body"].startswith("{prompt}, ")
-    assert captured["path"] == str(img_abs)
+    # Compare resolved paths — macOS resolves /var → /private/var via symlink.
+    assert Path(captured["path"]).resolve() == img_abs.resolve()
 
 
 def test_image_draft_rejects_both_sources(monkeypatch):
