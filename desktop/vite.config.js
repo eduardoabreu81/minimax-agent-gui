@@ -17,17 +17,6 @@ export default defineConfig({
     },
   },
   clearScreen: false,
-  build: {
-    rollupOptions: {
-      output: {
-        manualChunks(id) {
-          if (id.includes('micromark')) {
-            return 'vendor-micromark';
-          }
-        },
-      },
-    },
-  },
   server: {
     port: 1420,
     strictPort: true,
