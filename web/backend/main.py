@@ -5657,6 +5657,34 @@ async def list_generations():
 
     return {"success": True, "data": result}
 
+
+@app.delete("/api/generations/image")
+async def delete_generated_image(path: str = ""):
+    """Delete a single image under workspace/generations/images/.
+
+    Idempotent: deleting an already-missing path returns success. Paths
+    outside ``workspace/generations/images/`` are rejected (403) so the
+    endpoint cannot be used to remove anchors, config, or other media.
+    """
+    if not path:
+        raise HTTPException(status_code=400, detail="path is required")
+    try:
+        root = get_app_workspace_dir()
+        target = _safe_join(root, path)
+        images_root = (root / "generations" / "images").resolve()
+        if images_root not in target.resolve().parents and target.resolve() != images_root:
+            raise HTTPException(
+                status_code=403,
+                detail="Only files under generations/images/ can be deleted here",
+            )
+        if target.exists() and target.is_file():
+            target.unlink()
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return {"success": True, "deleted": path}
+
 @app.post("/api/files/save")
 async def save_file(data: dict):
     """Save file content into the workspace that owns this session."""
