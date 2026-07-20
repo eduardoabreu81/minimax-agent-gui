@@ -11,6 +11,7 @@ import ModeTabBar from '../shared/ModeTabBar'
 import GalleryHeader from '../shared/GalleryHeader'
 import ShapePreview from '../shared/ShapePreview'
 import RecentGenerations from './RecentGenerations'
+import GenerationMetaModal from './GenerationMetaModal'
 import { apiFetch } from '../../lib/api.js'
 import { StyleSheetEditor, StyleSheetModal } from '../style-sheets/index.js'
 import { listStyleSheets } from '../../lib/styleSheets.js'
@@ -152,7 +153,8 @@ export default function ImagePanel() {
 
   const [styleEditorState, setStyleEditorState] = useState(null)
   // null = closed; { mode: 'create' } | { mode: 'edit', sheet }
-  const [styleSheetsLoadError, setStyleSheetsLoadError] = useState(null)
+  // Currently-open GenerationMetaModal item (null = closed).
+  const [metaItem, setMetaItem] = useState(null)
 
   const loadStyleSheets = useCallback(async () => {
     try {
@@ -164,12 +166,11 @@ export default function ImagePanel() {
         if (typeof localStorage !== 'undefined') localStorage.removeItem('image-style-sheet')
         setStyleSheet('')
       }
-    } catch (e) {
-      setStyleSheetsLoadError(e.message || 'Failed to load style sheets')
-    }
+    } catch { /* style sheets are optional — never block the panel */ }
   }, [])
 
   useEffect(() => { loadStyleSheets() }, [loadStyleSheets])
+  useEffect(() => { fetchGallery() }, [])
 
   const handleStyleSaved = useCallback(async (saved) => {
     setStyleEditorState(null)
@@ -832,6 +833,7 @@ export default function ImagePanel() {
       items={gallery}
       loading={galleryLoading}
       onRefresh={fetchGallery}
+      onShowMeta={setMetaItem}
       emptyMessage={t('image.noGenerated')}
       onPromoteToAnchor={(item) => {
         // Cross-tab promotion to the Video panel's AnchorLibrary.
@@ -900,6 +902,9 @@ export default function ImagePanel() {
             onError={(msg) => setError(msg)}
           />
         </StyleSheetModal>
+      )}
+      {metaItem && (
+        <GenerationMetaModal item={metaItem} onClose={() => setMetaItem(null)} />
       )}
     </>
   )
