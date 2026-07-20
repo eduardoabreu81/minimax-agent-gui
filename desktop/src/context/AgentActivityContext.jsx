@@ -259,9 +259,11 @@ export function useSessionActivity(sessionId) {
     throw new Error('useSessionActivity must be used inside AgentActivityProvider')
   }
 
-  // Ref keeps the latest actions snapshot without forcing the merged
-  // object to recompute on every dispatch. We rebuild only when the
-  // underlying session record identity changes.
+  // Ref keeps the latest ctx without putting it in the memo deps. The
+  // bound action closures below read dispatchers from actionsRef.current
+  // at call time, so they stay referentially stable across unrelated
+  // session updates — only a session-id change or a session record
+  // identity change will rebuild the returned object.
   const actionsRef = useRef(ctx)
   actionsRef.current = ctx
 
@@ -296,43 +298,37 @@ export function useSessionActivity(sessionId) {
         approvePlan: emptyActionShim,
       }
     }
-    const { activity, ...rest } = session
+    const actions = actionsRef.current
     return {
-      ...rest,
-      ...activity,
-      startRun: (options) => ctx.startRun(sessionId, options),
-      setPhase: (phase) => ctx.setPhase(sessionId, phase),
+      ...session,
+      ...session.activity,
+      startRun: (options) => actions.startRun(sessionId, options),
+      setPhase: (phase) => actions.setPhase(sessionId, phase),
       setThinkingState: (active, content = '') =>
-        ctx.setThinkingState(sessionId, active, content),
-      setThinkingDuration: (duration) => ctx.setThinkingDuration(sessionId, duration),
-      addStep: (step, maxSteps) => ctx.addStep(sessionId, step, maxSteps),
-      completeStep: (step) => ctx.completeStep(sessionId, step),
-      addToolResult: (data) => ctx.addToolResult(sessionId, data),
-      requestAttention: (permission) => ctx.requestAttention(sessionId, permission),
+        actions.setThinkingState(sessionId, active, content),
+      setThinkingDuration: (duration) => actions.setThinkingDuration(sessionId, duration),
+      addStep: (step, maxSteps) => actions.addStep(sessionId, step, maxSteps),
+      completeStep: (step) => actions.completeStep(sessionId, step),
+      addToolResult: (data) => actions.addToolResult(sessionId, data),
+      requestAttention: (permission) => actions.requestAttention(sessionId, permission),
       resolveAttention: (requestId, resolution) =>
-        ctx.resolveAttention(sessionId, requestId, resolution),
+        actions.resolveAttention(sessionId, requestId, resolution),
       expireAttention: (requestId, reason) =>
-        ctx.expireAttention(sessionId, requestId, reason),
-      completeRun: (options) => ctx.completeRun(sessionId, options),
-      failRun: (error, options) => ctx.failRun(sessionId, error, options),
-      failRunIfActive: (error, options) => ctx.failRunIfActive(sessionId, error, options),
-      acknowledgeSession: () => ctx.acknowledgeSession(sessionId),
-      clearActivity: () => ctx.clearActivity(sessionId),
+        actions.expireAttention(sessionId, requestId, reason),
+      completeRun: (options) => actions.completeRun(sessionId, options),
+      failRun: (error, options) => actions.failRun(sessionId, error, options),
+      failRunIfActive: (error, options) =>
+        actions.failRunIfActive(sessionId, error, options),
+      acknowledgeSession: () => actions.acknowledgeSession(sessionId),
+      clearActivity: () => actions.clearActivity(sessionId),
       createPlan: (items, sourcePrompt, sourceAttachment) =>
-        ctx.createPlan(sessionId, items, sourcePrompt, sourceAttachment),
-      updatePlanItem: (id, text) => ctx.updatePlanItem(sessionId, id, text),
-      togglePlanItem: (id) => ctx.togglePlanItem(sessionId, id),
-      removePlanItem: (id) => ctx.removePlanItem(sessionId, id),
-      addPlanItem: (text) => ctx.addPlanItem(sessionId, text),
-      clearPlan: () => ctx.clearPlan(sessionId),
-      approvePlan: () => ctx.approvePlan(sessionId),
+        actions.createPlan(sessionId, items, sourcePrompt, sourceAttachment),
+      updatePlanItem: (id, text) => actions.updatePlanItem(sessionId, id, text),
+      togglePlanItem: (id) => actions.togglePlanItem(sessionId, id),
+      removePlanItem: (id) => actions.removePlanItem(sessionId, id),
+      addPlanItem: (text) => actions.addPlanItem(sessionId, text),
+      clearPlan: () => actions.clearPlan(sessionId),
+      approvePlan: () => actions.approvePlan(sessionId),
     }
-    // session object identity changes when reducer creates a new session;
-    // actions are stable via useCallback upstream.
-  }, [session, sessionId, ctx])
+  }, [session, sessionId])
 }
-
-// Internal helper for tests — exports the stable empty session shape so
-// provider tests can assert that an unknown session id returns the
-// documented defaults. Not part of the public brief contract.
-export const __test__ = { EMPTY_SESSION, ACTIVE_RUN_STATUSES }

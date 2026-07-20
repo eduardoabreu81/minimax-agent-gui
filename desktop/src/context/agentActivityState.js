@@ -133,7 +133,7 @@ export function agentActivityReducer(state, action) {
     case 'run_failed': {
       const { sessionId, error, options } = action
       const now = nowFrom(action)
-      const unread = !!(options && options.unread)
+      const unread = !!(options && options.unread) || !!action.unread
       return updateSession(state, sessionId, (session) => ({
         ...session,
         status: 'error',
@@ -279,7 +279,7 @@ export function agentActivityReducer(state, action) {
     }
 
     case 'attention_resolved': {
-      const { sessionId, resolution } = action
+      const { sessionId } = action
       const now = nowFrom(action)
       return updateSession(state, sessionId, (session) => ({
         ...session,
@@ -291,9 +291,6 @@ export function agentActivityReducer(state, action) {
           thinking: { ...session.activity.thinking, active: true },
         },
       }))
-      // resolution is intentionally unused at the reducer level — the
-      // backend applies the allow/deny decision and continues the turn.
-      void resolution
     }
 
     case 'attention_expired': {
@@ -497,11 +494,26 @@ export function selectSession(state, sessionId) {
   return state[sessionId] || null
 }
 
-const STATUS_PRIORITY = ['needs_input', 'error', 'running', 'completed', 'idle']
+// Priority: needs_input > (error if unread) > (completed if unread) > running > idle.
+//
+// `needs_input` always wins because the user must answer before any other
+// state matters. An unread error outranks a still-running sibling because
+// it represents a fresh failure the user hasn't acknowledged yet — same
+// for unread completions. Acknowledged (read) errors and completed turns
+// do NOT outrank running; once the badge is cleared, the chip stops
+// dwelling on the past failure and surfaces the live run instead.
+const STATUS_PRIORITY = ['needs_input', 'error', 'completed', 'running', 'idle']
 
 function deriveStatus(sessions) {
   for (const status of STATUS_PRIORITY) {
-    if (sessions.some((s) => s.status === status)) return status
+    const hit = sessions.find((s) => {
+      if (s.status !== status) return false
+      // error and completed only count toward global priority when the
+      // session is unread (the user hasn't acknowledged the badge yet).
+      if ((status === 'error' || status === 'completed') && !s.unread) return false
+      return true
+    })
+    if (hit) return status
   }
   return 'idle'
 }
