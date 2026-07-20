@@ -130,6 +130,12 @@ export default function ImagePanel() {
     () => (typeof localStorage !== 'undefined' && localStorage.getItem('image-style-sheet')) || ''
   )
   const [galleryLoading, setGalleryLoading] = useState(false)
+  const [message, setMessage] = useState('')
+  useEffect(() => {
+    if (!message) return
+    const id = setTimeout(() => setMessage(''), 2500)
+    return () => clearTimeout(id)
+  }, [message])
 
   const { register } = useSessionProtection()
 
@@ -225,6 +231,30 @@ export default function ImagePanel() {
       setGallery(images)
     } catch (e) { /* ignore */ }
     setGalleryLoading(false)
+  }
+
+  const handleDeleteImage = async (item) => {
+    if (!confirm(t('image.confirmDelete', { name: item.name }))) return
+    let res
+    try {
+      res = await apiFetch(
+        `/api/generations/image?path=${encodeURIComponent(item.path)}`,
+        { method: 'DELETE' }
+      )
+    } catch (e) {
+      setMessage(t('image.toastDeleteFailed', { message: e.message }))
+      return
+    }
+    if (res.status === 200 || res.status === 404) {
+      setGallery((prev) => prev.filter((i) => i.path !== item.path))
+      setMessage(t('image.toastDeleted', { name: item.name }))
+    } else {
+      let detail = ''
+      try { detail = (await res.json()).detail || '' } catch { /* ignore */ }
+      setMessage(t('image.toastDeleteFailed', {
+        message: detail || `HTTP ${res.status}`,
+      }))
+    }
   }
 
   // Read a File as a base64 data URL — same approach used by VideoPanel.
@@ -796,16 +826,35 @@ export default function ImagePanel() {
           window.dispatchEvent(new CustomEvent('minimax:nav-to-video'))
         }
       }}
+      onDeleteImage={handleDeleteImage}
     />
   )
 
   return (
-    <MediaPanelLayout
-      controlsWidth={360}
-      topBar={topBar}
-      galleryHeader={galleryHeader}
-      controls={controls}
-      canvas={canvas}
-    />
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      {message && (
+        <div
+          role="status"
+          style={{
+            padding: '6px 12px',
+            fontSize: 12,
+            background: 'hsl(var(--primary) / 0.12)',
+            color: 'var(--app-text)',
+            borderBottom: '1px solid var(--app-border)',
+          }}
+        >
+          {message}
+        </div>
+      )}
+      <div style={{ flex: 1, minHeight: 0 }}>
+        <MediaPanelLayout
+          controlsWidth={360}
+          topBar={topBar}
+          galleryHeader={galleryHeader}
+          controls={controls}
+          canvas={canvas}
+        />
+      </div>
+    </div>
   )
 }
