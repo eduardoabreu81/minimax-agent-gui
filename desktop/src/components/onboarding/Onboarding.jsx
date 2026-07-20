@@ -1,55 +1,23 @@
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   X, ChevronRight, ChevronLeft, MessageSquare, Code2, Layout,
   Volume2, Image, Music, Video, Sparkles, Check
 } from 'lucide-react'
 
+// Step ids stay in code (we map them to i18n keys at render time).
+// Icons + accent colors live in JSX so they don't go through i18n.
 const STEPS = [
-  {
-    id: 'welcome',
-    title: 'Welcome to MiniMax Studio',
-    description: 'Your all-in-one platform for MiniMax Token Plan. Chat, generate media, code, and manage tasks — all in one place.',
-    icon: Sparkles,
-    color: 'text-primary',
-  },
-  {
-    id: 'chat',
-    title: 'Agent Chat',
-    description: 'Chat with the MiniMax AI agent. Ask questions, get help with coding, or brainstorm ideas. Use Ctrl+Enter to send messages.',
-    icon: MessageSquare,
-    color: 'text-blue-500',
-  },
-  {
-    id: 'media',
-    title: 'Media Generation',
-    description: 'Generate text-to-speech, images, music, and videos using MiniMax APIs. Switch between panels using the sidebar.',
-    icon: Image,
-    color: 'text-purple-500',
-  },
-  {
-    id: 'code',
-    title: 'Coding Workspace',
-    description: 'Explore files, edit code with syntax highlighting, use the integrated terminal, and manage Git — all without leaving the app.',
-    icon: Code2,
-    color: 'text-green-500',
-  },
-  {
-    id: 'tasks',
-    title: 'Task Board',
-    description: 'Organize your work with a Kanban board. Create tasks, track progress with subtasks, and manage priorities.',
-    icon: Layout,
-    color: 'text-amber-500',
-  },
-  {
-    id: 'tips',
-    title: 'Pro Tips',
-    description: 'Press Ctrl+K to open the Command Palette from anywhere. Use Ctrl+Enter to send chat messages. Your tasks are saved automatically.',
-    icon: Sparkles,
-    color: 'text-primary',
-  },
+  { id: 'welcome', icon: Sparkles, color: 'text-primary' },
+  { id: 'chat',    icon: MessageSquare, color: 'text-blue-500' },
+  { id: 'media',   icon: Image, color: 'text-purple-500' },
+  { id: 'code',    icon: Code2, color: 'text-green-500' },
+  { id: 'tasks',   icon: Layout, color: 'text-amber-500' },
+  { id: 'tips',    icon: Sparkles, color: 'text-primary' },
 ]
 
 export default function Onboarding({ onComplete }) {
+  const { t } = useTranslation()
   const [isOpen, setIsOpen] = useState(false)
   const [currentStep, setCurrentStep] = useState(0)
 
@@ -67,11 +35,8 @@ export default function Onboarding({ onComplete }) {
   }
 
   const handleNext = () => {
-    if (currentStep < STEPS.length - 1) {
-      setCurrentStep(s => s + 1)
-    } else {
-      handleClose()
-    }
+    if (currentStep === STEPS.length - 1) handleClose()
+    else setCurrentStep(s => Math.min(STEPS.length - 1, s + 1))
   }
 
   const handlePrev = () => {
@@ -104,14 +69,15 @@ export default function Onboarding({ onComplete }) {
             <button
               onClick={handleClose}
               className="p-1.5 rounded-lg hover:bg-surface text-muted-foreground transition-colors"
+              title={t('onboarding.wizardClose')}
             >
               <X size={16} />
             </button>
           </div>
 
           {/* Content */}
-          <h2 className="text-lg font-semibold text-foreground mb-2">{step.title}</h2>
-          <p className="text-sm text-muted-foreground leading-relaxed mb-8">{step.description}</p>
+          <h2 className="text-lg font-semibold text-foreground mb-2">{t(`onboarding.${step.id}`)}</h2>
+          <p className="text-sm text-muted-foreground leading-relaxed mb-8">{t(`onboarding.${step.id}Desc`)}</p>
 
           {/* Step indicators */}
           <div className="flex items-center gap-1.5 mb-8">
@@ -132,7 +98,7 @@ export default function Onboarding({ onComplete }) {
               onClick={handleClose}
               className="text-xs text-muted-foreground hover:text-foreground transition-colors"
             >
-              Skip tour
+              {t('onboarding.skip')}
             </button>
             <div className="flex items-center gap-2">
               {currentStep > 0 && (
@@ -140,7 +106,7 @@ export default function Onboarding({ onComplete }) {
                   onClick={handlePrev}
                   className="px-4 py-2 bg-surface border border-border hover:border-primary text-foreground rounded-lg text-xs font-medium transition-colors flex items-center gap-1"
                 >
-                  <ChevronLeft size={14} /> Back
+                  <ChevronLeft size={14} /> {t('onboarding.back')}
                 </button>
               )}
               <button
@@ -148,9 +114,9 @@ export default function Onboarding({ onComplete }) {
                 className="px-4 py-2 bg-primary hover:bg-primary-hover text-white rounded-lg text-xs font-medium transition-colors flex items-center gap-1"
               >
                 {currentStep === STEPS.length - 1 ? (
-                  <><Check size={14} /> Get Started</>
+                  <><Check size={14} /> {t('onboarding.getStarted')}</>
                 ) : (
-                  <><>Next</> <ChevronRight size={14} /></>
+                  <>{t('onboarding.next')} <ChevronRight size={14} /></>
                 )}
               </button>
             </div>

@@ -24,8 +24,8 @@ const VIDEO_MODES = [
 ]
 
 const VIDEO_MODELS = [
-  { id: 'MiniMax-Hailuo-2.3',      label: 'Hailuo 2.3' },
-  { id: 'MiniMax-Hailuo-2.3-Fast', label: 'Hailuo 2.3 Fast' },
+  { id: 'MiniMax-Hailuo-2.3',      labelKey: 'video.modelHailuo23' },
+  { id: 'MiniMax-Hailuo-2.3-Fast', labelKey: 'video.modelHailuo23Fast' },
 ]
 
 // Camera commands — full list of 18 motions the mockup hints at
@@ -40,13 +40,13 @@ const CAMERA_COMMANDS = [
 ]
 
 const DURATIONS = [
-  { id: '6',  label: '6s' },
-  { id: '10', label: '10s' },
+  { id: '6',  labelKey: 'video.duration6s' },
+  { id: '10', labelKey: 'video.duration10s' },
 ]
 
 const RESOLUTIONS = [
-  { id: '768P',  label: '768P' },
-  { id: '1080P', label: '1080P' },
+  { id: '768P',  labelKey: 'video.resolution768P' },
+  { id: '1080P', labelKey: 'video.resolution1080P' },
 ]
 
 // Per-mode frame requirements — drives which dropzones show
@@ -102,8 +102,7 @@ function Toggle({ checked, onChange }) {
 
 // Image dropzone — shows placeholder or the picked filename. On click
 // opens a file picker; supports drag/drop too.
-function FrameDropzone({ file, onPick }) {
-  const inputRef = useRef(null)
+function FrameDropzone({ file, onPick, t }) {
   const onDrop = (e) => {
     e.preventDefault()
     const f = e.dataTransfer?.files?.[0]
@@ -147,7 +146,7 @@ function FrameDropzone({ file, onPick }) {
         <>
           <Upload size={20} />
           <span style={{ fontSize: 11, textAlign: 'center', lineHeight: 1.4 }}>
-            Drop an image or <span style={{ color: 'hsl(var(--primary))' }}>browse</span>
+            {t('video.frameDrop')}
           </span>
         </>
       )}
@@ -164,25 +163,38 @@ function FrameDropzone({ file, onPick }) {
 
 // Camera commands multiselect — pill-tags inside the trigger + a popup
 // with a searchable checkbox list. Closing the popup applies the picks.
+//
+// Each row shows a localized label (left) and a hover tooltip with a
+// one-sentence description of what the shot does. The English token
+// (e.g. "Push in") is the value sent to the model in the prompt as
+// `[Push in]` — see generate() below — so we keep the array as the
+// source of truth and look up i18n labels/descriptions by token.
 function CameraCommandMultiSelect({ selected, onChange }) {
+  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
+  const [hovered, setHovered] = useState(null)
   const ref = useRef(null)
 
   useEffect(() => {
     if (!open) return
     const handler = (e) => {
-      if (ref.current && !ref.current.contains(e.target)) setOpen(false)
+      if (ref.current && !ref.current.contains(e.target)) { setOpen(false); setHovered(null) }
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [open])
 
   const filtered = useMemo(() => {
-    if (!search.trim()) return CAMERA_COMMANDS
-    const q = search.toLowerCase()
-    return CAMERA_COMMANDS.filter(c => c.toLowerCase().includes(q))
-  }, [search])
+    const q = search.trim().toLowerCase()
+    if (!q) return CAMERA_COMMANDS
+    return CAMERA_COMMANDS.filter(c => {
+      // Match against the English token AND the localized label so
+      // searching "푸시" finds "Push in" in Korean mode.
+      const label = (t(`video.cameraCommands.items.${c}`) || '').toLowerCase()
+      return c.toLowerCase().includes(q) || label.includes(q)
+    })
+  }, [search, t])
 
   const toggle = (cmd) => {
     if (selected.includes(cmd)) {
@@ -195,7 +207,8 @@ function CameraCommandMultiSelect({ selected, onChange }) {
   return (
     <div ref={ref} style={{ position: 'relative' }}>
       <label style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--app-text-2)', display: 'block', marginBottom: 7 }}>
-        Camera commands <span style={{ fontWeight: 400 }}>· insert into prompt</span>
+        {t('video.cameraCommandsTitle')}
+        <span style={{ fontWeight: 400 }}> · {t('video.cameraCommandsLabel')}</span>
       </label>
       <button
         onClick={() => setOpen(!open)}
@@ -209,7 +222,7 @@ function CameraCommandMultiSelect({ selected, onChange }) {
         }}
       >
         {selected.length === 0 ? (
-          <span style={{ fontSize: 12, color: 'var(--app-text-2)', flex: 1 }}>Pick camera commands…</span>
+          <span style={{ fontSize: 12, color: 'var(--app-text-2)', flex: 1 }}>{t('video.cameraCommandsPlaceholder')}</span>
         ) : (
           selected.map(cmd => (
             <span
@@ -239,7 +252,7 @@ function CameraCommandMultiSelect({ selected, onChange }) {
           border: '0.5px solid var(--app-border)',
           borderRadius: 10, zIndex: 50,
           boxShadow: '0 14px 36px rgba(0,0,0,0.45)',
-          maxHeight: 280, display: 'flex', flexDirection: 'column',
+          maxHeight: 320, display: 'flex', flexDirection: 'column',
         }}>
           <div style={{ padding: 8, borderBottom: '0.5px solid var(--app-border)' }}>
             <div style={{ position: 'relative' }}>
@@ -248,7 +261,7 @@ function CameraCommandMultiSelect({ selected, onChange }) {
                 autoFocus
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search commands…"
+                placeholder={t('video.searchCommands')}
                 style={{
                   width: '100%',
                   background: 'var(--app-surface)',
@@ -260,27 +273,37 @@ function CameraCommandMultiSelect({ selected, onChange }) {
               />
             </div>
           </div>
-          <div style={{ overflowY: 'auto', padding: 4 }}>
+          <div style={{ overflowY: 'auto', padding: 4, flex: 1, minHeight: 0 }}>
             {filtered.length === 0 && (
               <div style={{ padding: 12, fontSize: 11, color: 'var(--app-text-2)', textAlign: 'center' }}>
-                No matches
+                {t('video.cameraCommandsNoMatches')}
               </div>
             )}
             {filtered.map(cmd => {
               const isSelected = selected.includes(cmd)
+              const desc = t(`video.cameraCommands.descriptions.${cmd}`)
+              const localizedLabel = t(`video.cameraCommands.items.${cmd}`)
+              // Show the localized label; keep the bracketed English
+              // token visible as a small tag so the user can confirm
+              // what will go into the prompt.
+              const showLabel = localizedLabel && localizedLabel !== cmd
               return (
                 <button
                   key={cmd}
                   onClick={() => toggle(cmd)}
+                  onMouseEnter={() => setHovered(cmd)}
+                  onMouseLeave={() => setHovered(prev => (prev === cmd ? null : prev))}
+                  title={desc || cmd}
                   style={{
                     width: '100%',
                     display: 'flex', alignItems: 'center', gap: 8,
                     padding: '6px 9px', border: 'none', borderRadius: 6,
                     cursor: 'pointer', textAlign: 'left',
-                    background: isSelected ? 'hsl(var(--primary) / 0.12)' : 'transparent',
+                    background: isSelected ? 'hsl(var(--primary) / 0.12)' : (hovered === cmd ? 'var(--app-surface)' : 'transparent'),
                     color: isSelected ? 'hsl(var(--primary))' : 'var(--app-text)',
                     fontSize: 11.5, fontWeight: 500,
                     fontFamily: 'JetBrains Mono, monospace',
+                    position: 'relative',
                   }}
                 >
                   <div style={{
@@ -291,11 +314,29 @@ function CameraCommandMultiSelect({ selected, onChange }) {
                   }}>
                     {isSelected && <Check size={10} color="#fff" strokeWidth={3} />}
                   </div>
-                  <span>[{cmd}]</span>
+                  <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {showLabel ? `${localizedLabel} ` : ''}
+                    <span style={{ opacity: 0.65 }}>[{cmd}]</span>
+                  </span>
                 </button>
               )
             })}
           </div>
+          {open && hovered && (
+            <div style={{
+              padding: '6px 9px',
+              borderTop: '0.5px solid var(--app-border)',
+              fontSize: 10.5, color: 'var(--app-text-2)',
+              background: 'var(--app-surface)',
+              flexShrink: 0,
+            }}>
+              <strong style={{ color: 'var(--app-text)', fontWeight: 600, fontFamily: 'JetBrains Mono, monospace' }}>
+                [{hovered}]
+              </strong>
+              {' — '}
+              {t(`video.cameraCommands.descriptions.${hovered}`) || hovered}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -360,16 +401,17 @@ function PlayerControls() {
 // Render queue — visual skeleton only. Backend doesn't track multiple
 // in-flight tasks yet, so this is a placeholder showing the layout.
 function RenderQueueSkeleton() {
+  const { t } = useTranslation()
   return (
     <div style={{ marginTop: 26 }}>
-      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--app-text-2)', marginBottom: 12 }}>Render queue</div>
+      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--app-text-2)', marginBottom: 12 }}>{t('video.renderQueue')}</div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 13, padding: 12, border: '1px solid hsl(var(--primary) / 0.35)', borderRadius: 11, background: 'hsl(var(--primary) / 0.06)', marginBottom: 10 }}>
         <div style={{ width: 64, height: 40, flexShrink: 0, borderRadius: 7, background: 'linear-gradient(135deg,#3b0764,#a855f7)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <RefreshCw size={16} color="#fff" />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--app-text-2)' }}>
-            Render preview
+            {t('video.renderPreview')}
           </div>
           <div style={{ marginTop: 7, height: 5, borderRadius: 3, background: 'var(--app-surface)', overflow: 'hidden' }}>
             <div style={{ width: '0%', height: '100%', background: 'hsl(var(--primary))' }} />
@@ -378,9 +420,9 @@ function RenderQueueSkeleton() {
         <span style={{ fontSize: 11, color: 'hsl(var(--primary))', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>—</span>
       </div>
       <div style={{ fontSize: 11, color: 'var(--app-text-2)', padding: '14px 12px', textAlign: 'center', border: '1px dashed var(--app-border)', borderRadius: 11, lineHeight: 1.5 }}>
-        Backend render-queue tracking — coming next round.
+        {t('video.renderQueueNotice')}
         <br />
-        <span style={{ opacity: 0.7 }}>For now, generated videos land in History below.</span>
+        <span style={{ opacity: 0.7 }}>{t('video.renderQueueHint')}</span>
       </div>
     </div>
   )
@@ -394,19 +436,19 @@ function VideoHistory({ history, historyLoading, onRefresh, onShowMeta }) {
   return (
     <div style={{ marginTop: 26 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--app-text-2)' }}>History</span>
+        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--app-text-2)' }}>{t('video.historyTitle')}</span>
         <button
           onClick={onRefresh}
           disabled={historyLoading}
           style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--app-text-2)', display: 'flex', padding: 2 }}
-          title="Refresh"
+          title={t('video.refresh')}
         >
           <RefreshCw size={12} className={historyLoading ? 'animate-spin' : ''} />
         </button>
       </div>
       {history.length === 0 ? (
         <div style={{ fontSize: 11, color: 'var(--app-text-2)', padding: '14px 12px', textAlign: 'center', border: '1px dashed var(--app-border)', borderRadius: 11 }}>
-          No generated videos yet
+          {t('video.empty')}
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 10 }}>
@@ -503,12 +545,12 @@ export default function VideoPanel() {
   const { register } = useSessionProtection()
 
   useEffect(() => {
-    register('video-loading', loading || !!taskId, 'Video generation in progress')
-  }, [loading, taskId, register])
+    register('video-loading', loading || !!taskId, t('video.sessionInProgress', { defaultValue: 'Video generation in progress' }))
+  }, [loading, taskId, register, t])
 
   useEffect(() => {
-    register('video-prompt', prompt.trim().length > 0, 'Unsaved video prompt')
-  }, [prompt, register])
+    register('video-prompt', prompt.trim().length > 0, t('video.unsavedPrompt', { defaultValue: 'Unsaved video prompt' }))
+  }, [prompt, register, t])
 
   const fetchHistory = async () => {
     setHistoryLoading(true)
@@ -652,7 +694,7 @@ export default function VideoPanel() {
       const data = await res.json()
       if (data.success && data.task_id) {
         setTaskId(data.task_id)
-        setStatus('Task created. Waiting for completion...')
+        setStatus(t('video.taskCreated'))
         if (typeof data.cost_credits === 'number' || typeof data.cost_usd === 'number') {
           setCost({ cost_credits: data.cost_credits, cost_usd: data.cost_usd })
         }
@@ -661,7 +703,7 @@ export default function VideoPanel() {
           window.dispatchEvent(new CustomEvent('minimax:media-complete'))
         }
       } else {
-        setError(data.error || data.detail || 'Video generation failed')
+        setError(data.error || data.detail || t('video.failed'))
         setLoading(false)
       }
     } catch (e) {
@@ -682,7 +724,7 @@ export default function VideoPanel() {
           const taskStatus = data.data.status
           const fileId = data.data.file_id
           if (taskStatus === 'Success' || taskStatus === ' success') {
-            setStatus('Video ready!')
+            setStatus(t('video.videoReady'))
             setProgress(100)
             setLoading(false)
             if (fileId) {
@@ -700,16 +742,16 @@ export default function VideoPanel() {
                   window.dispatchEvent(new CustomEvent('minimax:media-complete'))
                 }
               } else {
-                setError(dlData.error || 'Download failed')
+                setError(dlData.error || t('video.downloadFailed'))
               }
             }
             clearInterval(interval)
           } else if (taskStatus === 'Failed' || taskStatus === 'failed') {
-            setError('Video generation failed')
+            setError(t('video.failed'))
             setLoading(false)
             clearInterval(interval)
           } else {
-            setStatus(`Status: ${taskStatus || 'Processing'}...`)
+            setStatus(`${t('video.statusPrefix')}${taskStatus || t('video.processing')}...`)
             setProgress(prev => Math.min(prev + 10, 90))
           }
         }
@@ -740,13 +782,13 @@ export default function VideoPanel() {
             fontSize: 15, fontWeight: 600, color: 'var(--app-text)',
             whiteSpace: 'nowrap',
           }}>
-            Video
+            {t('video.title')}
           </div>
           <div style={{
             fontSize: 11.5, color: 'var(--app-text-2)',
             whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
           }}>
-            {modeConfig.title} · up to 1080P
+            {t(modeConfig.titleKey)} · {t('video.upTo1080P')}
           </div>
         </div>
       </div>
@@ -797,26 +839,26 @@ export default function VideoPanel() {
       {frames.start && frames.end && (
         <div>
           <label style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--app-text-2)', display: 'block', marginBottom: 7 }}>
-            Start &amp; end frames
+            {t('video.framesLabel')}
           </label>
           <div style={{ display: 'flex', gap: 10 }}>
-            <FrameDropzone file={firstFrame} onPick={setFirstFrame} />
-            <FrameDropzone file={lastFrame}  onPick={setLastFrame} />
+            <FrameDropzone file={firstFrame} onPick={setFirstFrame} t={t} />
+            <FrameDropzone file={lastFrame}  onPick={setLastFrame}  t={t} />
           </div>
         </div>
       )}
       {frames.start && !frames.end && (
         <div>
           <label style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--app-text-2)', display: 'block', marginBottom: 7 }}>
-            First frame
+            {t('video.firstFrame')}
           </label>
-          <FrameDropzone file={firstFrame} onPick={setFirstFrame} />
+          <FrameDropzone file={firstFrame} onPick={setFirstFrame} t={t} />
         </div>
       )}
       {frames.subject && (
         <div>
           <label style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--app-text-2)', display: 'block', marginBottom: 7 }}>
-            Subject reference
+            {t('video.subjectReference')}
           </label>
           {attachedAnchors.length > 0 ? (
             <div style={{
@@ -830,7 +872,7 @@ export default function VideoPanel() {
               <span>{t('anchor.lockedByAnchors', { defaultValue: 'Referenced by anchor(s)' })}: <strong>{attachedAnchors.map(a => a.name).join(', ')}</strong></span>
             </div>
           ) : (
-            <FrameDropzone file={subjectImage} onPick={setSubjectImage} />
+            <FrameDropzone file={subjectImage} onPick={setSubjectImage} t={t} />
           )}
         </div>
       )}
@@ -838,7 +880,7 @@ export default function VideoPanel() {
       {/* Prompt — mockup L508-515 */}
       <div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 7 }}>
-          <label style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--app-text-2)' }}>Prompt</label>
+          <label style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--app-text-2)' }}>{t('video.promptLabel')}</label>
           <span style={{
             fontSize: 11, color: prompt.length > 2000 ? 'hsl(var(--error))' : 'var(--app-text-2)',
             fontVariantNumeric: 'tabular-nums',
@@ -849,7 +891,7 @@ export default function VideoPanel() {
         <textarea
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
-          placeholder="Drone shot flying over neon-lit streets at night [Push in], rain reflections, cinematic."
+          placeholder={t('video.promptPlaceholder')}
           rows={4}
           style={{
             width: '100%',
@@ -869,7 +911,7 @@ export default function VideoPanel() {
       {/* Model — single dropdown — mockup L530-534 */}
       <div>
         <label style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--app-text-2)', display: 'block', marginBottom: 7 }}>
-          Model
+          {t('video.modelLabel')}
         </label>
         <div style={{ position: 'relative' }}>
           <select
@@ -884,7 +926,7 @@ export default function VideoPanel() {
               cursor: 'pointer', outline: 'none', appearance: 'none',
             }}
           >
-            {VIDEO_MODELS.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+            {VIDEO_MODELS.map(m => <option key={m.id} value={m.id}>{t(m.labelKey)}</option>)}
           </select>
           <ChevronDown size={12} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--app-text-2)' }} />
         </div>
@@ -893,7 +935,7 @@ export default function VideoPanel() {
       {/* Duration — mockup L536-543 */}
       <div>
         <label style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--app-text-2)', display: 'block', marginBottom: 7 }}>
-          Duration
+          {t('video.durationLabel')}
         </label>
         <div style={{ display: 'flex', gap: 7 }}>
           {DURATIONS.map(d => {
@@ -911,7 +953,7 @@ export default function VideoPanel() {
                   fontSize: 12, fontWeight: active ? 600 : 500,
                   cursor: 'pointer', transition: 'all 0.15s',
                 }}
-              >{d.label}</button>
+              >{t(d.labelKey)}</button>
             )
           })}
         </div>
@@ -920,7 +962,7 @@ export default function VideoPanel() {
       {/* Resolution — mockup L545-552 */}
       <div>
         <label style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--app-text-2)', display: 'block', marginBottom: 7 }}>
-          Resolution
+          {t('video.resolutionLabel')}
         </label>
         <div style={{ display: 'flex', gap: 7 }}>
           {RESOLUTIONS.map(r => {
@@ -938,7 +980,7 @@ export default function VideoPanel() {
                   fontSize: 12, fontWeight: active ? 600 : 500,
                   cursor: 'pointer', transition: 'all 0.15s',
                 }}
-              >{r.label}</button>
+              >{t(r.labelKey)}</button>
             )
           })}
         </div>
@@ -947,8 +989,8 @@ export default function VideoPanel() {
       {/* Prompt optimizer — mockup L554-558 */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
         <div>
-          <div style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--app-text)' }}>Prompt optimizer</div>
-          <div style={{ fontSize: 11, color: 'var(--app-text-2)' }}>Auto-enhance the prompt before rendering</div>
+          <div style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--app-text)' }}>{t('video.promptOptimizer')}</div>
+          <div style={{ fontSize: 11, color: 'var(--app-text-2)' }}>{t('video.promptOptimizerHint')}</div>
         </div>
         <Toggle checked={promptOptimizer} onChange={setPromptOptimizer} />
       </div>
@@ -1021,8 +1063,8 @@ export default function VideoPanel() {
         }}
       >
         {loading
-          ? <><Loader2 size={14} className="animate-spin" /> Submitting…</>
-          : <><Video size={16} /> Generate Video</>}
+          ? <><Loader2 size={14} className="animate-spin" /> {t('video.submitting')}</>
+          : <><Video size={16} /> {t('video.generate')}</>}
       </button>
     </>
   )

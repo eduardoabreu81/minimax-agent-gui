@@ -56,7 +56,7 @@ export default function AgentChatPanel({
               </button>
               <div className="border-t border-border my-1" />
               {chat.conversations.length === 0 && (
-                <p className="px-3 py-2 text-xs text-muted-foreground">No previous code chats</p>
+                <p className="px-3 py-2 text-xs text-muted-foreground">{t('coding.noPreviousCodeChats')}</p>
               )}
               {chat.conversations.map((conv) => (
                 <div
@@ -66,12 +66,12 @@ export default function AgentChatPanel({
                 >
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-medium text-foreground truncate">{conv.title}</p>
-                    <p className="text-[10px] text-muted-foreground">{conv.message_count} messages</p>
+                    <p className="text-[10px] text-muted-foreground">{t('chat.messageCount', { count: conv.message_count })}</p>
                   </div>
                   <button
                     onClick={(e) => chat.deleteConversation(e, conv.id)}
                     className="p-1 rounded hover:bg-error/10 text-muted-foreground hover:text-error transition-colors"
-                    title="Delete"
+                  title={t('coding.delete')}
                   >
                     <Trash2 size={10} />
                   </button>
@@ -85,9 +85,9 @@ export default function AgentChatPanel({
             onClick={() => setShowEditorDrawer(!showEditorDrawer)}
             className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 ${showEditorDrawer ? 'bg-primary/10 text-primary' : 'bg-surface border border-border hover:border-primary text-muted-foreground'}`}
           >
-            <Code2 size={12} /> Editor
+            <Code2 size={12} /> {t('coding.editorButton')}
           </button>
-          <button onClick={chat.startNewChat} className="p-2 rounded-lg hover:bg-surface text-muted-foreground hover:text-foreground transition-colors" title="New chat">
+          <button onClick={chat.startNewChat} className="p-2 rounded-lg hover:bg-surface text-muted-foreground hover:text-foreground transition-colors" title={t('coding.newChat')}>
             <MessageSquarePlus size={14} />
           </button>
           <div className={`w-2 h-2 rounded-full ${chat.isConnected ? 'bg-success' : 'bg-error'}`} />
@@ -99,8 +99,8 @@ export default function AgentChatPanel({
         {chat.messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-center">
             <Bot size={48} className="mb-4 opacity-30" />
-            <p className="text-sm">Ask me about your code</p>
-            <p className="text-xs mt-1 opacity-60">I can see the file you have open</p>
+            <p className="text-sm">{t('coding.askAboutCode')}</p>
+            <p className="text-xs mt-1 opacity-60">{t('coding.canSeeFile')}</p>
           </div>
         )}
 
@@ -227,7 +227,7 @@ export default function AgentChatPanel({
                 onClick={() => chat.fileInputRef.current?.click()}
                 disabled={!chat.isConnected}
                 className="px-3 py-3 bg-surface hover:bg-surface-hover border border-border disabled:opacity-40 text-foreground rounded-xl transition-colors flex items-center justify-center"
-                title="Attach file or image"
+                title={t('coding.attachFile')}
               >
                 <Paperclip size={16} />
               </button>
@@ -310,7 +310,7 @@ export default function AgentChatPanel({
                   ) : (
                     <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
                       <Code2 size={32} className="mb-3 opacity-20" />
-                      <p className="text-xs">Select a file to edit</p>
+                      <p className="text-xs">{t('coding.selectFileToEdit')}</p>
                     </div>
                   )}
                 </div>

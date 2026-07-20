@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import { Power, RotateCcw, Wifi, WifiOff } from 'lucide-react'
 
 export default function XTermTerminal({ onReady }) {
+  const { t } = useTranslation()
   const containerRef = useRef(null)
   const terminalRef = useRef(null)
   const fitAddonRef = useRef(null)
@@ -167,14 +169,14 @@ export default function XTermTerminal({ onReady }) {
             onClick={connect}
             disabled={isConnected || isConnecting}
             className="p-1 rounded hover:bg-[#333] disabled:opacity-30 transition-colors"
-            title="Connect"
+            title={t('terminal.connect')}
           >
             <Power size={12} className="text-gray-400" />
           </button>
           <button
             onClick={restart}
             className="p-1 rounded hover:bg-[#333] transition-colors"
-            title="Restart"
+            title={t('terminal.restart')}
           >
             <RotateCcw size={12} className="text-gray-400" />
           </button>

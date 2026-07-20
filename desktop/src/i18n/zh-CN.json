@@ -100,7 +100,13 @@
     "messageCount": "",
     "contextTooLarge": "",
     "deleteConversation": "",
-    "keyboardHint": ""
+    "keyboardHint": "",
+    "renameConv": "",
+    "deleteConv": "",
+    "stopActiveAgent": "",
+    "stopActiveDescription": "",
+    "stopAndContinue": "",
+    "keepRunning": ""
   },
   "palette": {
     "placeholder": "搜索任何内容...",
@@ -191,7 +197,24 @@
     "noPreviousChats": "",
     "registerUnsaved": "",
     "previewHint": "",
-    "goUp": ""
+    "goUp": "",
+    "rename": "",
+    "delete": "",
+    "newChat": "",
+    "openInBrowserButton": "",
+    "unsupportedType": "",
+    "downloadHint": "",
+    "reject": "",
+    "canSeeFile": "",
+    "selectFileToEdit": "",
+    "attachFile": "",
+    "noPreviousCodeChats": "",
+    "editorButton": "",
+    "goToWorkspaceRoot": "",
+    "stopActiveAgent": "",
+    "stopActiveDescription": "",
+    "stopAndContinue": "",
+    "keepRunning": ""
   },
   "tasks": {
     "title": "任务看板",
@@ -787,7 +810,9 @@
     "create": "创建锚点",
     "confirmDelete": "删除锚点\"{name}\"？此操作不可撤销。",
     "capExceeded": "每次生成最多 {cap} 个 {type} 锚点",
-    "lockedByAnchors": ""
+    "lockedByAnchors": "",
+    "editAnchor": "",
+    "deleteAnchor": ""
   },
   "quota": {
     "connectingToPlan": "",
@@ -998,7 +1023,61 @@
     "title": "",
     "taskCreated": "",
     "promptOptimizerHint": "",
-    "frameDrop": ""
+    "frameDrop": "",
+    "upTo1080P": "",
+    "submitting": "",
+    "generate": "",
+    "cameraCommandsTitle": "",
+    "duration6s": "",
+    "duration10s": "",
+    "resolution768P": "",
+    "resolution1080P": "",
+    "modelHailuo23": "",
+    "modelHailuo23Fast": "",
+    "cameraCommands": {
+      "items": {
+        "Push in": "",
+        "Push out": "",
+        "Pan left": "",
+        "Pan right": "",
+        "Zoom in": "",
+        "Zoom out": "",
+        "Tracking shot": "",
+        "Static shot": "",
+        "Tilt up": "",
+        "Tilt down": "",
+        "Crane up": "",
+        "Crane down": "",
+        "Dolly in": "",
+        "Dolly out": "",
+        "Handheld": "",
+        "Aerial": "",
+        "Orbit": "",
+        "Roll": ""
+      },
+      "descriptions": {
+        "Push in": "",
+        "Push out": "",
+        "Pan left": "",
+        "Pan right": "",
+        "Zoom in": "",
+        "Zoom out": "",
+        "Tracking shot": "",
+        "Static shot": "",
+        "Tilt up": "",
+        "Tilt down": "",
+        "Crane up": "",
+        "Crane down": "",
+        "Dolly in": "",
+        "Dolly out": "",
+        "Handheld": "",
+        "Aerial": "",
+        "Orbit": "",
+        "Roll": ""
+      }
+    },
+    "sessionInProgress": "",
+    "unsavedPrompt": ""
   },
   "statusBar": {
     "fiveHourLimit": "",
@@ -1281,5 +1360,16 @@
     "copyJson": "Copy full JSON",
     "empty": "This generation has no saved metadata.",
     "manualUpload": "Manual upload — not persisted"
+  },
+  "recent": {
+    "saveAsVideoAnchor": "",
+    "saveAsStyle": "",
+    "deleteAriaLabel": "",
+    "imagePreviewTitle": "",
+    "audioPreviewTitle": "",
+    "videoPreviewTitle": "",
+    "loading": "",
+    "viewMeta": "",
+    "noMeta": ""
   }
 }

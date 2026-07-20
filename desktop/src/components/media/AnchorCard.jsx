@@ -11,11 +11,13 @@
 //   onDelete    — () => void
 
 import { Image as ImageIcon, Trash2, Pencil, Check } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { assetUrl } from '../../lib/api.js'
 
 const CARD_SIZE = 84
 
 export default function AnchorCard({ anchor, attached, onToggleAttach, onEdit, onDelete }) {
+  const { t } = useTranslation()
   const imgSrc = anchor?.image?.path
     ? assetUrl(`/api/files/raw?path=${encodeURIComponent(anchor.image.path)}`)
     : null
@@ -99,7 +101,7 @@ export default function AnchorCard({ anchor, attached, onToggleAttach, onEdit, o
         {onEdit && (
           <button
             onClick={onEdit}
-            title="Edit anchor"
+            title={t('anchor.editAnchor')}
             style={{
               width: 20, height: 20, borderRadius: 5,
               background: 'rgba(0,0,0,0.65)', color: '#fff',
@@ -112,7 +114,7 @@ export default function AnchorCard({ anchor, attached, onToggleAttach, onEdit, o
         {onDelete && (
           <button
             onClick={onDelete}
-            title="Delete anchor"
+            title={t('anchor.deleteAnchor')}
             style={{
               width: 20, height: 20, borderRadius: 5,
               background: 'rgba(220,38,38,0.85)', color: '#fff',
@@ -123,7 +125,6 @@ export default function AnchorCard({ anchor, attached, onToggleAttach, onEdit, o
           ><Trash2 size={10} /></button>
         )}
       </div>
-
       {/* Hover style — can't use :hover in inline, so inject a tiny style once. */}
       <style>{`
         .anchor-card:hover .anchor-card-actions { opacity: 1 !important; }

@@ -100,7 +100,13 @@
       "reason": "Reason",
       "approve": "Approve",
       "reject": "Reject"
-    }
+    },
+    "renameConv": "Rename conversation",
+    "deleteConv": "Delete conversation",
+    "stopActiveAgent": "Stop the active agent?",
+    "stopActiveDescription": "This action will stop the current run and discard in-flight output.",
+    "stopAndContinue": "Stop and continue",
+    "keepRunning": "Keep running"
   },
   "palette": {
     "placeholder": "Type to search anything...",
@@ -191,7 +197,24 @@
     "viewGitChanges": "View workspace Git changes",
     "thinking": "Thinking...",
     "idle": "Idle",
-    "thinkingDuration": "{seconds}s"
+    "thinkingDuration": "{seconds}s",
+    "rename": "Rename",
+    "delete": "Delete",
+    "newChat": "New chat",
+    "openInBrowserButton": "Open in Browser",
+    "unsupportedType": "This file type cannot be previewed yet.",
+    "downloadHint": "You can download it or open it from the workspace folder.",
+    "reject": "Reject",
+    "canSeeFile": "I can see the file you have open",
+    "selectFileToEdit": "Select a file to edit",
+    "attachFile": "Attach file or image",
+    "noPreviousCodeChats": "No previous code chats",
+    "editorButton": "Editor",
+    "goToWorkspaceRoot": "Go to workspace root",
+    "stopActiveAgent": "Stop the active agent?",
+    "stopActiveDescription": "This action will stop the current run and discard in-flight output.",
+    "stopAndContinue": "Stop and continue",
+    "keepRunning": "Keep running"
   },
   "tasks": {
     "title": "Task Board",
@@ -1185,7 +1208,61 @@
     "processing": "Processing",
     "downloadFailed": "Download failed",
     "title": "Video",
-    "historyTitle": "History"
+    "historyTitle": "History",
+    "upTo1080P": "up to 1080P",
+    "submitting": "Submitting…",
+    "generate": "Generate Video",
+    "cameraCommandsTitle": "Camera commands",
+    "duration6s": "6s",
+    "duration10s": "10s",
+    "resolution768P": "768P",
+    "resolution1080P": "1080P",
+    "modelHailuo23": "Hailuo 2.3",
+    "modelHailuo23Fast": "Hailuo 2.3 Fast",
+    "cameraCommands": {
+      "items": {
+        "Push in": "Push in",
+        "Push out": "Push out",
+        "Pan left": "Pan left",
+        "Pan right": "Pan right",
+        "Zoom in": "Zoom in",
+        "Zoom out": "Zoom out",
+        "Tracking shot": "Tracking shot",
+        "Static shot": "Static shot",
+        "Tilt up": "Tilt up",
+        "Tilt down": "Tilt down",
+        "Crane up": "Crane up",
+        "Crane down": "Crane down",
+        "Dolly in": "Dolly in",
+        "Dolly out": "Dolly out",
+        "Handheld": "Handheld",
+        "Aerial": "Aerial",
+        "Orbit": "Orbit",
+        "Roll": "Roll"
+      },
+      "descriptions": {
+        "Push in": "Camera moves steadily toward the subject to heighten focus or tension.",
+        "Push out": "Camera pulls away from the subject to reveal more of the surrounding scene.",
+        "Pan left": "Camera rotates horizontally to the left from a fixed position.",
+        "Pan right": "Camera rotates horizontally to the right from a fixed position.",
+        "Zoom in": "Lens focal length shortens to magnify the subject without moving the camera.",
+        "Zoom out": "Lens focal length widens to take in more of the frame from a fixed position.",
+        "Tracking shot": "Camera follows alongside a moving subject, keeping it centered in frame.",
+        "Static shot": "Camera is locked off with no movement — the scene plays out within a still frame.",
+        "Tilt up": "Camera rotates upward from a fixed point.",
+        "Tilt down": "Camera rotates downward from a fixed point.",
+        "Crane up": "Camera rises vertically through space, lifting the perspective higher.",
+        "Crane down": "Camera descends vertically, lowering toward the subject or ground.",
+        "Dolly in": "Camera physically moves forward toward the subject on a track or wheels.",
+        "Dolly out": "Camera physically moves backward away from the subject on a track or wheels.",
+        "Handheld": "Operator carries the camera, adding organic shake and immediacy to the shot.",
+        "Aerial": "High vantage point sweeping over landscapes or cityscapes from above.",
+        "Orbit": "Camera circles around the subject along a curved path.",
+        "Roll": "Camera rotates around its own lens axis, tilting the horizon."
+      }
+    },
+    "sessionInProgress": "Video generation in progress",
+    "unsavedPrompt": "Unsaved video prompt"
   },
   "anchor": {
     "libraryLabel": "Anchors",
@@ -1206,7 +1283,9 @@
     "autoDescribeHint": "Generate a description via MiniMax VLM",
     "create": "Create anchor",
     "confirmDelete": "Delete anchor \"{name}\"? This cannot be undone.",
-    "lockedByAnchors": "Referenced by anchor(s)"
+    "lockedByAnchors": "Referenced by anchor(s)",
+    "editAnchor": "Edit anchor",
+    "deleteAnchor": "Delete anchor"
   },
   "generationMeta": {
     "showMeta": "View prompt & settings",
@@ -1281,5 +1360,16 @@
   },
   "limit": {
     "char": "chars"
+  },
+  "recent": {
+    "saveAsVideoAnchor": "Save as video anchor",
+    "saveAsStyle": "Save as style",
+    "deleteAriaLabel": "Delete {name}",
+    "imagePreviewTitle": "Image preview",
+    "audioPreviewTitle": "Audio preview",
+    "videoPreviewTitle": "Video preview",
+    "loading": "Loading...",
+    "viewMeta": "View prompt & settings",
+    "noMeta": "No saved metadata"
   }
 }

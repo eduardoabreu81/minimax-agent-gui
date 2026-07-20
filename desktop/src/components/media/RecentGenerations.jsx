@@ -52,7 +52,7 @@ export default function RecentGenerations({
             onClick={onRefresh}
             disabled={loading}
             className="p-1.5 rounded-lg hover:bg-surface text-muted-foreground hover:text-foreground transition-colors"
-            title="Refresh"
+            title={t('common.refresh')}
           >
             <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
           </button>
@@ -61,7 +61,7 @@ export default function RecentGenerations({
 
       {loading && (
         <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
-          <Loader2 size={12} className="animate-spin" /> Loading...
+          <Loader2 size={12} className="animate-spin" /> {t('common.loading')}
         </div>
       )}
 
@@ -94,7 +94,7 @@ export default function RecentGenerations({
                         href={mediaUrl(item.path)}
                         download={item.name}
                         className="p-1.5 bg-white/90 rounded-lg hover:bg-white transition-colors"
-                        title="Download"
+                        title={t('common.download')}
                       >
                         <Save size={12} className="text-black" />
                       </a>
@@ -102,7 +102,7 @@ export default function RecentGenerations({
                         <button
                           onClick={() => onPromoteToAnchor(item)}
                           className="p-1.5 bg-primary hover:bg-primary-hover rounded-lg transition-colors"
-                          title="Save as video anchor"
+                          title={t('recent.saveAsVideoAnchor')}
                         >
                           <Anchor size={12} className="text-white" />
                         </button>
@@ -111,7 +111,7 @@ export default function RecentGenerations({
                         <button
                           onClick={() => onSaveAsStyle(item)}
                           className="p-1.5 bg-primary hover:bg-primary-hover rounded-lg transition-colors"
-                          title="Save as style"
+                          title={t('recent.saveAsStyle')}
                         >
                           <Sparkles size={12} className="text-white" />
                         </button>
@@ -121,8 +121,8 @@ export default function RecentGenerations({
                           type="button"
                           onClick={(e) => { e.stopPropagation(); onDeleteImage(item) }}
                           className="p-1.5 bg-error hover:bg-error/90 rounded-lg transition-colors"
-                          title="Delete"
-                          aria-label={`Delete ${item.name}`}
+                          title={t('common.delete')}
+                          aria-label={t('recent.deleteAriaLabel', { name: item.name })}
                         >
                           <Trash2 size={12} className="text-white" />
                         </button>
@@ -138,7 +138,7 @@ export default function RecentGenerations({
                               : 'bg-white/40 text-black/40 cursor-not-allowed'
                           }`}
                           title={item.meta ? t('generationMeta.showMeta', { defaultValue: 'View prompt & settings' }) : t('generationMeta.noMeta', { defaultValue: 'No saved metadata' })}
-                          aria-label={item.meta ? 'View metadata' : 'No metadata'}
+                          aria-label={item.meta ? t('recent.viewMeta') : t('recent.noMeta')}
                         >
                           <Info size={12} />
                         </button>

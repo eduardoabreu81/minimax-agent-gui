@@ -993,14 +993,14 @@ const sendCodingMessage = useCallback((text, attachment) => {
                           <button
                             onClick={(e) => startRename(e, conv)}
                             className="p-1 rounded hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors"
-                            title="Rename"
+                    title={t('coding.rename')}
                           >
                             <Pencil size={10} />
                           </button>
                           <button
                             onClick={(e) => deleteCodingConversation(e, conv.id)}
                             className="p-1 rounded hover:bg-error/10 text-muted-foreground hover:text-error transition-colors"
-                            title="Delete"
+                    title={t('coding.delete')}
                           >
                             <Trash2 size={10} />
                           </button>
@@ -1016,12 +1016,12 @@ const sendCodingMessage = useCallback((text, attachment) => {
                 onClick={() => setShowEditorDrawer(!showEditorDrawer)}
                 className={`ml-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 ${showEditorDrawer ? 'bg-primary/10 text-primary' : 'bg-surface border border-border hover:border-primary text-muted-foreground'}`}
               >
-                <Code2 size={12} /> Editor
+                <Code2 size={12} /> {t('coding.editorButton')}
               </button>
             )}
           </div>
           <div className="flex items-center gap-1">
-            <button onClick={startNewCodingChat} className={isAgent ? 'p-2 rounded hover:bg-surface text-muted-foreground hover:text-foreground transition-colors' : 'p-1.5 rounded hover:bg-surface text-muted-foreground hover:text-foreground transition-colors'} title="New chat">
+            <button onClick={startNewCodingChat} className={isAgent ? 'p-2 rounded hover:bg-surface text-muted-foreground hover:text-foreground transition-colors' : 'p-1.5 rounded hover:bg-surface text-muted-foreground hover:text-foreground transition-colors'} title={t('coding.newChat')}>
               <MessageSquarePlus size={isAgent ? 14 : 12} />
             </button>
             <div className={`w-2 h-2 rounded-full ${codingConnected ? 'bg-success' : 'bg-error'}`} />
@@ -1033,8 +1033,8 @@ const sendCodingMessage = useCallback((text, attachment) => {
           {codingMessages.length === 0 && (
             <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-center">
               {isAgent ? <Bot size={48} className="mb-4 opacity-30" /> : <Sparkles size={32} className="mb-3 opacity-30" />}
-              <p className={isAgent ? 'text-sm' : 'text-xs'}>Ask me about your code</p>
-              <p className={isAgent ? 'text-xs mt-1 opacity-50' : 'text-[10px] mt-1 opacity-50'}>I can see the file you have open</p>
+              <p className={isAgent ? 'text-sm' : 'text-xs'}>{t('coding.askAboutCode')}</p>
+              <p className={isAgent ? 'text-xs mt-1 opacity-50' : 'text-[10px] mt-1 opacity-50'}>{t('coding.canSeeFile')}</p>
             </div>
           )}
 
@@ -1180,9 +1180,9 @@ const sendCodingMessage = useCallback((text, attachment) => {
                   <button
                     onClick={() => window.open(assetUrl(`/api/files/raw?path=${encodeURIComponent(activeFile)}`), '_blank')}
                     className="ml-auto mr-2 px-2 py-1 rounded text-[10px] bg-surface border border-border hover:border-primary text-muted-foreground hover:text-foreground transition-colors"
-                    title="Open this HTML file in a new browser tab"
+                    title={t('coding.openInBrowser')}
                   >
-                    Open in Browser
+                    {t('coding.openInBrowserButton')}
                   </button>
                 )}
               </div>
@@ -1197,24 +1197,24 @@ const sendCodingMessage = useCallback((text, attachment) => {
                       src={assetUrl(`/api/files/raw?path=${encodeURIComponent(selectedPreview.path)}`)}
                       alt={selectedPreview.name}
                       className="max-w-full max-h-full object-contain rounded-lg"
-                      title="Image preview"
+                      title={t('coding.imagePreview')}
                     />
                   )}
                   {selectedPreview.type === 'audio' && (
-                    <audio controls className="w-full" title="Audio preview">
+                    <audio controls className="w-full" title={t('coding.audioPreview')}>
                       <source src={assetUrl(`/api/files/raw?path=${encodeURIComponent(selectedPreview.path)}`)} />
                     </audio>
                   )}
                   {selectedPreview.type === 'video' && (
-                    <video controls className="max-w-full max-h-full rounded-lg" title="Video preview">
+                    <video controls className="max-w-full max-h-full rounded-lg" title={t('coding.videoPreview')}>
                       <source src={assetUrl(`/api/files/raw?path=${encodeURIComponent(selectedPreview.path)}`)} />
                     </video>
                   )}
                   {selectedPreview.type === 'unsupported' && (
                     <div className="text-center text-muted-foreground">
                       <FileCode size={48} className="mb-4 opacity-20 mx-auto" />
-                      <p className="text-sm">This file type cannot be previewed yet.</p>
-                      <p className="text-xs mt-1 opacity-60">You can download it or open it from the workspace folder.</p>
+                      <p className="text-sm">{t('coding.unsupportedType')}</p>
+                      <p className="text-xs mt-1 opacity-60">{t('coding.downloadHint')}</p>
                     </div>
                   )}
                 </div>
@@ -1481,7 +1481,7 @@ const sendCodingMessage = useCallback((text, attachment) => {
                   onClick={handlePermissionReject}
                   className="flex-1 py-2 bg-surface hover:bg-error/10 border border-border text-foreground hover:text-error text-xs font-medium rounded-lg transition-colors"
                 >
-                  Reject
+                  {t('coding.reject')}
                 </button>
               </div>
             </div>
@@ -1490,10 +1490,10 @@ const sendCodingMessage = useCallback((text, attachment) => {
 
         <SessionActionGuard
           open={!!guardAction}
-          title="Stop the active agent?"
-          description="This action will stop the current run and discard in-flight output."
-          confirmLabel="Stop and continue"
-          cancelLabel="Keep running"
+          title={t('coding.stopActiveAgent')}
+          description={t('coding.stopActiveDescription')}
+          confirmLabel={t('coding.stopAndContinue')}
+          cancelLabel={t('coding.keepRunning')}
           onConfirm={() => {
             if (guardAction === 'new') startNewCodingChat()
             else if (guardAction === 'load' && guardPayload) loadCodingConversation(guardPayload)

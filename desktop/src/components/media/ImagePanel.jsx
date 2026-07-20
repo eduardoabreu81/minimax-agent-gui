@@ -830,6 +830,7 @@ export default function ImagePanel() {
   // ──── canvas (right column body) ────────────────────────────────────
   const canvas = (
     <RecentGenerations
+      title={t('image.recentGenerations')}
       type="image"
       items={gallery}
       loading={galleryLoading}

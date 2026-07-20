@@ -84,6 +84,7 @@ web/backend/visitors.json
 .mavis/
 .specstory/
 .opencode/
+.oxi/
 
 # Public documentation assets — re-include despite the broad *.png and
 # docs/*.md ignores above. These are referenced by the public README and

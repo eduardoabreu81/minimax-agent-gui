@@ -661,14 +661,14 @@ export default function ChatPanel({
                     <button
                       onClick={(e) => startRename(e, conv)}
                       className="p-1 rounded hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors"
-                      title="Rename conversation"
+                      title={t('chat.renameConv')}
                     >
                       <Pencil size={10} />
                     </button>
                     <button
                       onClick={(e) => deleteConversation(e, conv.id)}
                       className="p-1 rounded hover:bg-error/10 text-muted-foreground hover:text-error transition-colors"
-                      title="Delete conversation"
+                      title={t('chat.deleteConv')}
                     >
                       <Trash2 size={10} />
                     </button>
@@ -680,10 +680,10 @@ export default function ChatPanel({
         </div>
         <button
           onClick={startNewChat}
-          title="New Chat"
+          title={t('chat.newChat')}
           className="flex items-center gap-1.5 h-8 px-3 rounded-lg border border-border text-foreground text-[12.5px] font-medium hover:border-primary/50 transition-colors"
         >
-          <Plus size={15} aria-hidden="true" /> New Chat
+          <Plus size={15} aria-hidden="true" /> {t('chat.newChat')}
         </button>
       </div>
 
@@ -884,10 +884,10 @@ export default function ChatPanel({
 
         <SessionActionGuard
           open={!!guardAction}
-          title="Stop the active agent?"
-          description="This action will stop the current run and discard in-flight output."
-          confirmLabel="Stop and continue"
-          cancelLabel="Keep running"
+          title={t('chat.stopActiveAgent')}
+          description={t('chat.stopActiveDescription')}
+          confirmLabel={t('chat.stopAndContinue')}
+          cancelLabel={t('chat.keepRunning')}
           onConfirm={() => {
             if (guardAction === 'new') startNewChat()
             else if (guardAction === 'load' && guardPayload) loadConversation(guardPayload)
