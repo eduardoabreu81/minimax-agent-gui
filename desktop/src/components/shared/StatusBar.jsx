@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { ChevronDown, ChevronRight, Loader2, Brain, AlertCircle } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { useSessionTokens } from '../../context/SessionTokensContext'
 import { useAgentActivity } from '../../context/AgentActivityContext'
 import { useTheme, THEMES } from '../../context/ThemeContext'
@@ -223,12 +224,15 @@ export const contextBarGradient = 'linear-gradient(to right, hsl(142 71% 45%) 0%
 // backend in `details.{mcp_tools_list,memory_files_list,custom_agents_list}`
 // (kept for future expansion) but the UI no longer renders them.
 
-
 function ContextChip({ model }) {
-  const { sessions, activeSessionId } = useSessionTokens()
+  const { t } = useTranslation()
+  // Visibility is controlled by the parent (App) via the
+  // SessionTokensProvider's `visibleSessionId` prop. The chip reads
+  // the bucket for that exact id — never an internal state.
+  const { sessions, visibleSessionId } = useSessionTokens()
   const { data: quotaData, items: quotaItems } = useQuota()
   const { theme: themeId } = useTheme()
-  const bucket = activeSessionId ? sessions[activeSessionId] : null
+  const bucket = visibleSessionId ? sessions[visibleSessionId] : null
   // Prefer the live picker selection (`model` prop) so the limit updates
   // the moment the user switches model in the picker, even before the
   // first usage event for the new model arrives. Falls back to the
@@ -277,7 +281,7 @@ function ContextChip({ model }) {
         ref={anchorRef}
         onClick={() => setOpen(!open)}
         className="flex items-center gap-2 h-[22px] px-2.5 rounded-md hover:bg-secondary hover:text-foreground text-muted-foreground transition-colors"
-        title="Context window & plan"
+        title={t('statusBar.contextAndPlan')}
       >
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <circle cx="12" cy="12" r="10" />
@@ -369,12 +373,12 @@ function ContextChip({ model }) {
             // of the token count, per Edu's "tamanho em bytes" ask.
             // All other rows show token counts as before.
             const rows = [
-              { key: 'messages',      label: 'Messages',      useBytes: true  },
-              { key: 'skills',        label: 'Skills',        useBytes: false },
-              { key: 'memory_files',  label: 'Memory files',  useBytes: false },
-              { key: 'custom_agents', label: 'Custom agents', useBytes: false },
-              { key: 'system_prompt', label: 'System prompt', useBytes: false },
-              { key: 'mcp_tools',     label: 'MCP tools',     useBytes: false },
+              { key: 'messages',      label: t('statusBar.breakdown.messages'),      useBytes: true  },
+              { key: 'skills',        label: t('statusBar.breakdown.skills'),        useBytes: false },
+              { key: 'memory_files',  label: t('statusBar.breakdown.memoryFiles'),  useBytes: false },
+              { key: 'custom_agents', label: t('statusBar.breakdown.customAgents'), useBytes: false },
+              { key: 'system_prompt', label: t('statusBar.breakdown.systemPrompt'), useBytes: false },
+              { key: 'mcp_tools',     label: t('statusBar.breakdown.mcpTools'),     useBytes: false },
             ]
             return (
               <div className="space-y-1 mt-1">

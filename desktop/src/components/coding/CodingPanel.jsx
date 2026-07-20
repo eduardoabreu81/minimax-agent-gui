@@ -55,6 +55,7 @@ Always be concise but thorough. Use markdown for code blocks.`
 // Quick actions removed — agent now works directly from chat context
 
 export default function CodingPanel({
+  onSessionIdChange,
   activeModel: activeModelProp,
   setActiveModel,
   thinkingEnabled: thinkingEnabledProp,
@@ -402,15 +403,16 @@ export default function CodingPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [codingSessionId])
 
-  // Register the current coding session with the StatusBar so the context
-  // chip tracks this conversation's tokens. Cleared on unmount; re-registers
-  // on every session change (loadConversation, startNewCodingChat).
-  const { setActiveSessionId, recordUsage } = useSessionTokens()
+  // Report the current coding session id to the parent (App). The parent
+  // uses it as `visibleSessionId` for SessionTokensProvider, which the
+  // StatusBar reads to pick the bucket to render. We no longer push the
+  // id into a provider-owned state — visibility is controlled from the
+  // top of the tree, so the active panel is whichever the App decides.
+  const { recordUsage } = useSessionTokens()
   useEffect(() => {
     if (!codingSessionId) return
-    setActiveSessionId(codingSessionId)
-    return () => setActiveSessionId(null)
-  }, [codingSessionId, setActiveSessionId])
+    onSessionIdChange?.(codingSessionId)
+  }, [codingSessionId, onSessionIdChange])
 
   useEffect(() => {
     if (codingWs) codingWs.close()

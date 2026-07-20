@@ -6,8 +6,16 @@ import { createContext, useContext, useState, useEffect, useCallback, useRef } f
 // includes Anthropic `usage` fields (input_tokens, output_tokens,
 // cache_read_input_tokens, cache_creation_input_tokens). ChatPanel and
 // CodingPanel call `recordUsage(sessionId, usage)` after each turn. The
-// StatusBar reads the aggregate for the currently-active session and
+// StatusBar reads the aggregate for the currently-VISIBLE session and
 // renders the context-window chip + popover.
+//
+// Task 2: visibility is now controlled by the parent (App). The provider
+// receives `visibleSessionId` as a prop and exposes it on the context.
+// Chat/Coding panels call `onSessionIdChange(sessionId)` from an effect so
+// the parent always knows which id is in front of the user. Keeping
+// sessions as a per-id map lets both panels record usage into their own
+// bucket even while the other is offscreen — switching visible session
+// does not delete either bucket.
 //
 // State is persisted to localStorage so a refresh doesn't wipe the
 // running total. Each session is keyed by its id (chat or coding).
@@ -16,8 +24,7 @@ const STORAGE_KEY = 'minimax-session-tokens-v1'
 
 const SessionTokensContext = createContext({
   sessions: {},
-  activeSessionId: null,
-  setActiveSessionId: () => {},
+  visibleSessionId: null,
   recordUsage: () => {},
   resetSession: () => {},
   clearAll: () => {},
@@ -71,7 +78,7 @@ function emptySession() {
   }
 }
 
-export function SessionTokensProvider({ children }) {
+export function SessionTokensProvider({ children, visibleSessionId = null }) {
   const [sessions, setSessions] = useState(() => {
     const initial = loadFromStorage()
     // Migrate any old bucket (missing lastTurnInput) so consumers don't blow up.
@@ -85,7 +92,6 @@ export function SessionTokensProvider({ children }) {
     }
     return initial
   })
-  const [activeSessionId, setActiveSessionIdState] = useState(null)
   const saveTimerRef = useRef(null)
 
   // Debounced persist — writes are tiny but avoid hammering storage.
@@ -94,10 +100,6 @@ export function SessionTokensProvider({ children }) {
     saveTimerRef.current = setTimeout(() => saveToStorage(sessions), 300)
     return () => clearTimeout(saveTimerRef.current)
   }, [sessions])
-
-  const setActiveSessionId = useCallback((id) => {
-    setActiveSessionIdState(id)
-  }, [])
 
   // Record usage from a single assistant event. Anthropic usage is
   // cumulative per turn; we ADD input/output/cache to the running total
@@ -143,8 +145,7 @@ export function SessionTokensProvider({ children }) {
 
   const value = {
     sessions,
-    activeSessionId,
-    setActiveSessionId,
+    visibleSessionId,
     recordUsage,
     resetSession,
     clearAll,
@@ -159,10 +160,10 @@ export function SessionTokensProvider({ children }) {
 
 export const useSessionTokens = () => useContext(SessionTokensContext)
 
-// Convenience: returns the bucket for the active session, or null.
-// Useful for the StatusBar where we don't want to render anything
-// until the user has had at least one turn.
-export const useActiveSessionTokens = () => {
-  const { sessions, activeSessionId } = useSessionTokens()
-  return activeSessionId ? (sessions[activeSessionId] || null) : null
+// id has no recorded usage yet. Used by StatusBar.ContextChip to read
+// the chip's fill / popover breakdown. The id is controlled — it
+// comes from the parent's `visibleSessionId` prop, not internal state.
+export const useVisibleSessionTokens = () => {
+  const { sessions, visibleSessionId } = useSessionTokens()
+  return visibleSessionId ? (sessions[visibleSessionId] || null) : null
 }

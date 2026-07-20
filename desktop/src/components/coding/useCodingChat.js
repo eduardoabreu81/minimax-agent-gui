@@ -29,13 +29,12 @@ export function useCodingChat({
   const fileInputRef = useRef(null)
   const convListRef = useRef(null)
 
-  // Register this coding session with the StatusBar context. Cleared on
-  // unmount so the chip falls back to chat when the user switches tabs.
-  const { setActiveSessionId, recordUsage } = useSessionTokens()
-  useEffect(() => {
-    setActiveSessionId(sessionId)
-    return () => setActiveSessionId(null)
-  }, [sessionId, setActiveSessionId])
+  // Panel-level `recordUsage` is wired here so per-turn usage from the
+  // coding WebSocket still flows into the SessionTokensContext bucket.
+  // The provider's `visibleSessionId` is driven by the parent (App)
+  // via the panel's `onSessionIdChange` effect, not from this hook —
+  // keeping visibility ownership in one place.
+  const { recordUsage } = useSessionTokens()
 
   const fetchConversations = async () => {
     try {

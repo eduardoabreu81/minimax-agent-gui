@@ -42,7 +42,7 @@ vi.mock('../../context/AgentActivityContext.jsx', () => ({
 beforeEach(() => {
   mockUseSessionTokens.mockReturnValue({
     sessions: {},
-    activeSessionId: null,
+    visibleSessionId: null,
   })
   mockApiFetch.mockResolvedValue({
     ok: true,
@@ -115,7 +115,7 @@ describe('StatusBar ContextChip — gradient + plan bar', () => {
           turnCount: 3,
         },
       },
-      activeSessionId: 'sess-1',
+      visibleSessionId: 'sess-1',
     })
     // useQuota's first poll: return a quota with 25% remaining on
     // the 5-hour text bucket. Force the re-render to show the
@@ -189,7 +189,7 @@ describe('StatusBar ContextChip — gradient + plan bar', () => {
           turnCount: 3,
         },
       },
-      activeSessionId: 'sess-1',
+      visibleSessionId: 'sess-1',
     })
     render(<StatusBar model="MiniMax-M3" setModel={vi.fn()} thinkingEnabled={false} setThinkingEnabled={vi.fn()} supportsThinking={true} />)
     const chip = screen.getByTitle('statusBar.contextAndPlan')
@@ -211,7 +211,7 @@ describe('StatusBar ContextChip — gradient + plan bar', () => {
           turnCount: 3,
         },
       },
-      activeSessionId: 'sess-1',
+      visibleSessionId: 'sess-1',
     })
     render(<StatusBar model="MiniMax-M3" setModel={vi.fn()} thinkingEnabled={false} setThinkingEnabled={vi.fn()} supportsThinking={true} />)
     screen.getByTitle('statusBar.contextAndPlan').click()
@@ -260,7 +260,7 @@ describe('StatusBar ContextChip — simplified 6-row breakdown', () => {
           lastBySource: null,
         },
       },
-      activeSessionId: 'sess-1',
+      visibleSessionId: 'sess-1',
     })
     render(<StatusBar model="MiniMax-M3" setModel={vi.fn()} thinkingEnabled={false} setThinkingEnabled={vi.fn()} supportsThinking={true} />)
     screen.getByTitle('statusBar.contextAndPlan').click()
@@ -290,7 +290,7 @@ describe('StatusBar ContextChip — simplified 6-row breakdown', () => {
           },
         },
       },
-      activeSessionId: 'sess-1',
+      visibleSessionId: 'sess-1',
     })
     render(<StatusBar model="MiniMax-M3" setModel={vi.fn()} thinkingEnabled={false} setThinkingEnabled={vi.fn()} supportsThinking={true} />)
     screen.getByTitle('statusBar.contextAndPlan').click()
@@ -327,7 +327,7 @@ describe('StatusBar ContextChip — simplified 6-row breakdown', () => {
           },
         },
       },
-      activeSessionId: 'sess-1',
+      visibleSessionId: 'sess-1',
     })
     render(<StatusBar model="MiniMax-M3" setModel={vi.fn()} thinkingEnabled={false} setThinkingEnabled={vi.fn()} supportsThinking={true} />)
     screen.getByTitle('statusBar.contextAndPlan').click()
@@ -356,7 +356,7 @@ describe('StatusBar ContextChip — simplified 6-row breakdown', () => {
           },
         },
       },
-      activeSessionId: 'sess-1',
+      visibleSessionId: 'sess-1',
     })
     render(<StatusBar model="MiniMax-M3" setModel={vi.fn()} thinkingEnabled={false} setThinkingEnabled={vi.fn()} supportsThinking={true} />)
     screen.getByTitle('statusBar.contextAndPlan').click()
@@ -397,7 +397,7 @@ describe('StatusBar ContextChip — simplified 6-row breakdown', () => {
           },
         },
       },
-      activeSessionId: 'sess-1',
+      visibleSessionId: 'sess-1',
     })
     const { default: user } = await import('@testing-library/user-event')
     const u = user.setup({ delay: null })
@@ -457,7 +457,7 @@ describe('StatusBar ContextChip — simplified 6-row breakdown', () => {
           },
         },
       },
-      activeSessionId: 'sess-1',
+      visibleSessionId: 'sess-1',
     })
     render(<StatusBar model="MiniMax-M3" setModel={vi.fn()} thinkingEnabled={false} setThinkingEnabled={vi.fn()} supportsThinking={true} />)
     screen.getByTitle('statusBar.contextAndPlan').click()
@@ -494,7 +494,7 @@ describe('StatusBar ContextChip — simplified 6-row breakdown', () => {
           },
         },
       },
-      activeSessionId: 'sess-1',
+      visibleSessionId: 'sess-1',
     })
     render(<StatusBar model="MiniMax-M3" setModel={vi.fn()} thinkingEnabled={false} setThinkingEnabled={vi.fn()} supportsThinking={true} />)
     screen.getByTitle('statusBar.contextAndPlan').click()
@@ -525,7 +525,7 @@ describe('StatusBar ContextChip — simplified 6-row breakdown', () => {
           },
         },
       },
-      activeSessionId: 'sess-1',
+      visibleSessionId: 'sess-1',
     })
     render(<StatusBar model="MiniMax-M3" setModel={vi.fn()} thinkingEnabled={false} setThinkingEnabled={vi.fn()} supportsThinking={true} />)
     screen.getByTitle('statusBar.contextAndPlan').click()

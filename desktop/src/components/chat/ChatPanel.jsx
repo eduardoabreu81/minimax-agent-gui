@@ -18,6 +18,7 @@ function generateId() {
 
 export default function ChatPanel({
   onProcessingChange,
+  onSessionIdChange,
   activeModel: activeModelProp,
   setActiveModel,
   thinkingEnabled: thinkingEnabledProp,
@@ -363,15 +364,15 @@ export default function ChatPanel({
     }, 1000)
     return () => clearInterval(interval)
   }, [isThinking])
-
-  // Register the current chat session with the StatusBar so the context
-  // chip tracks tokens for THIS conversation. The bucket persists across
-  // session changes (you can switch to an old chat and see its old totals).
-  const { setActiveSessionId, recordUsage, sessions, activeSessionId } = useSessionTokens()
+  // Report the current chat session id to the parent (App). The parent
+  // uses it as `visibleSessionId` for SessionTokensProvider, which the
+  // StatusBar reads to pick the bucket to render. We no longer push the
+  // id into a provider-owned state — visibility is controlled from the
+  // top of the tree, so the active panel is whichever the App decides.
+  const { recordUsage, sessions } = useSessionTokens()
   useEffect(() => {
-    setActiveSessionId(sessionId)
-    return () => setActiveSessionId(null)
-  }, [sessionId, setActiveSessionId])
+    onSessionIdChange?.(sessionId)
+  }, [sessionId, onSessionIdChange])
 
   // Context window pct + banner level. Computed from the live token
   // bucket for THIS session so it tracks the active conversation (not
@@ -388,7 +389,11 @@ export default function ChatPanel({
   }, [sessionId, connectWebSocket])
 
   const banner = useMemo(() => {
-    const bucket = activeSessionId ? sessions[activeSessionId] : null
+    // The banner tracks THIS panel's session id (our local state), not
+    // whatever the provider exposes — ChatPanel owns its sessionId and
+    // uses it directly for the warning chip. Other panels' buckets in
+    // the same provider are irrelevant for the warn/auto/max trigger.
+    const bucket = sessionId ? sessions[sessionId] : null
     const modelId = bucket?.lastModel || activeModelProp || null
     if (!modelId) return { level: null, pct: 0, used: 0, limit: 0 }
     const used = bucket?.lastTurnInput || bucket?.input_tokens || 0
@@ -401,7 +406,7 @@ export default function ChatPanel({
     else if (pct >= t.auto * 100)  level = 'auto'
     else if (t.warn != null && pct >= t.warn * 100) level = 'warn'
     return { level, pct, used, limit }
-  }, [sessions, activeSessionId, activeModelProp])
+  }, [sessions, sessionId, activeModelProp])
 
   // Send {type:'compact'} on the active WebSocket. Used by the [Compact]
   // button in the warn-tier banner (manual user opt-in) and by the
