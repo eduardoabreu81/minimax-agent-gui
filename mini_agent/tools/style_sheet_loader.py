@@ -402,11 +402,11 @@ def suggest_unique_name(user_dir: Path, proposal: str) -> str:
 
     candidate = base
     suffix = 1
-    while candidate in existing or not _re.match(r"^[a-z0-9][a-z0-9-]{0,63}$", candidate):
+    while candidate in existing or not NAME_RE.match(candidate):
         suffix += 1
         suffix_str = f"-{suffix}"
         if len(base) + len(suffix_str) > NAME_MAX:
-            trimmed = base[: NAME_MAX - len(suffix_str)]
+            trimmed = base[: NAME_MAX - len(suffix_str)].rstrip("-")
             candidate = f"{trimmed}{suffix_str}"
         else:
             candidate = f"{base}{suffix_str}"

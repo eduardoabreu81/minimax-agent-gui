@@ -32,16 +32,12 @@ from mini_agent.tools.style_sheet_loader import (  # noqa: E402
     read_style_sheet_raw,
     update_style_sheet,
     write_style_sheet,
+    kebab_slugify,
+    suggest_unique_name,
     _validate_body,
     _validate_description,
     _validate_name,
 )
-from mini_agent.tools.style_sheet_loader import (  # noqa: E402
-    kebab_slugify,
-    suggest_unique_name,
-)
-
-
 
 
 # ─── Loader: validation ────────────────────────────────────────────────────
@@ -304,6 +300,21 @@ def test_suggest_unique_name_truncates_overlong_proposal():
         got = suggest_unique_name(user_dir, long)
         assert _validate_name(got) == got
         assert len(got) <= 64
+
+
+def test_suggest_unique_name_truncation_avoids_double_hyphen():
+    # base slug is exactly 64 chars with an internal hyphen at the boundary;
+    # a collision must not synthesize a double hyphen in the truncated candidate.
+    with tempfile.TemporaryDirectory() as d:
+        user_dir = Path(d)
+        proposal = "a" * 61 + " bc"   # kebab_slugify -> 'a'*61 + '-bc' (64 chars)
+        base = "a" * 61 + "-bc"
+        write_style_sheet(user_dir, base, "d", "b")  # force collision -> suffix branch
+        got = suggest_unique_name(user_dir, proposal)
+        assert _validate_name(got) == got
+        assert "--" not in got
+        assert len(got) <= 64
+        assert got != base  # actually resolved the collision
 
 # ─── API routes ────────────────────────────────────────────────────────────
 #
