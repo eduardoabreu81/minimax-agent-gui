@@ -356,3 +356,62 @@ def get_default_user_dir() -> Path:
     # macOS / Linux: XDG-style home dir.
     xdg = os.environ.get("XDG_DATA_HOME") or str(Path.home() / ".local" / "share")
     return Path(xdg) / "MiniMaxStudio" / "style-sheets"
+
+
+import re as _re
+import unicodedata as _unicodedata
+
+
+_SLUG_RE = _re.compile(r"[^a-z0-9]+")
+
+
+def kebab_slugify(text: str, max_len: int = NAME_MAX) -> str:
+    """Slugify ``text`` into a name passing ``_validate_name``.
+
+    - lowercase ASCII only (accents stripped via NFKD decomposition);
+    - non-``[a-z0-9]`` runs collapse to a single ``-``;
+    - leading/trailing hyphens stripped;
+    - truncated to ``max_len`` (then trailing hyphen re-stripped);
+    - falls back to ``"style-1"`` if the result would be empty or
+      start with a hyphen after stripping.
+    """
+    raw = (text or "").strip().lower()
+    # Decompose accents and drop combining marks, then drop non-ASCII.
+    decomposed = _unicodedata.normalize("NFKD", raw)
+    ascii_only = "".join(c for c in decomposed if ord(c) < 128)
+    slug = _SLUG_RE.sub("-", ascii_only).strip("-")
+    if len(slug) > max_len:
+        slug = slug[:max_len].rstrip("-")
+    if not slug:
+        return "style-1"
+    return slug
+
+
+def suggest_unique_name(user_dir: Path, proposal: str) -> str:
+    """Return a name that passes ``_validate_name`` and does not collide
+    with an existing sheet under ``user_dir``.
+
+    Appends ``-2``, ``-3``, … on collision. If the slugified proposal is
+    unusable, falls back to ``"style"``, ``"style-2"``, …
+    """
+    base = kebab_slugify(proposal)
+    if base == "style-1":
+        # Empty proposal — use the documented fallback stem.
+        base = "style"
+    existing = {p.name for p in user_dir.glob("*") if p.is_dir()} if user_dir.exists() else set()
+
+    candidate = base
+    suffix = 1
+    while candidate in existing or not _re.match(r"^[a-z0-9][a-z0-9-]{0,63}$", candidate):
+        suffix += 1
+        suffix_str = f"-{suffix}"
+        if len(base) + len(suffix_str) > NAME_MAX:
+            trimmed = base[: NAME_MAX - len(suffix_str)]
+            candidate = f"{trimmed}{suffix_str}"
+        else:
+            candidate = f"{base}{suffix_str}"
+        # Safety: if suffix grows absurdly large, bail with the plain stem.
+        if suffix > 10000:
+            candidate = base
+            break
+    return candidate

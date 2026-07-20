@@ -36,6 +36,12 @@ from mini_agent.tools.style_sheet_loader import (  # noqa: E402
     _validate_description,
     _validate_name,
 )
+from mini_agent.tools.style_sheet_loader import (  # noqa: E402
+    kebab_slugify,
+    suggest_unique_name,
+)
+
+
 
 
 # ─── Loader: validation ────────────────────────────────────────────────────
@@ -236,6 +242,68 @@ def test_default_user_dir_is_under_minimax_studio():
     assert "MiniMaxStudio" in str(d)
     assert "style-sheets" in str(d)
 
+
+# ─── slugify + unique-name suggestion ────────────────────────────────────────
+
+
+def test_kebab_slugify_basic():
+    assert kebab_slugify("Warm Cel Anime") == "warm-cel-anime"
+    assert kebab_slugify("  multiple   spaces  ") == "multiple-spaces"
+    assert kebab_slugify("a/b\\c?d:e") == "a-b-c-d-e"
+
+
+def test_kebab_slugify_strips_and_collapses():
+    assert kebab_slugify("---leading-and-trailing---") == "leading-and-trailing"
+    assert kebab_slugify("MIXED-Case_123") == "mixed-case-123"
+
+
+def test_kebab_slugify_rejects_non_ascii_and_falls_back():
+    # Non-ASCII letters are stripped; if nothing survives, fall back.
+    assert kebab_slugify("한국어") == "style-1"
+    assert kebab_slugify("!!!") == "style-1"
+
+
+def test_kebab_slugify_enforces_leading_alnum():
+    # Leading hyphen / digit-only leading must still pass _validate_name.
+    assert kebab_slugify("-1990s") == "1990s"
+    assert kebab_slugify("123") == "123"
+
+
+def test_kebab_slugify_truncates_at_max_len():
+    long = "a" * 80
+    out = kebab_slugify(long, max_len=64)
+    assert len(out) <= 64
+    assert out == "a" * 64
+
+
+def test_suggest_unique_name_passes_through_when_free():
+    with tempfile.TemporaryDirectory() as d:
+        user_dir = Path(d)
+        assert suggest_unique_name(user_dir, "warm-cel-anime") == "warm-cel-anime"
+
+
+def test_suggest_unique_name_appends_suffix_on_collision():
+    with tempfile.TemporaryDirectory() as d:
+        user_dir = Path(d)
+        write_style_sheet(user_dir, "warm-cel-anime", "d", "b")
+        write_style_sheet(user_dir, "warm-cel-anime-2", "d", "b")
+        got = suggest_unique_name(user_dir, "warm-cel-anime")
+        assert got == "warm-cel-anime-3"
+        # Even after many collisions the result stays schema-valid and ≤64.
+        for i in range(3, 12):
+            write_style_sheet(user_dir, f"warm-cel-anime-{i}", "d", "b")
+        got2 = suggest_unique_name(user_dir, "warm-cel-anime")
+        assert _validate_name(got2) == got2
+        assert len(got2) <= 64
+
+
+def test_suggest_unique_name_truncates_overlong_proposal():
+    long = "a" * 100
+    with tempfile.TemporaryDirectory() as d:
+        user_dir = Path(d)
+        got = suggest_unique_name(user_dir, long)
+        assert _validate_name(got) == got
+        assert len(got) <= 64
 
 # ─── API routes ────────────────────────────────────────────────────────────
 #
