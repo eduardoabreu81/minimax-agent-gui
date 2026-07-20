@@ -6044,6 +6044,11 @@ async def list_generations():
         for f in folder.iterdir():
             if not f.is_file():
                 continue
+            # Sidecars (.meta.json) are not gallery entries — skip them
+            # so the gallery only lists media files; their metadata is
+            # attached below via _read_media_meta.
+            if f.suffix.lower() == ".json":
+                continue
             stat = f.stat()
             result[subdir].append({
                 "name": f.name,
@@ -6052,6 +6057,7 @@ async def list_generations():
                 "size": stat.st_size,
                 "modified_at": datetime.fromtimestamp(stat.st_mtime).isoformat(),
                 "extension": f.suffix.lower(),
+                "meta": _read_media_meta(f),
             })
         result[subdir].sort(key=lambda x: x["modified_at"], reverse=True)
 
@@ -6079,6 +6085,14 @@ async def delete_generated_image(path: str = ""):
             )
         if target.exists() and target.is_file():
             target.unlink()
+            # Also remove the sibling .meta.json sidecar if present.
+            # Best-effort — a missing or corrupt sidecar is not an error.
+            sc = _media_meta_sidecar_path(target)
+            if sc.exists():
+                try:
+                    sc.unlink()
+                except Exception:
+                    pass
     except HTTPException:
         raise
     except Exception as e:

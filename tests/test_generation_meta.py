@@ -238,3 +238,82 @@ def test_video_download_without_meta_writes_no_sidecar(monkeypatch):
     finally:
         if vid.exists():
             vid.unlink()
+
+
+def _seed_image_with_sidecar(name="gen_merge.png"):
+    """Create a media file + sidecar pair under generations/images/."""
+    img = _workspace() / "generations" / "images" / name
+    img.parent.mkdir(parents=True, exist_ok=True)
+    img.write_bytes(b"\x89PNG")
+    _main._write_media_meta(img, {
+        "version": 1, "media_type": "image",
+        "prompt": "test", "user_prompt": "test",
+        "model": "image-01", "params": {}, "references": {},
+    })
+    return img
+
+
+def test_generations_list_includes_meta_field():
+    img = _seed_image_with_sidecar("list_meta.png")
+    try:
+        res = client.get("/api/generations")
+        assert res.status_code == 200
+        images = res.json()["data"]["images"]
+        match = next(i for i in images if i["name"] == "list_meta.png")
+        assert match["meta"] is not None
+        assert match["meta"]["prompt"] == "test"
+    finally:
+        for p in (img.with_suffix(".meta.json"), img):
+            if p.exists():
+                p.unlink()
+
+
+def test_generations_list_skips_sidecar_files_as_entries():
+    """A .meta.json file must NOT appear as its own gallery entry."""
+    img = _seed_image_with_sidecar("skip_sidecar.png")
+    try:
+        res = client.get("/api/generations")
+        names = [i["name"] for i in res.json()["data"]["images"]]
+        assert "skip_sidecar.png" in names
+        assert "skip_sidecar.meta.json" not in names
+    finally:
+        for p in (img.with_suffix(".meta.json"), img):
+            if p.exists():
+                p.unlink()
+
+
+def test_generations_list_meta_null_when_sidecar_missing():
+    """Pre-feature files (no sidecar) -> meta: null, not 500."""
+    img = _workspace() / "generations" / "images" / "no_meta.png"
+    img.parent.mkdir(parents=True, exist_ok=True)
+    img.write_bytes(b"\x89PNG")
+    try:
+        res = client.get("/api/generations")
+        match = next(i for i in res.json()["data"]["images"]
+                     if i["name"] == "no_meta.png")
+        assert match["meta"] is None
+    finally:
+        if img.exists():
+            img.unlink()
+
+
+def test_delete_image_removes_sidecar():
+    img = _seed_image_with_sidecar("del_sidecar.png")
+    sc = img.with_suffix(".meta.json")
+    assert img.exists() and sc.exists()
+    rel = f"generations/images/{img.name}"
+    res = client.delete(f"/api/generations/image?path={rel}")
+    assert res.status_code == 200
+    assert not img.exists()
+    assert not sc.exists(), "sidecar must be removed with the image"
+
+
+def test_delete_image_missing_sidecar_is_idempotent():
+    """Delete an image that has no sidecar — must still 200."""
+    img = _workspace() / "generations" / "images" / "no_sc.png"
+    img.parent.mkdir(parents=True, exist_ok=True)
+    img.write_bytes(b"\x89PNG")
+    rel = f"generations/images/{img.name}"
+    res = client.delete(f"/api/generations/image?path={rel}")
+    assert res.status_code == 200
+    assert not img.exists()
