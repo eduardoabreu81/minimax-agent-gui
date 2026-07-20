@@ -10,7 +10,9 @@ import path from "node:path";
 // frontend detects the `tauri:` protocol and falls back to
 // `invoke('get_backend_url')` — see src/lib/api.js.
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+  ],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
@@ -40,6 +42,26 @@ export default defineConfig({
         target: "ws://127.0.0.1:8765",
         ws: true,
         changeOrigin: true,
+      },
+    },
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          // Isolate all node_modules into a vendor chunk to prevent
+          // Rollup scope-hoisting TDZ between CJS and ESM modules.
+          // Split lucide-react separately since it's huge (~900 icons).
+          if (id.includes("node_modules")) {
+            if (id.includes("lucide-react")) {
+              return "vendor-lucide";
+            }
+            if (id.includes("micromark") || id.includes("remark") || id.includes("react-markdown")) {
+              return "vendor-markdown";
+            }
+            return "vendor";
+          }
+        },
       },
     },
   },
