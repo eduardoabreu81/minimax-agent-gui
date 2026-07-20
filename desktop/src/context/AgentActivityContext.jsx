@@ -1,150 +1,241 @@
-import { createContext, useContext, useState, useCallback, useMemo } from 'react'
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useReducer,
+  useRef,
+} from 'react'
+import {
+  ACTIVE_RUN_STATUSES,
+  agentActivityReducer,
+  selectGlobalSummary,
+  selectSession,
+  selectTabSummary,
+} from './agentActivityState.js'
+
+// AgentActivityContext — React surface for the per-session activity
+// registry. The provider owns a single reducer state (Record<sessionId,
+// SessionActivity>) and exposes both a global view and a per-session hook
+// bound to a specific session id.
+//
+// Consumers fall into two camps:
+//
+//   1. Per-session panels (Coding, future Chat) call useSessionActivity(id)
+//      which flattens the session's `activity` container with bound
+//      dispatchers — preserving the legacy single-session API surface
+//      so existing components can migrate incrementally.
+//
+//   2. Shell-level consumers (Titlebar, StatusBar) currently rely on the
+//      legacy global flat shape. They will migrate to useAgentActivity in
+//      a follow-up; until then the global hook returns `{ sessions, ... }`
+//      per the brief.
+
+const EMPTY_SESSION = Object.freeze({
+  sessionId: null,
+  tabId: null,
+  kind: null,
+  title: null,
+  status: 'idle',
+  phase: null,
+  startedAt: null,
+  updatedAt: 0,
+  currentStep: null,
+  lastTool: null,
+  permissionRequest: null,
+  unread: false,
+  error: null,
+  activity: {
+    steps: [],
+    toolResults: [],
+    thinking: { active: false, duration: 0, content: '' },
+    plan: { items: [], sourcePrompt: '', sourceAttachment: null, approved: false },
+    hasNewActivity: false,
+  },
+})
 
 const AgentActivityContext = createContext(null)
 
+function emptyActionShim() {
+  // Stable no-op for actions dispatched against an unregistered session.
+  // Panels are expected to registerSession() before they start sending
+  // events, so this path is a defensive fallback.
+  return undefined
+}
+
 export function AgentActivityProvider({ children }) {
-  const [steps, setSteps] = useState([])
-  const [toolResults, setToolResults] = useState([])
-  const [thinking, setThinking] = useState({ active: false, duration: 0, content: '' })
-  const [lastTool, setLastTool] = useState(null)
-  const [plan, setPlan] = useState({ items: [], sourcePrompt: '', sourceAttachment: null, approved: false })
-  const [hasNewActivity, setHasNewActivity] = useState(false)
+  const [state, dispatch] = useReducer(agentActivityReducer, {})
 
-  const addStep = useCallback((step, maxSteps) => {
-    setSteps(prev => {
-      const exists = prev.find(s => s.step === step)
-      if (exists) {
-        return prev.map(s => s.step === step ? { ...s, status: 'running', timestamp: Date.now() } : s)
-      }
-      return [...prev, { step, maxSteps, status: 'running', timestamp: Date.now() }]
-    })
-    setHasNewActivity(true)
+  // Stable dispatcher builders. We keep them memoized with `useCallback`
+  // and an empty deps array — React's dispatch from useReducer is already
+  // stable, but each individual action factory must also be stable so
+  // children that destructure them don't re-render on every provider
+  // state change.
+  const registerSession = useCallback((metadata) => {
+    dispatch({ type: 'register', metadata })
   }, [])
 
-  const completeStep = useCallback((step) => {
-    setSteps(prev => prev.map(s => s.step === step ? { ...s, status: 'done' } : s))
+  const removeSession = useCallback((sessionId) => {
+    dispatch({ type: 'unregister', sessionId })
   }, [])
 
-  const addToolResult = useCallback((data) => {
-    const entry = {
-      tool: data.tool,
-      arguments: data.arguments,
-      success: data.success,
-      content: data.content,
-      error: data.error,
-      timestamp: Date.now(),
-    }
-    setToolResults(prev => [...prev, entry])
-    setLastTool(entry)
-    setHasNewActivity(true)
+  const startRun = useCallback((sessionId, options) => {
+    dispatch({ type: 'run_started', sessionId, ...(options || {}) })
   }, [])
 
-  const setThinkingState = useCallback((active, content = '') => {
-    setThinking({ active, duration: active ? thinking.duration : 0, content })
-  }, [thinking.duration])
-
-  const setThinkingDuration = useCallback((duration) => {
-    setThinking(prev => ({ ...prev, duration }))
+  const setPhase = useCallback((sessionId, phase) => {
+    dispatch({ type: 'phase_changed', sessionId, phase })
   }, [])
 
-  const updatePlan = useCallback((items) => {
-    setPlan(prev => ({ ...prev, items: items.map((item, i) => ({ id: i, text: item, status: 'pending' })) }))
+  const setThinkingState = useCallback((sessionId, active, content = '') => {
+    dispatch({ type: 'thinking_changed', sessionId, active, content })
   }, [])
 
-  const markPlanItemDone = useCallback((id) => {
-    setPlan(prev => ({
-      ...prev,
-      items: prev.items.map(item => item.id === id ? { ...item, status: 'done' } : item)
-    }))
+  const setThinkingDuration = useCallback((sessionId, duration) => {
+    dispatch({ type: 'thinking_duration', sessionId, duration })
   }, [])
 
-  const createPlan = useCallback((items, sourcePrompt = '', sourceAttachment = null) => {
-    setPlan({
-      items: items.map((item, i) => ({ id: i, text: item, status: 'pending' })),
-      sourcePrompt,
-      sourceAttachment,
-      approved: false,
-    })
+  const addStep = useCallback((sessionId, step, maxSteps) => {
+    dispatch({ type: 'step_added', sessionId, step, maxSteps })
   }, [])
 
-  const updatePlanItem = useCallback((id, text) => {
-    setPlan(prev => ({
-      ...prev,
-      items: prev.items.map(item => item.id === id ? { ...item, text } : item)
-    }))
+  const completeStep = useCallback((sessionId, step) => {
+    dispatch({ type: 'step_completed', sessionId, step })
   }, [])
 
-  const togglePlanItem = useCallback((id) => {
-    setPlan(prev => ({
-      ...prev,
-      items: prev.items.map(item =>
-        item.id === id ? { ...item, status: item.status === 'done' ? 'pending' : 'done' } : item
-      )
-    }))
+  const addToolResult = useCallback((sessionId, data) => {
+    dispatch({ type: 'tool_result', sessionId, data })
   }, [])
 
-  const removePlanItem = useCallback((id) => {
-    setPlan(prev => ({
-      ...prev,
-      items: prev.items.filter(item => item.id !== id).map((item, i) => ({ ...item, id: i }))
-    }))
+  const requestAttention = useCallback((sessionId, permission) => {
+    dispatch({ type: 'attention_requested', sessionId, permission })
   }, [])
 
-  const addPlanItem = useCallback((text) => {
-    setPlan(prev => ({
-      ...prev,
-      items: [...prev.items, { id: prev.items.length, text, status: 'pending' }]
-    }))
+  const resolveAttention = useCallback((sessionId, requestId, resolution) => {
+    dispatch({ type: 'attention_resolved', sessionId, requestId, resolution })
   }, [])
 
-  const clearPlan = useCallback(() => {
-    setPlan({ items: [], sourcePrompt: '', sourceAttachment: null, approved: false })
+  const expireAttention = useCallback((sessionId, requestId, reason) => {
+    dispatch({ type: 'attention_expired', sessionId, requestId, reason })
   }, [])
 
-  const approvePlan = useCallback(() => {
-    setPlan(prev => ({ ...prev, approved: true }))
+  const completeRun = useCallback((sessionId, options) => {
+    dispatch({ type: 'run_completed', sessionId, options })
   }, [])
 
-  const clearActivity = useCallback(() => {
-    setSteps([])
-    setToolResults([])
-    setThinking({ active: false, duration: 0, content: '' })
-    setLastTool(null)
-    setPlan({ items: [], sourcePrompt: '', sourceAttachment: null, approved: false })
-    setHasNewActivity(false)
+  const failRun = useCallback((sessionId, error, options) => {
+    dispatch({ type: 'run_failed', sessionId, error, options })
   }, [])
 
-  const acknowledgeActivity = useCallback(() => {
-    setHasNewActivity(false)
+  const failRunIfActive = useCallback((sessionId, error, options) => {
+    dispatch({ type: 'fail_run_if_active', sessionId, error, options })
   }, [])
 
-  const value = useMemo(() => ({
-    steps,
-    toolResults,
-    thinking,
-    lastTool,
-    plan,
-    hasNewActivity,
-    addStep,
-    completeStep,
-    addToolResult,
-    setThinkingState,
-    setThinkingDuration,
-    updatePlan,
-    markPlanItemDone,
-    createPlan,
-    updatePlanItem,
-    togglePlanItem,
-    removePlanItem,
-    addPlanItem,
-    clearPlan,
-    approvePlan,
-    clearActivity,
-    acknowledgeActivity,
-  }), [steps, toolResults, thinking, lastTool, plan, hasNewActivity, addStep, completeStep, addToolResult, setThinkingState, setThinkingDuration, updatePlan, markPlanItemDone, createPlan, updatePlanItem, togglePlanItem, removePlanItem, addPlanItem, clearPlan, approvePlan, clearActivity, acknowledgeActivity])
+  const acknowledgeSession = useCallback((sessionId) => {
+    dispatch({ type: 'session_acknowledged', sessionId })
+  }, [])
+
+  const clearActivity = useCallback((sessionId) => {
+    dispatch({ type: 'session_cleared', sessionId })
+  }, [])
+
+  const createPlan = useCallback((sessionId, items, sourcePrompt = '', sourceAttachment = null) => {
+    dispatch({ type: 'plan_created', sessionId, items, sourcePrompt, sourceAttachment })
+  }, [])
+
+  const updatePlanItem = useCallback((sessionId, id, text) => {
+    dispatch({ type: 'plan_item_updated', sessionId, id, text })
+  }, [])
+
+  const togglePlanItem = useCallback((sessionId, id) => {
+    dispatch({ type: 'plan_item_toggled', sessionId, id })
+  }, [])
+
+  const removePlanItem = useCallback((sessionId, id) => {
+    dispatch({ type: 'plan_item_removed', sessionId, id })
+  }, [])
+
+  const addPlanItem = useCallback((sessionId, text) => {
+    dispatch({ type: 'plan_item_added', sessionId, text })
+  }, [])
+
+  const clearPlan = useCallback((sessionId) => {
+    dispatch({ type: 'plan_cleared', sessionId })
+  }, [])
+
+  const approvePlan = useCallback((sessionId) => {
+    dispatch({ type: 'plan_approved', sessionId })
+  }, [])
+
+  const actions = useMemo(
+    () => ({
+      registerSession,
+      removeSession,
+      startRun,
+      setPhase,
+      setThinkingState,
+      setThinkingDuration,
+      addStep,
+      completeStep,
+      addToolResult,
+      requestAttention,
+      resolveAttention,
+      expireAttention,
+      completeRun,
+      failRun,
+      failRunIfActive,
+      acknowledgeSession,
+      clearActivity,
+      createPlan,
+      updatePlanItem,
+      togglePlanItem,
+      removePlanItem,
+      addPlanItem,
+      clearPlan,
+      approvePlan,
+    }),
+    [
+      registerSession,
+      removeSession,
+      startRun,
+      setPhase,
+      setThinkingState,
+      setThinkingDuration,
+      addStep,
+      completeStep,
+      addToolResult,
+      requestAttention,
+      resolveAttention,
+      expireAttention,
+      completeRun,
+      failRun,
+      failRunIfActive,
+      acknowledgeSession,
+      clearActivity,
+      createPlan,
+      updatePlanItem,
+      togglePlanItem,
+      removePlanItem,
+      addPlanItem,
+      clearPlan,
+      approvePlan,
+    ],
+  )
+
+  const globalValue = useMemo(
+    () => ({
+      sessions: state,
+      selectSession: (sessionId) => selectSession(state, sessionId),
+      selectTabSummary: (tabId) => selectTabSummary(state, tabId),
+      selectGlobalSummary: () => selectGlobalSummary(state),
+      activeRunStatuses: ACTIVE_RUN_STATUSES,
+      ...actions,
+    }),
+    [state, actions],
+  )
 
   return (
-    <AgentActivityContext.Provider value={value}>
+    <AgentActivityContext.Provider value={globalValue}>
       {children}
     </AgentActivityContext.Provider>
   )
@@ -152,6 +243,96 @@ export function AgentActivityProvider({ children }) {
 
 export function useAgentActivity() {
   const ctx = useContext(AgentActivityContext)
-  if (!ctx) throw new Error('useAgentActivity must be used inside AgentActivityProvider')
+  if (!ctx) {
+    throw new Error('useAgentActivity must be used inside AgentActivityProvider')
+  }
   return ctx
 }
+
+// useSessionActivity — flatten the session's `activity` container and bind
+// the global action dispatchers to a specific session id. Panels always
+// register before sending, but we still return a stable empty value when
+// the session is unknown so the hook can be called during mount.
+export function useSessionActivity(sessionId) {
+  const ctx = useContext(AgentActivityContext)
+  if (!ctx) {
+    throw new Error('useSessionActivity must be used inside AgentActivityProvider')
+  }
+
+  // Ref keeps the latest actions snapshot without forcing the merged
+  // object to recompute on every dispatch. We rebuild only when the
+  // underlying session record identity changes.
+  const actionsRef = useRef(ctx)
+  actionsRef.current = ctx
+
+  const session = sessionId ? ctx.sessions[sessionId] : null
+
+  return useMemo(() => {
+    if (!session) {
+      return {
+        ...EMPTY_SESSION,
+        sessionId,
+        addStep: emptyActionShim,
+        completeStep: emptyActionShim,
+        addToolResult: emptyActionShim,
+        setThinkingState: emptyActionShim,
+        setThinkingDuration: emptyActionShim,
+        startRun: emptyActionShim,
+        setPhase: emptyActionShim,
+        requestAttention: emptyActionShim,
+        resolveAttention: emptyActionShim,
+        expireAttention: emptyActionShim,
+        completeRun: emptyActionShim,
+        failRun: emptyActionShim,
+        failRunIfActive: emptyActionShim,
+        acknowledgeSession: emptyActionShim,
+        clearActivity: emptyActionShim,
+        createPlan: emptyActionShim,
+        updatePlanItem: emptyActionShim,
+        togglePlanItem: emptyActionShim,
+        removePlanItem: emptyActionShim,
+        addPlanItem: emptyActionShim,
+        clearPlan: emptyActionShim,
+        approvePlan: emptyActionShim,
+      }
+    }
+    const { activity, ...rest } = session
+    return {
+      ...rest,
+      ...activity,
+      startRun: (options) => ctx.startRun(sessionId, options),
+      setPhase: (phase) => ctx.setPhase(sessionId, phase),
+      setThinkingState: (active, content = '') =>
+        ctx.setThinkingState(sessionId, active, content),
+      setThinkingDuration: (duration) => ctx.setThinkingDuration(sessionId, duration),
+      addStep: (step, maxSteps) => ctx.addStep(sessionId, step, maxSteps),
+      completeStep: (step) => ctx.completeStep(sessionId, step),
+      addToolResult: (data) => ctx.addToolResult(sessionId, data),
+      requestAttention: (permission) => ctx.requestAttention(sessionId, permission),
+      resolveAttention: (requestId, resolution) =>
+        ctx.resolveAttention(sessionId, requestId, resolution),
+      expireAttention: (requestId, reason) =>
+        ctx.expireAttention(sessionId, requestId, reason),
+      completeRun: (options) => ctx.completeRun(sessionId, options),
+      failRun: (error, options) => ctx.failRun(sessionId, error, options),
+      failRunIfActive: (error, options) => ctx.failRunIfActive(sessionId, error, options),
+      acknowledgeSession: () => ctx.acknowledgeSession(sessionId),
+      clearActivity: () => ctx.clearActivity(sessionId),
+      createPlan: (items, sourcePrompt, sourceAttachment) =>
+        ctx.createPlan(sessionId, items, sourcePrompt, sourceAttachment),
+      updatePlanItem: (id, text) => ctx.updatePlanItem(sessionId, id, text),
+      togglePlanItem: (id) => ctx.togglePlanItem(sessionId, id),
+      removePlanItem: (id) => ctx.removePlanItem(sessionId, id),
+      addPlanItem: (text) => ctx.addPlanItem(sessionId, text),
+      clearPlan: () => ctx.clearPlan(sessionId),
+      approvePlan: () => ctx.approvePlan(sessionId),
+    }
+    // session object identity changes when reducer creates a new session;
+    // actions are stable via useCallback upstream.
+  }, [session, sessionId, ctx])
+}
+
+// Internal helper for tests — exports the stable empty session shape so
+// provider tests can assert that an unknown session id returns the
+// documented defaults. Not part of the public brief contract.
+export const __test__ = { EMPTY_SESSION, ACTIVE_RUN_STATUSES }
