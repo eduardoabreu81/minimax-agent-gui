@@ -56,6 +56,21 @@ const MODE_FRAMES = {
   s2v:         { start: false, end: false, subject: true  },
 }
 
+/**
+ * Map presence of frame/subject inputs to the MiniMax video-mode taxonomy
+ * recorded in the generation-meta sidecar. Pure function — exported for
+ * unit tests.
+ *
+ * @param {{firstFrame?: string|null, lastFrame?: string|null, subject_reference?: Array|null}} inputs
+ * @returns {'text2video' | 'image2video' | 'sef' | 's2v'}
+ */
+export function deriveVideoMode({ firstFrame, lastFrame, subject_reference } = {}) {
+  if (subject_reference && subject_reference.length) return 's2v'
+  if (firstFrame && lastFrame) return 'sef'
+  if (firstFrame) return 'image2video'
+  return 'text2video'
+}
+
 // ───────────────────────────────────────────────────────────────────────────
 // Inline sub-components
 // ───────────────────────────────────────────────────────────────────────────
@@ -441,6 +456,13 @@ export default function VideoPanel() {
   // URLs in generate(), giving the model character/subject visual
   // references for cross-generation consistency.
   const [attachedAnchors, setAttachedAnchors] = useState([])
+  // Snapshot of the params sent to /api/video on the most recent
+  // generate() call. Replayed as the meta payload on /api/video/download
+  // so the backend can write the prompt+params sidecar next to the mp4.
+  // Captured at generate() time (not read from form state at download
+  // time) so the sidecar reflects exactly what was sent, even if the
+  // user edits the form while the video is rendering.
+  const [lastGenerationMeta, setLastGenerationMeta] = useState(null)
 
   // Generation state (existing)
   const [loading, setLoading] = useState(false)
@@ -562,6 +584,32 @@ export default function VideoPanel() {
       const manualSubject    = subjectImage ? [await readFileAsDataURL(subjectImage)] : null
 
       const subjectData = anchorDataUrls.length > 0 ? anchorDataUrls : manualSubject
+      // Snapshot the params as-sent so the download call can attach
+      // them as the sidecar meta. effectivePrompt (with camera commands
+      // appended) is what the model actually saw; the raw user prompt is
+      // recorded separately. Manual frame uploads aren't persisted as
+      // anchor IDs, so they're recorded as null — re-upload to reproduce.
+      setLastGenerationMeta({
+        media_type: 'video',
+        prompt: effectivePrompt,
+        user_prompt: prompt,
+        model,
+        params: {
+          duration: parseInt(duration, 10),
+          resolution,
+          prompt_optimizer: promptOptimizer,
+          mode: deriveVideoMode({
+            firstFrame: manualFirstFrame,
+            lastFrame: manualLastFrame,
+            subject_reference: subjectData,
+          }),
+        },
+        references: {
+          first_frame_image: null,
+          last_frame_image: null,
+          subject_reference: (attachedAnchors || []).map(a => a.id),
+        },
+      })
 
       const res = await apiFetch('/api/video', {
         method: 'POST',
@@ -620,7 +668,7 @@ export default function VideoPanel() {
               const dlRes = await apiFetch('/api/video/download', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ file_id: fileId }),
+                body: JSON.stringify({ file_id: fileId, meta: lastGenerationMeta }),
               })
               const dlData = await dlRes.json()
               if (dlData.success && dlData.path) {

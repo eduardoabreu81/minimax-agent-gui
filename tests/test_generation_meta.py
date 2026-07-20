@@ -162,3 +162,79 @@ def test_image_endpoint_i2i_live_mode_records_mode(monkeypatch):
         for p in (sc, img):
             if p.exists():
                 p.unlink()
+
+
+def test_video_download_writes_sidecar_when_meta_provided(monkeypatch):
+    """POST /api/video/download with {file_id, meta} writes both the
+    video file and a sidecar with the provided meta (plus server-set
+    created_at)."""
+    def fake_download(self, file_id, target):
+        Path(target).write_bytes(b"\x00\x00\x00\x20 ftypisom")
+        return True, target
+
+    import mini_max_mcp.client as mc
+    monkeypatch.setattr(mc.MiniMaxSyncClient, "video_download", fake_download)
+    monkeypatch.setattr(_main, "get_minimax_config",
+                        lambda: {"api_key": "sk-test", "api_base": "x"})
+
+    res = client.post("/api/video/download", json={
+        "file_id": "fake-file-id",
+        "meta": {
+            "media_type": "video",
+            "prompt": "a cat playing piano",
+            "user_prompt": "a cat playing piano",
+            "model": "MiniMax-Hailuo-2.3",
+            "params": {
+                "duration": 6,
+                "resolution": "768P",
+                "prompt_optimizer": False,
+                "mode": "text2video",
+            },
+            "references": {
+                "first_frame_image": None,
+                "last_frame_image": None,
+                "subject_reference": [],
+            },
+        },
+    })
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert body["success"] is True
+    vid = _workspace() / body["path"]
+    sc = _main._media_meta_sidecar_path(vid)
+    try:
+        assert vid.exists()
+        assert sc.exists()
+        data = json.loads(sc.read_text(encoding="utf-8"))
+        assert data["media_type"] == "video"
+        assert data["prompt"] == "a cat playing piano"
+        assert data["params"]["mode"] == "text2video"
+        assert "created_at" in data, "server must inject created_at"
+    finally:
+        for p in (sc, vid):
+            if p.exists():
+                p.unlink()
+
+
+def test_video_download_without_meta_writes_no_sidecar(monkeypatch):
+    """Old client (no meta field) must still work — no sidecar."""
+    def fake_download(self, file_id, target):
+        Path(target).write_bytes(b"\x00\x00\x00\x20 ftypisom")
+        return True, target
+
+    import mini_max_mcp.client as mc
+    monkeypatch.setattr(mc.MiniMaxSyncClient, "video_download", fake_download)
+    monkeypatch.setattr(_main, "get_minimax_config",
+                        lambda: {"api_key": "sk-test", "api_base": "x"})
+
+    res = client.post("/api/video/download", json={"file_id": "fake"})
+    assert res.status_code == 200
+    body = res.json()
+    vid = _workspace() / body["path"]
+    sc = _main._media_meta_sidecar_path(vid)
+    try:
+        assert vid.exists()
+        assert not sc.exists(), "old client must not produce a sidecar"
+    finally:
+        if vid.exists():
+            vid.unlink()

@@ -5407,6 +5407,7 @@ async def music_generate(req: MusicRequest):
             "params": {
                 "audio_setting": audio_setting,
                 "mode": "instrumental" if req.is_instrumental else "lyrics",
+                "lyrics": req.lyrics or "",
             },
             "references": {
                 "cover_audio": req.audio_url or None,
@@ -5584,9 +5585,16 @@ async def video_download(req: dict):
 
         if success:
             rel = str(target.relative_to(get_app_workspace_dir())).replace("\\", "/")
+            meta = req.get("meta")
+            if isinstance(meta, dict):
+                meta.setdefault("version", 1)
+                meta.setdefault("created_at", datetime.utcnow().isoformat() + "Z")
+                _write_media_meta(target, meta)
             return {"success": True, "path": rel}
         else:
             return {"success": False, "error": result}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
