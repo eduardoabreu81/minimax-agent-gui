@@ -10,9 +10,7 @@ import path from "node:path";
 // frontend detects the `tauri:` protocol and falls back to
 // `invoke('get_backend_url')` — see src/lib/api.js.
 export default defineConfig({
-  plugins: [
-    react(),
-  ],
+  plugins: [react()],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
@@ -49,18 +47,17 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
-          // Isolate all node_modules into a vendor chunk to prevent
-          // Rollup scope-hoisting TDZ between CJS and ESM modules.
-          // Split lucide-react separately since it's huge (~900 icons).
-          if (id.includes("node_modules")) {
-            if (id.includes("lucide-react")) {
-              return "vendor-lucide";
-            }
-            if (id.includes("micromark") || id.includes("remark") || id.includes("react-markdown")) {
-              return "vendor-markdown";
-            }
-            return "vendor";
-          }
+          if (!id.includes("node_modules")) return;
+          // CJS production bundles (react, react-dom, scheduler) must be in
+          // isolated chunks to prevent Rollup scope-hoisting TDZ with ESM.
+          if (id.includes("react-dom")) return "vendor-react-dom";
+          if (id.includes("/react/") && id.includes(".production")) return "vendor-react-cjs";
+          if (id.includes("scheduler")) return "vendor-scheduler";
+          // ESM-only vendors — isolate each family.
+          if (id.includes("lucide-react")) return "vendor-lucide";
+          // Isolate micromark ecosystem (circular internal deps trigger TDZ).
+          if (id.includes("micromark") || id.includes("remark") || id.includes("react-markdown")) return "vendor-markdown";
+          return "vendor";
         },
       },
     },
