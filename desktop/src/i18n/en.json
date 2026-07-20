@@ -71,7 +71,8 @@
     "allInOne": "All-in-One Platform",
     "tokenPlan": "Token Plan",
     "expand": "Expand",
-    "collapse": "Collapse"
+    "collapse": "Collapse",
+    "workspace": "Workspace"
   },
   "chat": {
     "title": "Agent Chat",
@@ -357,7 +358,12 @@
     "personality": {
       "preset": "Preset"
     },
-    "updateAction": "Update"
+    "updateAction": "Update",
+    "rerunSetup": "First-run setup",
+    "rerunSetupBtn": "Rerun",
+    "rerunSetupHint": "Walk through the welcome wizard again",
+    "saveHint": "Save settings",
+    "skillsRescanned": "Skills rescanned"
   },
   "onboarding": {
     "welcome": "Welcome to MiniMax Studio",
@@ -631,7 +637,14 @@
     "delete": "Delete",
     "rename": "Rename",
     "optional": "optional",
-    "browse": "browse"
+    "browse": "browse",
+    "close": "Close",
+    "generating": "Generating…",
+    "loading": "Loading…",
+    "save": "Save",
+    "attachFile": "Attach file",
+    "removeAttachment": "Remove attachment",
+    "send": "Send"
   },
   "contextWindow": {
     "warnText": "Context at {pct}%. Compact now to free room for the next turn.",
@@ -1160,7 +1173,7 @@
     "createNew": "New anchor",
     "emptyHint": "No anchors yet. Create one to lock a subject or scene across generations.",
     "createTitle": "New anchor",
-    "editTitle": "Edit \"{{name}}\"",
+    "editTitle": "Edit \"{name}\"",
     "imageLabel": "Image",
     "imageLocked": "Image cannot be changed after creation. Delete and recreate to swap.",
     "dropHint": "Drop an image or click to browse",
@@ -1168,11 +1181,12 @@
     "namePlaceholder": "e.g. \"Hero — red jacket\"",
     "descriptionLabel": "Description",
     "descriptionPlaceholder": "Stable visual identity — appearance, clothing, setting, lighting.",
-    "capExceeded": "Max {{cap}} {{type}} anchor(s) per generation",
+    "capExceeded": "Max {cap} {type} anchor(s) per generation",
     "autoDescribe": "Auto-describe",
     "autoDescribeHint": "Generate a description via MiniMax VLM",
     "create": "Create anchor",
-    "confirmDelete": "Delete anchor \"{{name}}\"? This cannot be undone."
+    "confirmDelete": "Delete anchor \"{name}\"? This cannot be undone.",
+    "lockedByAnchors": "Referenced by anchor(s)"
   },
   "commonActions": {
     "deleteTask": "Delete task?"
@@ -1223,6 +1237,12 @@
     "destructiveTitle": "Stop the active agent?",
     "destructiveDescription": "This action will stop the current run and discard in-flight output.",
     "stay": "Keep running",
-    "stopAndContinue": "Stop and continue"
+    "stopAndContinue": "Stop and continue",
+    "hasError": "Error — {tab}",
+    "needsInput": "Needs input — {tab}",
+    "toolRequest": "Tool: {tool}"
+  },
+  "limit": {
+    "char": "chars"
   }
 }

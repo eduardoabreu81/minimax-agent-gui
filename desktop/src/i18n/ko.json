@@ -71,7 +71,8 @@
     "allInOne": "올인원 플랫폼",
     "tokenPlan": "토큰 플랜",
     "expand": "펼치기",
-    "collapse": "접기"
+    "collapse": "접기",
+    "workspace": "워크스페이스"
   },
   "chat": {
     "title": "에이전트 채팅",
@@ -357,7 +358,12 @@
     "audioLowBitrateWarn": "낮은 비트레이트({kbps}kbps)를 선택했습니다. 오디오가 눈에 띄게 압축되어 들릴 수 있으므로 음악에는 128kbps 이상을 권장합니다.",
     "audioHighBitrateHint": "선택한 프리셋: {khz}kHz · {kbps}kbps · {format}. 비트레이트가 높을수록 파일은 커지지만 더 많은 디테일을 유지합니다.",
     "audioSaved": "오디오 설정이 저장되었습니다.",
-    "updateAction": "업데이트"
+    "updateAction": "업데이트",
+    "rerunSetup": "초기 설정 마법사",
+    "rerunSetupBtn": "다시 실행",
+    "rerunSetupHint": "환영 마법사를 다시 실행합니다",
+    "saveHint": "설정 저장",
+    "skillsRescanned": "스킬 재스캔 완료"
   },
   "onboarding": {
     "welcome": "MiniMax 에이전트에 오신 것을 환영합니다",
@@ -631,7 +637,14 @@
     "delete": "삭제",
     "rename": "이름 변경",
     "optional": "선택",
-    "browse": "찾아보기"
+    "browse": "찾아보기",
+    "close": "닫기",
+    "generating": "생성 중…",
+    "loading": "로딩 중…",
+    "save": "저장",
+    "attachFile": "파일 첨부",
+    "removeAttachment": "첨부 제거",
+    "send": "보내기"
   },
   "agentContext": {
     "roles": {
@@ -1203,7 +1216,10 @@
     "destructiveTitle": "실행 중인 에이전트를 중단할까요?",
     "destructiveDescription": "이 작업은 현재 실행 중인 작업을 중단하고 진행 중인 출력을 삭제합니다.",
     "stay": "계속 실행",
-    "stopAndContinue": "중단하고 계속"
+    "stopAndContinue": "중단하고 계속",
+    "hasError": "오류 — {tab}",
+    "needsInput": "입력 필요 — {tab}",
+    "toolRequest": "도구: {tool}"
   },
   "anchor": {
     "libraryLabel": "앵커",
@@ -1211,7 +1227,7 @@
     "createNew": "새 앵커",
     "emptyHint": "앵커가 없습니다. 생성에 걸쳐 피사체나 배경을 고정하려면 만드세요.",
     "createTitle": "새 앵커",
-    "editTitle": "\"{{name}}\" 편집",
+    "editTitle": "\"{name}\" 편집",
     "imageLabel": "이미지",
     "imageLocked": "이미지는 생성 후 변경할 수 없습니다. 교체하려면 삭제 후 다시 만드세요.",
     "dropHint": "이미지를 드롭하거나 클릭하여 선택",
@@ -1222,7 +1238,11 @@
     "autoDescribe": "자동 설명",
     "autoDescribeHint": "MiniMax VLM으로 설명 생성",
     "create": "앵커 생성",
-    "confirmDelete": "앵커 \"{{name}}\"을(를) 삭제하시겠습니까? 되돌릴 수 없습니다.",
-    "capExceeded": "생성당 최대 {{cap}}개의 {{type}} 앵커"
+    "confirmDelete": "앵커 \"{name}\"을(를) 삭제하시겠습니까? 되돌릴 수 없습니다.",
+    "capExceeded": "생성당 최대 {cap}개의 {type} 앵커",
+    "lockedByAnchors": "앵커에서 참조됨"
+  },
+  "limit": {
+    "char": "자"
   }
 }

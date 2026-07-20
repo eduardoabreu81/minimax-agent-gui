@@ -61,8 +61,8 @@ const DESIGN_TRAITS = [
 ]
 
 const DELIVERY_OPTIONS = [
-  { id: 'standard', labelKey: 'speech.deliveryStandard' },
-  { id: 'async',    labelKey: 'speech.deliveryAsync' },
+  { id: 'standard', labelKey: 'music.deliveryStandard' },
+  { id: 'async',    labelKey: 'music.deliveryAsync' },
 ]
 
 const LANGUAGE_BOOST_OPTIONS = [

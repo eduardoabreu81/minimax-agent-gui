@@ -22,6 +22,18 @@ i18n
       'zh-CN': { translation: zhCN },
     },
     fallbackLng: 'en',
+    // saveMissing + missingKeyHandler: when a translation is empty
+    // (i.e. we explicitly backfilled "" so i18next falls back to en),
+    // still emit a dev-only console warning so missing keys don't
+    // silently slip into the codebase. In production this is a
+    // no-op — the fallback to en already renders correctly.
+    saveMissing: import.meta.env?.DEV ?? false,
+    missingKeyHandler: (lngs, key) => {
+      if (import.meta.env?.DEV) {
+        // eslint-disable-next-line no-console
+        console.warn(`[i18n] missing key "${key}" in ${lngs.join(', ')} — falling back to en`)
+      }
+    },
     interpolation: {
       escapeValue: false,
       // i18next 23+ changed the default placeholder syntax from `{name}`

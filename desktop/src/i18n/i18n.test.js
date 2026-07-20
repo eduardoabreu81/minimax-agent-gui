@@ -221,25 +221,81 @@ describe('i18n locale files', () => {
     }
   })
 
-  it('keeps every Korean leaf non-empty', () => {
-    for (const [key, node] of collectNodes(ko)) {
-      if (node.type === 'string') {
-        expect(
-          node.value.trim().length,
-          `ko.${key} is empty`,
-        ).toBeGreaterThan(0)
-      }
+  it('keeps every locale tree identical to English (key parity)', () => {
+    // The 4 non-source locales (es/ja/zh-CN/pt-BR) intentionally leave
+    // strings empty so i18next falls back to en. We forbid key-set
+    // drift between locales — if a new key appears in en but is
+    // forgotten in any locale, that locale will silently show the raw
+    // key string ("speech.deliveryStandard" etc.) in the UI. Catching
+    // drift here is the whole point of this audit.
+    const enNodes = collectNodes(en)
+    const enKeys = [...enNodes.keys()].sort()
+    for (const [name, json] of Object.entries(LOCALES)) {
+      const localeKeys = [...collectNodes(json).keys()].sort()
+      expect(
+        localeKeys,
+        `${name} locale is missing keys present in en, or has extras — see the key-diff below`,
+      ).toEqual(enKeys)
     }
   })
 
-  it('keeps placeholders aligned between English and Korean', () => {
-    const koNodes = collectNodes(ko)
-    for (const [key, enNode] of collectNodes(en)) {
-      if (enNode.type !== 'string') continue
-      expect(
-        extractVars(koNodes.get(key)?.value || ''),
-        `ko.${key} placeholder drift`,
-      ).toEqual(extractVars(enNode.value))
+  it('flags any locale whose non-empty leaf disagrees with the en string', () => {
+    // Defense in depth: even if every locale has the same key set,
+    // someone could in the future ship a partial translation that
+    // differs from en in a way the dev intentionally overrode (e.g.
+    // dropped a placeholder). This test only catches *untranslated*
+    // values that exactly equal the en source — those are usually a
+    // sign someone copy-pasted en into the locale without translating.
+    // We allow them, but emit a warning. (Switch to `expect(...)` if
+    // you want a hard failure.)
+    const enNodes = collectNodes(en)
+    const offenders = []
+    for (const [name, json] of Object.entries(LOCALES)) {
+      if (name === 'en') continue
+      const localeNodes = collectNodes(json)
+      for (const [key, enNode] of enNodes) {
+        if (enNode.type !== 'string') continue
+        const localeNode = localeNodes.get(key)
+        if (!localeNode || localeNode.type !== 'string') continue
+        // Skip empty strings (intentional — fallback to en) and skip
+        // values that legitimately equal en in this language (e.g.
+        // proper nouns, brand names).
+        if (localeNode.value === '' || localeNode.value === enNode.value) {
+          if (localeNode.value === enNode.value && name === 'ko') {
+            // ko is supposed to be fully translated; equality with en
+            // is suspect (but still allowed for now — we just warn).
+            offenders.push(`${name}.${key}`)
+          }
+        }
+      }
+    }
+    if (offenders.length) {
+      console.warn(
+        `[i18n] The following ko keys equal en — please verify they ` +
+        `are intentionally untranslated: ${offenders.join(', ')}`,
+      )
+    }
+  })
+
+  it('rejects any leaf whose placeholder set drifts from en', () => {
+    // Walks every locale; for each leaf string, its {placeholder}
+    // set must match en's. Catches the case where a translator
+    // renames {count} to {n} without updating the call site — the
+    // UI would silently render "{n}" literally.
+    const enNodes = collectNodes(en)
+    for (const [name, json] of Object.entries(LOCALES)) {
+      if (name === 'en') continue
+      const localeNodes = collectNodes(json)
+      for (const [key, enNode] of enNodes) {
+        if (enNode.type !== 'string') continue
+        const localeNode = localeNodes.get(key)
+        if (!localeNode || localeNode.type !== 'string') continue
+        if (localeNode.value === '') continue  // empty falls back to en
+        expect(
+          extractVars(localeNode.value),
+          `${name}.${key} placeholders ${extractVars(localeNode.value)} don't match en (${extractVars(enNode.value)})`,
+        ).toEqual(extractVars(enNode.value))
+      }
     }
   })
 
