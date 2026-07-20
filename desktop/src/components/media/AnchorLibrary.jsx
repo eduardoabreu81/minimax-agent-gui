@@ -22,6 +22,7 @@ import { listAnchors, deleteAnchor } from '../../lib/anchors.js'
 import AnchorCard from './AnchorCard.jsx'
 import AnchorEditor from './AnchorEditor.jsx'
 import { Anchor, Loader2, Plus } from 'lucide-react'
+import SessionActionGuard from '../shared/SessionActionGuard'
 
 const MAX_ANCHORS = 4  // max attached per generation (subject_reference[] cap)
 
