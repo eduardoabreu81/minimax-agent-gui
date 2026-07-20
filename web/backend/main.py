@@ -553,6 +553,49 @@ def _media_output_dir(session_id: str, media_kind: str) -> Path:
     d.mkdir(parents=True, exist_ok=True)
     return d
 
+# --- Generation metadata sidecars ---------------------------------------
+#
+# Each generated media file gets a sibling ``<basename>.meta.json``
+# recording the prompt + reproduction params. Sidecar lifecycle is 1:1
+# with the media file: DELETE removes both, out-of-band file deletion
+# leaves an invisible orphan (GET scans media files, not sidecars).
+
+def _media_meta_sidecar_path(media_path: Path) -> Path:
+    """image.png -> image.meta.json (same dir, same basename)."""
+    return media_path.with_suffix(".meta.json")
+
+
+def _write_media_meta(media_path: Path, meta: dict) -> None:
+    """Atomic write (tmp + rename). Best-effort: failures are logged
+    but never mask the successful media write."""
+    sc = _media_meta_sidecar_path(media_path)
+    sc.parent.mkdir(parents=True, exist_ok=True)
+    tmp = sc.with_suffix(".json.tmp")
+    try:
+        tmp.write_text(
+            json.dumps(meta, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        tmp.replace(sc)
+    except Exception:
+        try:
+            if tmp.exists():
+                tmp.unlink()
+        except Exception:
+            pass
+        _logger.warning("sidecar write failed for %s", media_path)
+
+
+def _read_media_meta(media_path: Path) -> dict | None:
+    """Return the parsed sidecar JSON, or None if missing / corrupt."""
+    sc = _media_meta_sidecar_path(media_path)
+    if not sc.exists():
+        return None
+    try:
+        return json.loads(sc.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
 def get_app_workspace_dir() -> Path:
     """The fixed app workspace — `PROJECT_ROOT/workspace`.
 
