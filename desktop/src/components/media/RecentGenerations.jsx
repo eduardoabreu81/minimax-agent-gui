@@ -1,4 +1,4 @@
-import { RefreshCw, Save, Loader2, Anchor } from 'lucide-react'
+import { RefreshCw, Save, Loader2, Anchor, Trash2 } from 'lucide-react'
 import { assetUrl } from '../../lib/api.js'
 
 /**
@@ -22,6 +22,7 @@ export default function RecentGenerations({
   onRefresh,
   emptyMessage = 'No recent generations',
   onPromoteToAnchor,
+  onDeleteImage,
 }) {
   const mediaUrl = (path) => assetUrl(`/api/files/download?path=${encodeURIComponent(path)}`)
 
@@ -100,6 +101,17 @@ export default function RecentGenerations({
                           title="Save as video anchor"
                         >
                           <Anchor size={12} className="text-white" />
+                        </button>
+                      )}
+                      {onDeleteImage && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); onDeleteImage(item) }}
+                          className="p-1.5 bg-error hover:bg-error/90 rounded-lg transition-colors"
+                          title="Delete"
+                          aria-label={`Delete ${item.name}`}
+                        >
+                          <Trash2 size={12} className="text-white" />
                         </button>
                       )}
                     </div>
