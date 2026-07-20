@@ -48,15 +48,18 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (!id.includes("node_modules")) return;
-          // CJS production bundles (react, react-dom, scheduler) must be in
-          // isolated chunks to prevent Rollup scope-hoisting TDZ with ESM.
-          if (id.includes("react-dom")) return "vendor-react-dom";
-          if (id.includes("/react/") && id.includes(".production")) return "vendor-react-cjs";
-          if (id.includes("scheduler")) return "vendor-scheduler";
-          // ESM-only vendors — isolate each family.
+          // Only split at self-contained package boundaries.
+          // NEVER split CJS from its ESM wrapper (e.g., react/ from
+          // react/cjs/react.production.min.js) — that breaks imports.
+          // These are pure ESM with no CJS re-export chains:
           if (id.includes("lucide-react")) return "vendor-lucide";
-          // Isolate micromark ecosystem (circular internal deps trigger TDZ).
           if (id.includes("micromark") || id.includes("remark") || id.includes("react-markdown")) return "vendor-markdown";
+          // Separate ESM-only packages from CJS packages to prevent
+          // Rollup scope-hoisting TDZ between module formats.
+          if (id.includes("/i18next/") || id.includes("/react-i18next/")) return "vendor-i18n";
+          if (id.includes("/@radix-ui/") || id.includes("react-remove-scroll") || id.includes("aria-hidden") || id.includes("react-style-singleton") || id.includes("use-callback-ref") || id.includes("use-sidecar") || id.includes("get-nonce") || id.includes("react-focus") || id.includes("tslib")) return "vendor-radix";
+          if (id.includes("/@tauri-apps/")) return "vendor-tauri";
+          // Everything else stays together (mostly CJS + ESM wrappers)
           return "vendor";
         },
       },
