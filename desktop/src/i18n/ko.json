@@ -1132,6 +1132,25 @@
   "statusBar": {
     "thinkingOnShort": "생각: 켬",
     "thinkingOffShort": "생각: 끔",
-    "pctLeft": "{pct}% 남음"
+    "pctLeft": "{pct}% 남음",
+    "contextAndPlan": "컨텍스트 창과 플랜",
+    "contextWindow": "컨텍스트 창",
+    "planUsage": "플랜 사용량",
+    "connectingToPlan": "Token Plan에 연결 중\u2026",
+    "planUnavailable": "플랜 데이터를 가져올 수 없음",
+    "hideBreakdown": "세부 내역 숨기기",
+    "showBreakdown": "세부 내역 보기",
+    "tokens": "토큰",
+    "fiveHourLimit": "5시간 한도",
+    "resetsIn": "다음 리셋까지",
+    "weeklyAllModels": "주간 \u00b7 전체 모델",
+    "breakdown": {
+      "messages": "메시지",
+      "skills": "스킬",
+      "memoryFiles": "메모리 파일",
+      "customAgents": "커스텀 에이전트",
+      "systemPrompt": "시스템 프롬프트",
+      "mcpTools": "MCP 도구"
+    }
   }
 }
