@@ -1000,7 +1000,12 @@ class MiniMaxClient:
         model: str = "speech-2.8-turbo"
     ) -> Tuple[bool, str]:
         """Create async TTS task for long text (up to 1M chars)."""
-        url = f"{self.api_base}/v1/t2a_v2_async"
+        # Endpoint is /v1/t2a_async_v2 — NOT /v1/t2a_v2_async. The async
+        # variant puts the version last. MiniMaxSyncClient already used the
+        # correct path; this httpx client had them transposed. Unused by the
+        # FastAPI layer (speech routes go through MiniMaxSyncClient), but a
+        # landmine for any future caller.
+        url = f"{self.api_base}/v1/t2a_async_v2"
 
         headers = {
             "Authorization": f"Bearer {self.api_key}",
@@ -1031,7 +1036,10 @@ class MiniMaxClient:
 
     async def tts_async_query(self, task_id: str) -> Tuple[bool, dict]:
         """Query async TTS task status."""
-        url = f"{self.api_base}/v1/t2a_v2_async"
+        # Polling lives under /v1/query/, not the create endpoint — see
+        # tts_async above. Task status is one of
+        # processing | success | failed | expired.
+        url = f"{self.api_base}/v1/query/t2a_async_query_v2"
 
         headers = {"Authorization": f"Bearer {self.api_key}"}
         params = {"task_id": task_id}

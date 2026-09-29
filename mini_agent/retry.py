@@ -19,6 +19,52 @@ logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
 
+# 4xx status codes that ARE worth retrying even though the class is
+# normally a client error: the request timed out, a write conflict, or
+# the caller is being rate limited. Everything else in 4xx is permanent.
+_RETRYABLE_CLIENT_STATUS: frozenset[int] = frozenset({408, 409, 429})
+
+
+def is_retryable_exception(exc: BaseException) -> bool:
+    """Whether a failed API call is worth trying again.
+
+    Retryable: connection/timeout errors (no ``status_code`` attribute),
+    ``408``/``409``/``429``, and any ``5xx``.
+
+    Permanent: the rest of the 4xx range — ``401`` bad key, ``402``
+    insufficient balance, ``403`` no access, ``404`` unknown model,
+    ``422`` bad request. Retrying one of those can never succeed; it
+    only burns the backoff before the user sees the same message.
+
+    Why this matters: a 402 from the Anthropic-compatible endpoint
+    (MiniMax billing, e.g. ``insufficient_balance_error``) used to take
+    4 attempts and ~7s of backoff to surface an error that needed the
+    user to top up their balance.
+    """
+    status = getattr(exc, "status_code", None)
+    if status is None:
+        # Not an HTTP error (connection reset, timeout, DNS, ...) —
+        # the classic transient case.
+        return True
+    if status in _RETRYABLE_CLIENT_STATUS:
+        return True
+    if status >= 500:
+        return True
+    return not (400 <= status < 500)
+
+
+class NonRetryableError(Exception):
+    """Wraps a permanent failure so callers can tell it apart.
+
+    Carries the original exception in ``__cause__``-style via
+    ``original`` so the HTTP layer can still surface the real message.
+    """
+
+    def __init__(self, original: Exception):
+        self.original = original
+        self.status_code = getattr(original, "status_code", None)
+        super().__init__(str(original))
+
 
 class RetryConfig:
     """Retry configuration class"""
@@ -106,6 +152,18 @@ def async_retry(
 
                 except config.retryable_exceptions as e:
                     last_exception = e
+
+                    # Permanent client errors (401/402/403/404/422, ...)
+                    # fail fast — retrying can't fix a missing balance
+                    # or a bad API key, and the backoff just delays the
+                    # message the user needs to see.
+                    if not is_retryable_exception(e):
+                        logger.error(
+                            f"Function {func.__name__} call {attempt + 1} failed with a "
+                            f"non-retryable error (status={getattr(e, 'status_code', None)}): "
+                            f"{str(e)}"
+                        )
+                        raise NonRetryableError(e) from e
 
                     # If this is the last attempt, don't retry
                     if attempt >= config.max_retries:
