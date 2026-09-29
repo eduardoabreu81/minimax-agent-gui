@@ -3,7 +3,7 @@ import { ChevronDown, ChevronRight, Loader2, Brain, AlertCircle } from 'lucide-r
 import { useSessionTokens } from '../../context/SessionTokensContext'
 import { useAgentActivity } from '../../context/AgentActivityContext'
 import { useTheme, THEMES } from '../../context/ThemeContext'
-import { getContextLimit, formatTokenCount, formatByteCount, DEFAULT_MODEL } from '../../lib/modelLimits'
+import { getContextLimit, formatTokenCount, formatByteCount, DEFAULT_MODEL, EFFORT_LEVELS, usesEffortControl } from '../../lib/modelLimits'
 import { apiFetch } from '../../lib/api.js'
 
 // StatusBar — global footer anchored above the bottom of the app.
@@ -501,6 +501,7 @@ function ContextChip({ model }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const CHAT_MODELS = [
+  { id: 'MiniMax-M3.1-Flash-Preview', label: 'M3.1 Flash Preview', desc: 'Newest · 1M context · tunable effort' },
   { id: 'MiniMax-M3', label: 'MiniMax M3', desc: '1M context · agentic · multimodal' },
   { id: 'MiniMax-M2.7', label: 'MiniMax M2.7', desc: 'Balanced reasoning · 200k context' },
   { id: 'MiniMax-M2.7-highspeed', label: 'M2.7 Highspeed', desc: 'Lowest latency · 200k context' },
@@ -619,6 +620,37 @@ function ThinkingToggle({ thinkingEnabled, setThinkingEnabled, supportsThinking 
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// EffortSelector — reasoning-depth picker for models that think
+// unconditionally (M3.1 Flash). Replaces the on/off ThinkingToggle for
+// those models: MiniMax enables reasoning by default and offers no way
+// to turn it off, so depth (`output_config.effort`) is the only dial.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function EffortSelector({ effort, setEffort }) {
+  return (
+    <div
+      title={`Reasoning effort: ${effort} (thinking is always on for this model)`}
+      className="flex items-center gap-1 h-[22px] px-2 rounded-md bg-primary/10 text-primary hover:bg-primary/15 transition-colors"
+    >
+      <Brain size={13} />
+      <span className="text-[11.5px] font-medium">Effort</span>
+      <select
+        value={effort}
+        onChange={(e) => setEffort(e.target.value)}
+        aria-label="Reasoning effort"
+        className="bg-transparent text-[11.5px] font-medium text-primary outline-none cursor-pointer"
+      >
+        {EFFORT_LEVELS.map((level) => (
+          <option key={level} value={level} className="bg-popover text-foreground">
+            {level}
+          </option>
+        ))}
+      </select>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // AgentStatus — conic-gradient spinner + label. Active when AgentActivity
 // context says thinking/steps running; idle otherwise.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -656,7 +688,12 @@ export default function StatusBar({
   thinkingEnabled,
   setThinkingEnabled,
   supportsThinking,
+  effort,
+  setEffort,
 }) {
+  // M3.1 Flash reasons unconditionally — the on/off toggle is replaced
+  // by the effort selector for it.
+  const showEffort = usesEffortControl(model)
   return (
     <footer className="h-[30px] flex-none border-t border-border bg-surface/95 backdrop-blur-sm flex items-center justify-between px-3.5 text-foreground relative z-30 select-none">
       {/* Left: connectivity */}
@@ -672,11 +709,15 @@ export default function StatusBar({
 
         <ModelPicker model={model} setModel={setModel} />
 
-        <ThinkingToggle
-          thinkingEnabled={thinkingEnabled}
-          setThinkingEnabled={setThinkingEnabled}
-          supportsThinking={supportsThinking}
-        />
+        {showEffort ? (
+          <EffortSelector effort={effort} setEffort={setEffort} />
+        ) : (
+          <ThinkingToggle
+            thinkingEnabled={thinkingEnabled}
+            setThinkingEnabled={setThinkingEnabled}
+            supportsThinking={supportsThinking}
+          />
+        )}
 
         <div className="w-px h-4 bg-border mx-1" />
 

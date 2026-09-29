@@ -3,25 +3,54 @@
 // spec as of 2026-06-20.
 
 export const MODEL_CONTEXT_LIMITS = {
+  'MiniMax-M3.1-Flash-Preview': 1_000_000,
   'MiniMax-M3': 1_000_000,
   'MiniMax-M2.7': 204_800,
   'MiniMax-M2.7-highspeed': 204_800,
 }
 
 // Auto-compact warning thresholds per model. Drives ContextWarningBanner
-// tier (none / suggest / auto / force). The 50% "suggest" tier is M3-only
-// — M2.7 has a smaller context window so an aggressive proactive nudge
-// doesn't add value. 80% (auto) and 90% (force-compact safety net) apply
-// to all models. Spec source: AGENTS.local.md §"Context Window".
+// tier (none / suggest / auto / force). The 50% "suggest" tier is limited
+// to the 1M-context models — M2.7 has a smaller context window so an
+// aggressive proactive nudge doesn't add value. 80% (auto) and 90%
+// (force-compact safety net) apply to all models. Spec source:
+// AGENTS.local.md §"Context Window".
 export const MODEL_COMPACT_THRESHOLDS = {
+  'MiniMax-M3.1-Flash-Preview': { warn: 0.50, auto: 0.80, max: 0.90 },
   'MiniMax-M3':            { warn: 0.50, auto: 0.80, max: 0.90 },
   'MiniMax-M2.7':          { warn: null, auto: 0.80, max: 0.90 },
   'MiniMax-M2.7-highspeed':{ warn: null, auto: 0.80, max: 0.90 },
 }
 
 // Default window used by the StatusBar context chip until the user has
-// picked a model (no limit known -> fall back to M3).
+// picked a model (no limit known -> fall back to the default model).
 export const DEFAULT_MODEL = 'MiniMax-M3'
+
+// Models that expose Anthropic-style thinking blocks. The rest of the
+// Token Plan chat models ignore the `thinking` param entirely, so the
+// composer hides the control for them.
+export const THINKING_SUPPORTED_MODELS = new Set([
+  'MiniMax-M3.1-Flash-Preview',
+  'MiniMax-M3',
+])
+
+// Models that reason unconditionally: MiniMax turns thinking on by
+// default and offers no way to disable it, so the on/off ThinkingToggle
+// is meaningless. Depth is picked with `output_config.effort` instead,
+// which is why the composer swaps the toggle for an effort selector.
+export const EFFORT_MODELS = new Set(['MiniMax-M3.1-Flash-Preview'])
+
+// `output_config.effort` levels accepted by the MiniMax Anthropic API.
+// `xhigh` is documented by MiniMax but missing from the Anthropic SDK's
+// own Literal — it serializes fine, so keep it.
+export const EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh', 'max']
+export const DEFAULT_EFFORT = 'max'
+
+// True when the model's thinking depth is tuned with `effort` rather
+// than an on/off toggle.
+export function usesEffortControl(modelId) {
+  return EFFORT_MODELS.has(modelId)
+}
 
 export function getContextLimit(modelId) {
   return MODEL_CONTEXT_LIMITS[modelId] || MODEL_CONTEXT_LIMITS[DEFAULT_MODEL]

@@ -50,6 +50,7 @@ class MiniMaxAgentTUI(App):
         self.llm_client = None
         self.current_model = "MiniMax-M3"
         self.thinking_enabled = True
+        self.current_effort = "max"
         self.user_plan = "plus"
         self.session_start = datetime.now()
         self._cancel_event = asyncio.Event()
@@ -227,6 +228,8 @@ All relative paths are resolved from this directory."""
         if event.model != self.current_model:
             self.current_model = event.model
         self.thinking_enabled = event.thinking
+        if event.effort:
+            self.current_effort = event.effort
         
         # Run agent in background
         self._cancel_event.clear()
@@ -275,6 +278,7 @@ All relative paths are resolved from this directory."""
                 tool_callback=on_tool_callback,
                 model_override=self.current_model,
                 thinking_override=self.thinking_enabled,
+                effort_override=self.current_effort,
                 stream_callback=on_stream_delta,
             )
             

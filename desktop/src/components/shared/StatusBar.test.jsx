@@ -54,6 +54,84 @@ beforeEach(() => {
 // planBarColor / planTextState — the actual decision logic
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ─────────────────────────────────────────────────────────────────────────────
+// EffortSelector — M3.1-Flash-Preview always thinks, so the on/off
+// ThinkingToggle is replaced by a reasoning-depth <select>. Guards that
+// swap: the toggle must disappear and the selector appear with all five
+// MiniMax-documented levels (including `xhigh`, which the Anthropic SDK's
+// own Literal omits).
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('EffortSelector (M3.1 always-on thinking)', () => {
+  it('renders the effort selector instead of the thinking toggle for M3.1', () => {
+    render(
+      <StatusBar
+        model="MiniMax-M3.1-Flash-Preview"
+        setModel={vi.fn()}
+        thinkingEnabled={false}
+        setThinkingEnabled={vi.fn()}
+        supportsThinking
+        effort="max"
+        setEffort={vi.fn()}
+      />
+    )
+    const select = screen.getByLabelText('Reasoning effort')
+    expect(select).toBeTruthy()
+    // The on/off toggle is meaningless here — it must not be rendered.
+    expect(screen.queryByText('Thinking off')).toBeNull()
+    expect(screen.queryByText('Thinking')).toBeNull()
+  })
+
+  it('offers all five documented effort levels', () => {
+    render(
+      <StatusBar
+        model="MiniMax-M3.1-Flash-Preview"
+        setModel={vi.fn()}
+        thinkingEnabled={false}
+        setThinkingEnabled={vi.fn()}
+        supportsThinking
+        effort="max"
+        setEffort={vi.fn()}
+      />
+    )
+    const select = screen.getByLabelText('Reasoning effort')
+    const values = Array.from(select.options).map((o) => o.value)
+    expect(values).toEqual(['low', 'medium', 'high', 'xhigh', 'max'])
+  })
+
+  it('keeps the thinking toggle for M3 and shows no effort selector', () => {
+    render(
+      <StatusBar
+        model="MiniMax-M3"
+        setModel={vi.fn()}
+        thinkingEnabled={false}
+        setThinkingEnabled={vi.fn()}
+        supportsThinking
+        effort="max"
+        setEffort={vi.fn()}
+      />
+    )
+    expect(screen.getByText('Thinking off')).toBeTruthy()
+    expect(screen.queryByLabelText('Reasoning effort')).toBeNull()
+  })
+
+  it('lists M3.1 Flash Preview in the model picker', () => {
+    render(
+      <StatusBar
+        model="MiniMax-M3.1-Flash-Preview"
+        setModel={vi.fn()}
+        thinkingEnabled={false}
+        setThinkingEnabled={vi.fn()}
+        supportsThinking
+        effort="max"
+        setEffort={vi.fn()}
+      />
+    )
+    // ModelPicker is a popover; the button label shows the current model.
+    expect(document.body.textContent).toContain('M3.1 Flash Preview')
+  })
+})
+
 describe('planBarColor', () => {
   it('returns bg-muted for null (no data)', () => {
     expect(planBarColor(null)).toBe('bg-muted')

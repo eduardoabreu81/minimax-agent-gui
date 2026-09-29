@@ -117,6 +117,7 @@ class LLMClient:
         tools: list | None = None,
         model: str | None = None,
         thinking: bool | None = None,
+        effort: str | None = None,
         on_delta: Any = None,
     ) -> LLMResponse:
         """Generate response from LLM.
@@ -126,6 +127,8 @@ class LLMClient:
             tools: Optional list of Tool objects or dicts
             model: Optional model override for this call (defaults to client default)
             thinking: Optional thinking override (True/False/None=auto)
+            effort: Optional reasoning-depth level for always-on-thinking
+                    models (M3.1 Flash), e.g. "low" | "high" | "max".
             on_delta: Optional async callback(kind, content) invoked for
                        every content_block_delta chunk during streaming.
 
@@ -133,5 +136,5 @@ class LLMClient:
             LLMResponse containing the generated content
         """
         return await self._client.generate(
-            messages, tools, model=model, thinking=thinking, on_delta=on_delta
+            messages, tools, model=model, thinking=thinking, effort=effort, on_delta=on_delta
         )

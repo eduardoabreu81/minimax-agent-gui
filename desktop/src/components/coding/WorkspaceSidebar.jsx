@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import { useAgentActivity } from '../../context/AgentActivityContext'
 import { useSelectedModel } from '../../hooks/useSelectedModel'
+import { DEFAULT_MODEL } from '../../lib/modelLimits'
 import { useLiveTodos } from '../../hooks/useLiveTodos'
 import { LiveTodoProgress } from '../taskboard/LiveTodoProgress'
 
@@ -409,7 +410,7 @@ function TasksPanel() {
 
 function AgentsPanel() {
   const activity = useAgentActivity()
-  const { model: selectedModel } = useSelectedModel({ fallback: 'MiniMax-M3' })
+  const { model: selectedModel } = useSelectedModel({ fallback: DEFAULT_MODEL })
 
   return (
     <div className="space-y-3">

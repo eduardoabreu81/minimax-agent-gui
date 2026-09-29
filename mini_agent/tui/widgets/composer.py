@@ -11,22 +11,31 @@ class Composer(Container):
     """Message composer with model selector and thinking toggle"""
     
     class Submit(Message):
-        def __init__(self, text: str, model: str, thinking: bool) -> None:
+        def __init__(self, text: str, model: str, thinking: bool, effort: str | None = None) -> None:
             self.text = text
             self.model = model
             self.thinking = thinking
+            self.effort = effort
             super().__init__()
     
     CHAT_MODELS = [
+        ("MiniMax-M3.1-Flash-Preview", "MiniMax-M3.1-Flash-Preview (1M context, tunable effort)"),
         ("MiniMax-M3", "MiniMax-M3 (1M context, agentic)"),
         ("MiniMax-M2.7", "MiniMax-M2.7 (faster)"),
         ("MiniMax-M2.7-highspeed", "MiniMax-M2.7-highspeed (highest throughput)"),
     ]
-    
+
+    # Models that force thinking on and cannot be disabled. For these the
+    # on/off toggle is meaningless — depth is picked with `effort` instead.
+    THINKING_ALWAYS_ON = {"MiniMax-M3.1-Flash-Preview"}
+    THINKING_SUPPORTED = {"MiniMax-M3.1-Flash-Preview", "MiniMax-M3"}
+    EFFORT_LEVELS = ["low", "medium", "high", "xhigh", "max"]
+
     def __init__(self, default_model: str = "MiniMax-M3", **kwargs):
         super().__init__(**kwargs)
         self.current_model = default_model
         self.thinking_enabled = True
+        self.current_effort = "max"
     
     def compose(self) -> ComposeResult:
         with Vertical(id="composer"):
@@ -45,6 +54,13 @@ class Composer(Container):
                     id="thinking-toggle",
                     variant="primary" if self.thinking_enabled else "default",
                 )
+                yield Label("Effort:", classes="label")
+                yield Select(
+                    [(level, level) for level in self.EFFORT_LEVELS],
+                    value=self.current_effort,
+                    id="effort-selector",
+                    allow_blank=False,
+                )
             
             # Input area
             yield TextArea(
@@ -61,13 +77,17 @@ class Composer(Container):
     def on_select_changed(self, event: Select.Changed) -> None:
         if event.select.id == "model-selector":
             self.current_model = event.value
-            # Hide thinking toggle for non-M3 models
-            thinking_btn = self.query_one("#thinking-toggle", Button)
-            if self.current_model != "MiniMax-M3":
-                thinking_btn.display = False
+            # Always-on models (M3.1 Flash) have no meaningful on/off toggle
+            # — swap it for the effort selector instead.
+            always_on = self.current_model in self.THINKING_ALWAYS_ON
+            self.query_one("#thinking-toggle", Button).display = (
+                not always_on and self.current_model in self.THINKING_SUPPORTED
+            )
+            self.query_one("#effort-selector", Select).display = always_on
+            if not always_on and self.current_model not in self.THINKING_SUPPORTED:
                 self.thinking_enabled = False
-            else:
-                thinking_btn.display = True
+        elif event.select.id == "effort-selector":
+            self.current_effort = event.value
     
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "thinking-toggle":
@@ -85,7 +105,12 @@ class Composer(Container):
         input_widget = self.query_one("#composer-input", TextArea)
         text = input_widget.text.strip()
         if text:
-            self.post_message(self.Submit(text, self.current_model, self.thinking_enabled))
+            effort = (
+                self.current_effort
+                if self.current_model in self.THINKING_ALWAYS_ON
+                else None
+            )
+            self.post_message(self.Submit(text, self.current_model, self.thinking_enabled, effort))
             input_widget.clear()
     
     def action_submit(self) -> None:

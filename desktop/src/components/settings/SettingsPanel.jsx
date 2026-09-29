@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { useTheme } from '../../context/ThemeContext'
 import { apiFetch } from '../../lib/api.js'
+import { DEFAULT_MODEL } from '../../lib/modelLimits'
 import pkg from '../../../package.json'
 import { check } from '@tauri-apps/plugin-updater'
 import { relaunch } from '@tauri-apps/plugin-process'
@@ -18,6 +19,7 @@ import { useContextModal } from '../agent-context/ContextProvider.jsx'
 // can pick as their default — media models (image / video / speech / music)
 // are picked inside their own panels, not here.
 const ALL_MODELS = [
+  { id: 'MiniMax-M3.1-Flash-Preview', label: 'MiniMax-M3.1-Flash-Preview', desc: 'Newest M-series (1M context, multimodal, tunable reasoning effort)', type: 'chat', plan: 'plus' },
   { id: 'MiniMax-M3', label: 'MiniMax-M3', desc: 'Frontier multimodal coding model (1M context, agentic tool use)', type: 'chat', plan: 'plus' },
   { id: 'MiniMax-M2.7', label: 'MiniMax-M2.7', desc: 'Beginning the journey of recursive self-improvement (200k context, ~60 tps)', type: 'chat', plan: 'plus' },
   { id: 'MiniMax-M2.7-highspeed', label: 'MiniMax-M2.7-highspeed', desc: 'Same performance, faster and more agile (200k context, ~100 tps)', type: 'chat', plan: 'plus' },
@@ -132,7 +134,7 @@ export default function SettingsPanel({ onRestartSetup }) {
   const [localSettings, setLocalSettings] = useState({
     apiKey: '',
     apiKeyConfigured: false,
-    model: 'MiniMax-M3',
+    model: DEFAULT_MODEL,
     maxSteps: 50,
     // ``workspaceDir`` was removed in v0.5 — coding sessions have their
     // own picker in the CodingPanel header, and the app workspace is
@@ -321,7 +323,7 @@ export default function SettingsPanel({ onRestartSetup }) {
           ...prev,
           apiKey: '',
           apiKeyConfigured: data.api_key_configured || false,
-          model: data.agent?.model || 'MiniMax-M3',
+          model: data.agent?.model || DEFAULT_MODEL,
           maxSteps: data.agent?.max_steps || 50,
           autoCompact: data.agent?.auto_compact ?? true,
           // v0.5: ``workspace_dir`` is gone — we read the new
@@ -465,7 +467,7 @@ export default function SettingsPanel({ onRestartSetup }) {
     setLocalSettings({
       apiKey: '',
       apiKeyConfigured: false,
-      model: 'MiniMax-M3',
+      model: DEFAULT_MODEL,
     maxSteps: 50,
     autoCompact: true,
       // v0.5: no global workspaceDir; show the live app workspace

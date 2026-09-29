@@ -9,7 +9,14 @@ import ThinkingBlock from '../shared/ThinkingBlock'
 import CopyButton from '../shared/CopyButton'
 import MarkdownRenderer from '../MarkdownRenderer'
 import ContextWarningBanner from '../shared/ContextWarningBanner'
-import { getCompactThresholds, getContextLimit } from '../../lib/modelLimits'
+import {
+  getCompactThresholds,
+  getContextLimit,
+  DEFAULT_MODEL,
+  DEFAULT_EFFORT,
+  THINKING_SUPPORTED_MODELS,
+  usesEffortControl,
+} from '../../lib/modelLimits'
 
 function generateId() {
   return Math.random().toString(36).substring(2, 10)
@@ -22,15 +29,19 @@ export default function ChatPanel({
   thinkingEnabled: thinkingEnabledProp,
   setThinkingEnabled,
   supportsThinking: supportsThinkingProp,
+  effort: effortProp,
 } = {}) {
   const { t } = useTranslation()
   // Per-turn model + thinking controls are owned by App.jsx (so the
   // StatusBar's model picker stays in sync across panels). Props are
   // required — App.jsx always passes them. The `??` fallback is just
   // defensive for unit-test mounts.
-  const activeModel = activeModelProp ?? 'MiniMax-M3'
+  const activeModel = activeModelProp ?? DEFAULT_MODEL
   const thinkingEnabled = thinkingEnabledProp ?? true
-  const supportsThinking = supportsThinkingProp ?? (activeModelProp === 'MiniMax-M3')
+  const supportsThinking = supportsThinkingProp ?? THINKING_SUPPORTED_MODELS.has(activeModel)
+  // Reasoning depth for always-on-thinking models (M3.1 Flash). Sent as
+  // `output_config.effort`; ignored by models with the on/off toggle.
+  const effort = effortProp ?? DEFAULT_EFFORT
   const [messages, setMessages] = useState([])
   const [isConnected, setIsConnected] = useState(false)
   const [isThinking, setIsThinking] = useState(false)
@@ -517,9 +528,12 @@ export default function ChatPanel({
       permission_mode: 'agent',
       // Per-turn model + thinking override. The backend uses these to
       // choose which LLM to call and whether to inject the Anthropic
-      // `thinking` param for this message.
+      // `thinking` param for this message. Models that reason
+      // unconditionally (M3.1 Flash) ignore `thinking` and tune depth
+      // with `effort` instead.
       model: activeModel,
       thinking: supportsThinking ? thinkingEnabled : false,
+      effort: usesEffortControl(activeModel) ? effort : null,
     }
     if (attachment) payload.attachment = attachment.path
     // Show user message immediately before sending. The original
@@ -533,7 +547,7 @@ export default function ChatPanel({
     wsRef.current.send(JSON.stringify(payload))
     setIsThinking(true)
     onProcessingChange?.(true)
-  }, [onProcessingChange, activeModel, supportsThinking, thinkingEnabled])
+  }, [onProcessingChange, activeModel, supportsThinking, thinkingEnabled, effort])
 
   const currentTitle = conversations.find(c => c.id === sessionId)?.title || 'Chat'
 

@@ -9,6 +9,7 @@ import XTermTerminal from './XTermTerminal'
 import { useCodingChat } from './useCodingChat'
 import { useAgentActivity } from '../../context/AgentActivityContext'
 import { useSelectedModel } from '../../hooks/useSelectedModel'
+import { DEFAULT_MODEL } from '../../lib/modelLimits'
 import { useState } from 'react'
 
 export default function AgentChatPanel({
@@ -16,14 +17,15 @@ export default function AgentChatPanel({
   onOpenFile, onCloseFile, onSaveFile,
   getLanguage, gitStatus, changedFiles,
   runGitCommand, loadGitStatus, onFileChange,
-  activeModel, thinkingEnabled, supportsThinking,
+  activeModel, thinkingEnabled, supportsThinking, effort,
 }) {
   const { t } = useTranslation()
-  const { model: selectedModel } = useSelectedModel({ fallback: 'MiniMax-M3' })
+  const { model: selectedModel } = useSelectedModel({ fallback: DEFAULT_MODEL })
   const chat = useCodingChat({
     activeModel,
     thinkingEnabled,
     supportsThinking,
+    effort,
     onActivity: (data) => {
       if (data.type === 'tool_result' && (data.tool === 'write_file' || data.tool === 'edit_file')) {
         onFileChange?.()

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { apiFetch } from '../lib/api.js'
+import { DEFAULT_MODEL } from '../lib/modelLimits'
 
 /**
  * useSelectedModel — fetches the currently selected chat model from /api/config.
@@ -12,11 +13,11 @@ import { apiFetch } from '../lib/api.js'
  *    trigger a config change
  *
  * Returns:
- *  - model: the current model id (e.g. 'MiniMax-M3') or the fallback
+ *  - model: the current model id (e.g. DEFAULT_MODEL) or the fallback
  *  - loading: true while the first fetch is in-flight
  *  - refresh(): force a refetch
  */
-export function useSelectedModel({ fallback = 'MiniMax-M3' } = {}) {
+export function useSelectedModel({ fallback = DEFAULT_MODEL } = {}) {
   const [model, setModel] = useState(fallback)
   const [loading, setLoading] = useState(true)
   const mountedRef = useRef(true)

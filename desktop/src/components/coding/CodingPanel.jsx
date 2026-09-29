@@ -14,6 +14,12 @@ import WorkspaceSidebar from './WorkspaceSidebar'
 import WorkspacePicker from './WorkspacePicker'
 import AgentChatPanel from './AgentChatPanel'
 import { useCodingChat } from './useCodingChat'
+import {
+  DEFAULT_MODEL,
+  DEFAULT_EFFORT,
+  THINKING_SUPPORTED_MODELS,
+  usesEffortControl,
+} from '../../lib/modelLimits'
 import { useAgentActivity } from '../../context/AgentActivityContext'
 import { useSessionProtection } from '../../hooks/useSessionProtection'
 import { useSessionTokens } from '../../context/SessionTokensContext'
@@ -59,14 +65,16 @@ export default function CodingPanel({
   thinkingEnabled: thinkingEnabledProp,
   setThinkingEnabled,
   supportsThinking: supportsThinkingProp,
-} = {}) {
-  const { t } = useTranslation()
+  effort: effortProp,
+} = {}) {  const { t } = useTranslation()
   const activity = useAgentActivity()
   // Per-turn model + thinking controls are owned by App.jsx (shared with
   // StatusBar and ChatPanel). Props are required — App.jsx always passes.
-  const activeModel = activeModelProp ?? 'MiniMax-M3'
+  const activeModel = activeModelProp ?? DEFAULT_MODEL
   const thinkingEnabled = thinkingEnabledProp ?? true
-  const supportsThinking = supportsThinkingProp ?? (activeModelProp === 'MiniMax-M3')
+  const supportsThinking = supportsThinkingProp ?? THINKING_SUPPORTED_MODELS.has(activeModel)
+  // Reasoning depth for always-on-thinking models (M3.1 Flash).
+  const effort = effortProp ?? DEFAULT_EFFORT
   const [files, setFiles] = useState([])
   const [currentPath, setCurrentPath] = useState('workspace')
   const [openFiles, setOpenFiles] = useState([])
@@ -710,8 +718,11 @@ const sendCodingMessage = useCallback((text, attachment) => {
       permission_mode: agentMode === 'yolo' ? 'yolo' : 'agent',
       // Per-turn model + thinking override. Backend routes the LLM call
       // to the chosen model and injects the thinking param if M3 + on.
+      // Always-on-thinking models (M3.1 Flash) ignore `thinking` and tune
+      // depth with `effort` instead.
       model: activeModel,
       thinking: supportsThinking ? thinkingEnabled : false,
+      effort: usesEffortControl(activeModel) ? effort : null,
     }
     if (attachment) payload.attachment = attachment.path
     // Show user message immediately before sending

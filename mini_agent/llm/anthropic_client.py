@@ -22,8 +22,10 @@ class AnthropicClient(LLMClientBase):
     """
 
     # Per-model max_tokens defaults (Anthropic-compatible MiniMax docs).
-    # M3: 131K recommended (up to 512K). M2.x: 64K recommended (up to 200K).
+    # M3.1 Flash: 512K output limit. M3: 131K recommended (up to 512K).
+    # M2.x: 64K recommended (up to 200K).
     MODEL_MAX_TOKENS: dict = {
+        "MiniMax-M3.1-Flash-Preview": 512_000,
         "MiniMax-M3": 131_072,
         "MiniMax-M2.7": 65_536,
         "MiniMax-M2.7-highspeed": 65_536,
@@ -35,18 +37,36 @@ class AnthropicClient(LLMClientBase):
     }
     # Per-model CONTEXT WINDOW (input limit, separate from max_tokens
     # which is the output limit). Used by Agent._summarize_messages()
-    # to compute pct-based auto-compact triggers. M3 is the 1M-context
-    # flagship; M2.x tops out at 200K. Keep in sync with
+    # to compute pct-based auto-compact triggers. M3.1 Flash and M3 are
+    # both 1M-context; M2.x tops out at 200K. Keep in sync with
     # desktop/src/lib/modelLimits.js — both files are the source of
     # truth on the respective sides (frontend display, backend trigger).
     MODEL_CONTEXT_LIMITS: dict = {
+        "MiniMax-M3.1-Flash-Preview": 1_000_000,
         "MiniMax-M3":           1_000_000,
         "MiniMax-M2.7":           204_800,
         "MiniMax-M2.7-highspeed": 204_800,
     }
     # Models that support Anthropic-style extended thinking blocks.
-    # Only M3 currently — M2.x does not accept the `thinking` param.
-    THINKING_SUPPORTED: set = {"MiniMax-M3"}
+    # M3.1 Flash and M3 do; M2.x does not accept the `thinking` param.
+    THINKING_SUPPORTED: set = {"MiniMax-M3.1-Flash-Preview", "MiniMax-M3"}
+    # Models that force thinking ON and cannot be disabled. For these the
+    # `thinking` param is never sent (MiniMax enables reasoning by default
+    # and rejects `disabled`); depth is tuned with `output_config.effort`
+    # instead of the UI on/off toggle.
+    #
+    # NOTE: M3.1 Flash is NOT covered by the Token Plan quota — calling it
+    # bills the pay-as-you-go balance and returns HTTP 402
+    # (insufficient_balance_error) on a zero-balance account. It is
+    # therefore offered in the picker but is NOT the default model; the
+    # default stays M3 so a Token Plan-only user never hits a 402 on
+    # their first message.
+    THINKING_ALWAYS_ON: set = {"MiniMax-M3.1-Flash-Preview"}
+    # Valid `output_config.effort` levels per the MiniMax Anthropic API.
+    # `xhigh` is documented by MiniMax but missing from the Anthropic SDK's
+    # Literal (low|medium|high|max) — TypedDict isn't enforced at runtime,
+    # so it serializes to the wire as-is. Keep it in the list.
+    EFFORT_LEVELS: tuple = ("low", "medium", "high", "xhigh", "max")
 
     def __init__(
         self,
@@ -60,7 +80,9 @@ class AnthropicClient(LLMClientBase):
         Args:
             api_key: API key for authentication
             api_base: Base URL for the API (default: MiniMax Anthropic endpoint)
-            model: Model name to use (default: MiniMax-M2.5)
+            model: Model name to use (default: MiniMax-M3. See
+                    MODEL_CONTEXT_LIMITS for the M3.1-Flash-Preview billing
+                    caveat — it needs pay-as-you-go credit, not just a plan.)
             retry_config: Optional retry configuration
         """
         super().__init__(api_key, api_base, model, retry_config)
@@ -79,6 +101,7 @@ class AnthropicClient(LLMClientBase):
         tools: list[Any] | None = None,
         model: str | None = None,
         thinking: bool | None = None,
+        effort: str | None = None,
         on_delta: Any = None,
     ) -> anthropic.types.Message:
         """Execute API request (core method that can be retried).
@@ -90,7 +113,13 @@ class AnthropicClient(LLMClientBase):
             model: Optional model override for this call (defaults to self.model)
             thinking: Optional thinking override for this call.
                        True = force thinking on, False = force off, None = auto
-                       (auto = on for M3, off otherwise).
+                       (auto = on for M3/M3.1, off otherwise).
+                       Ignored for THINKING_ALWAYS_ON models, which reason
+                       unconditionally.
+            effort: Optional reasoning-depth level (low/medium/high/xhigh/max)
+                    for THINKING_ALWAYS_ON models. Sent as
+                    ``output_config.effort``. Omitted levels fall back to the
+                    API default (`max`).
             on_delta: Optional async callback(kind, content) invoked for
                        every content_block_delta chunk. kind is "thinking"
                        or "text"; content is the incremental string.
@@ -117,7 +146,7 @@ class AnthropicClient(LLMClientBase):
         if tools:
             params["tools"] = self._convert_tools(tools)
 
-        # Thinking param: explicit override wins, otherwise auto for M3.
+        # Thinking param: explicit override wins, otherwise auto for M3/M3.1.
         # Per the MiniMax Anthropic-compatible API spec, only two values
         # are valid for M3:
         #   - {"type": "adaptive"}  → thinking on (the model decides how
@@ -130,7 +159,14 @@ class AnthropicClient(LLMClientBase):
         # controls this: ON sends `adaptive`, OFF sends `disabled`
         # (or omits the param entirely for M2.x, where thinking is
         # always on and the param is ignored).
-        if thinking is True or (thinking is None and effective_model in self.THINKING_SUPPORTED):
+        if effective_model in self.THINKING_ALWAYS_ON:
+            # M3.1 Flash reasons unconditionally — MiniMax turns thinking on
+            # by default and there is no `disabled` option for it. Sending
+            # the `thinking` param here would be wrong (or rejected), so we
+            # stay quiet and only tune the depth via `output_config.effort`.
+            if effort in self.EFFORT_LEVELS:
+                params["output_config"] = {"effort": effort}
+        elif thinking is True or (thinking is None and effective_model in self.THINKING_SUPPORTED):
             params["thinking"] = {"type": "adaptive"}
         elif thinking is False and effective_model in self.THINKING_SUPPORTED:
             # Explicit OFF — only meaningful for M3 (M2.x ignores the param).
@@ -414,6 +450,7 @@ class AnthropicClient(LLMClientBase):
         tools: list[Any] | None = None,
         model: str | None = None,
         thinking: bool | None = None,
+        effort: str | None = None,
         on_delta: Any = None,
     ) -> LLMResponse:
         """Generate response from Anthropic LLM.
@@ -424,7 +461,10 @@ class AnthropicClient(LLMClientBase):
             model: Optional model override for this call (defaults to self.model)
             thinking: Optional thinking override for this call.
                        True = force thinking on, False = force off, None = auto
-                       (auto = on for M3, off otherwise).
+                       (auto = on for M3/M3.1, off otherwise).
+            effort: Optional reasoning-depth level (low/medium/high/xhigh/max)
+                    for THINKING_ALWAYS_ON models (M3.1 Flash). Sent as
+                    `output_config.effort`; None uses the API default.
             on_delta: Optional async callback(kind, content) invoked for
                        every content_block_delta chunk during streaming.
                        When set, the request streams and the callback fires
@@ -448,6 +488,7 @@ class AnthropicClient(LLMClientBase):
                 request_params["tools"],
                 model=model,
                 thinking=thinking,
+                effort=effort,
                 on_delta=on_delta,
             )
         else:
@@ -458,6 +499,7 @@ class AnthropicClient(LLMClientBase):
                 request_params["tools"],
                 model=model,
                 thinking=thinking,
+                effort=effort,
                 on_delta=on_delta,
             )
 

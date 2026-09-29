@@ -20,6 +20,47 @@ from .utils import calculate_display_width
 
 _logger = logging.getLogger(__name__)
 
+# Permanent API failures (non-retryable 4xx) need an actionable message
+# instead of a raw JSON dump. Keyed by the HTTP status the provider
+# returned.
+_PERMANENT_ERROR_HINTS: dict[int, str] = {
+    401: "Invalid API key — check it in Settings.",
+    402: (
+        "Insufficient balance. Top up pay-as-you-go credit: the Token Plan "
+        "quota does not cover every model (MiniMax-M3.1-Flash-Preview is "
+        "billed as pay-as-you-go, unlike the rest of the plan)."
+    ),
+    403: "This API key does not have access to the selected model or feature.",
+    404: "Unknown model or endpoint — check the selected model id.",
+}
+
+
+def _describe_llm_error(exc: Exception) -> str:
+    """Build a user-facing message for a failed LLM call.
+
+    Dispatch is duck-typed on the class *name* plus the expected
+    attribute, deliberately not ``isinstance``. This module can be
+    executed twice in one interpreter — the test suite re-imports it
+    through repeated ``sys.path.insert`` calls, and a PyInstaller bundle
+    can expose ``mini_agent`` under two names — and ``isinstance``
+    against one copy silently fails for an exception raised by the other,
+    degrading every message to the generic fallback.
+    """
+    name = type(exc).__name__
+
+    if name == "NonRetryableError" and hasattr(exc, "original"):
+        original = exc.original
+        status = getattr(original, "status_code", None)
+        hint = _PERMANENT_ERROR_HINTS.get(status)
+        if hint:
+            return f"{hint} (HTTP {status})"
+        return f"LLM call failed: {original}"
+
+    if name == "RetryExhaustedError" and hasattr(exc, "attempts"):
+        return f"LLM call failed after {exc.attempts} retries. Last error: {str(exc.last_exception)}"
+
+    return f"LLM call failed: {str(exc)}"
+
 
 # ANSI color codes
 class Colors:
@@ -727,6 +768,7 @@ Requirements:
         permission_policy: Optional[dict] = None,
         model_override: str | None = None,
         thinking_override: bool | None = None,
+        effort_override: str | None = None,
         stream_callback: Optional[callable] = None,
         tool_result_post_processor: Optional[callable] = None,
     ) -> str:
@@ -747,6 +789,12 @@ Requirements:
                             client default. Per-turn model picker in the UI.
             thinking_override: Optional thinking toggle for THIS run.
                                 True = force on, False = force off, None = auto.
+                                Ignored by always-on-thinking models (M3.1 Flash).
+            effort_override: Optional reasoning-depth level for THIS run
+                             (low/medium/high/xhigh/max), sent as
+                             `output_config.effort`. Only meaningful for
+                             always-on-thinking models (M3.1 Flash); the
+                             on/off thinking toggle doesn't apply to them.
             stream_callback: Optional async callback(kind, content) invoked for
                               every content_block_delta (thinking or text) as
                               the model generates. Enables real-time streaming
@@ -814,18 +862,14 @@ Requirements:
                     tools=tool_list,
                     model=model_override,
                     thinking=thinking_override,
+                    effort=effort_override,
                     on_delta=stream_callback,
                 )
             except Exception as e:
-                # Check if it's a retry exhausted error
-                from .retry import RetryExhaustedError
-
-                if isinstance(e, RetryExhaustedError):
-                    error_msg = f"LLM call failed after {e.attempts} retries. Last error: {str(e.last_exception)}"
-                    _logger.error(f"Retry failed: {error_msg}")
-                else:
-                    error_msg = f"LLM call failed: {str(e)}"
-                    _logger.error(f"Error: {error_msg}")
+                # RetryExhaustedError / NonRetryableError are turned into
+                # an actionable message; anything else is surfaced raw.
+                error_msg = _describe_llm_error(e)
+                _logger.error(f"LLM error: {error_msg}")
                 return error_msg
 
             # Accumulate API reported token usage + store the full block

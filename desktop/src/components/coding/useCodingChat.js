@@ -11,6 +11,7 @@ export function useCodingChat({
   activeModel = null,
   thinkingEnabled = null,
   supportsThinking = null,
+  effort = null,
 } = {}) {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
@@ -193,6 +194,8 @@ export function useCodingChat({
     if (supportsThinking !== null) {
       payload.thinking = supportsThinking ? !!thinkingEnabled : false
     }
+    // Always-on-thinking models (M3.1 Flash) tune depth with `effort`.
+    if (effort) payload.effort = effort
     setMessages(prev => [...prev, {
       type: 'user',
       content: input || '📎 Attachment sent',
@@ -202,7 +205,7 @@ export function useCodingChat({
     setInput('')
     setAttachment(null)
     setIsThinking(true)
-  }, [input, attachment, activeModel, thinkingEnabled, supportsThinking])
+  }, [input, attachment, activeModel, thinkingEnabled, supportsThinking, effort])
 
   const filteredSkills = input.startsWith('/')
     ? skills.filter(s =>

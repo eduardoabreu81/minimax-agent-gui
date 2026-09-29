@@ -6,6 +6,11 @@ import { SessionTokensProvider } from './context/SessionTokensContext'
 import { hasAnyRisk } from './hooks/useSessionProtection'
 import { useBackendReady } from './hooks/useBackendReady'
 import { apiFetch, isTauri } from './lib/api.js'
+import {
+  DEFAULT_MODEL,
+  DEFAULT_EFFORT,
+  THINKING_SUPPORTED_MODELS,
+} from './lib/modelLimits'
 import { useAgentContext } from './hooks/useAgentContext'
 import { ContextModalProvider, useContextModal } from './components/agent-context/ContextProvider.jsx'
 import Sidebar from './components/Sidebar'
@@ -94,9 +99,9 @@ function AppShell() {
         localStorage.getItem('global-model-override') ||
         localStorage.getItem('chat-model-override') ||
         localStorage.getItem('code-model-override') ||
-        'MiniMax-M3'
+        DEFAULT_MODEL
       )
-    } catch { return 'MiniMax-M3' }
+    } catch { return DEFAULT_MODEL }
   })
   const [thinkingEnabled, setThinkingEnabled] = useState(() => {
     try {
@@ -108,6 +113,13 @@ function AppShell() {
       return v !== 'false'
     } catch { return true }
   })
+  // Reasoning depth for always-on-thinking models (M3.1 Flash), which
+  // replace the on/off toggle with `output_config.effort`.
+  const [effort, setEffort] = useState(() => {
+    try {
+      return localStorage.getItem('global-effort') || DEFAULT_EFFORT
+    } catch { return DEFAULT_EFFORT }
+  })
 
   useEffect(() => {
     try { localStorage.setItem('global-model-override', activeModel) } catch {}
@@ -115,10 +127,14 @@ function AppShell() {
   useEffect(() => {
     try { localStorage.setItem('global-thinking-enabled', String(thinkingEnabled)) } catch {}
   }, [thinkingEnabled])
+  useEffect(() => {
+    try { localStorage.setItem('global-effort', effort) } catch {}
+  }, [effort])
 
-  // Extended thinking is M3-only (today). Other chat models in the Token
-  // Plan do not support the Anthropic `thinking` param.
-  const supportsThinking = activeModel === 'MiniMax-M3'
+  // Extended thinking is available on the M-series frontier models
+  // (M3.1 Flash and M3). Other chat models in the Token Plan do not
+  // support the Anthropic `thinking` param.
+  const supportsThinking = THINKING_SUPPORTED_MODELS.has(activeModel)
 
   // Agent Context system — banner + wizard mount state. The hook
   // owns the .agent/ status, the localStorage flag controls whether
@@ -184,7 +200,8 @@ function AppShell() {
                      setActiveModel={setActiveModel}
                      thinkingEnabled={thinkingEnabled}
                      setThinkingEnabled={setThinkingEnabled}
-                     supportsThinking={supportsThinking} />,
+                     supportsThinking={supportsThinking}
+                     effort={effort} />,
     tts: <SpeechPanel />,
     image: <ImagePanel />,
     music: <MusicPanel />,
@@ -377,6 +394,8 @@ function AppShell() {
             thinkingEnabled={thinkingEnabled}
             setThinkingEnabled={setThinkingEnabled}
             supportsThinking={supportsThinking}
+            effort={effort}
+            setEffort={setEffort}
           />
           {showSetup && <FirstRunSetup onComplete={() => setShowSetup(false)} />}
           <IncompleteContextBanner
