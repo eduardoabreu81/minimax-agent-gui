@@ -21,8 +21,9 @@ simulación.
 ## Modelo y razonamiento
 
 Como el Chat, el Agente de Código usa el modelo y la configuración de
-razonamiento extendido de la barra de estado. `MiniMax-M3` con el razonamiento
-activado es la opción más potente para tareas complejas.
+razonamiento extendido de la barra de estado. `MiniMax-M3.1-Flash-Preview`
+(con un effort alto) o `MiniMax-M3` con el razonamiento activado son las
+opciones más potentes para tareas complejas.
 
 ## Consejos
 

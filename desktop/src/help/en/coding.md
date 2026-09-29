@@ -19,8 +19,9 @@ than a simulation.
 ## Model & thinking
 
 Like Chat, the Code Agent uses the model and extended-thinking setting from
-the status bar. `MiniMax-M3` with thinking enabled is the strongest option
-for complex tasks.
+the status bar. `MiniMax-M3.1-Flash-Preview` (with a high effort level) or
+`MiniMax-M3` with thinking enabled are the strongest options for complex
+tasks.
 
 ## Tips
 

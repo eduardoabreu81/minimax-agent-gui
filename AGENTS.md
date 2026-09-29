@@ -12,7 +12,7 @@
 The project wraps MiniMax MCP tools (`web_search`, `understand_image`) as standard agent tools and provides media generation (TTS, Image, Music, Video) via MiniMax APIs. The FastAPI backend (`web/backend/`) is bundled by the Tauri shell as a sidecar — there is no separate web app in this repo.
 
 - **Name**: `minimax-agent-gui`
-- **Version**: `0.4.0`
+- **Version**: `0.4.5`
 - **License**: MIT
 - **Python**: `>=3.10`
 - **Node**: `>=18`
@@ -221,17 +221,44 @@ Response format uses `base_resp` for error codes and `content` for VLM text / `o
 Every chat/code panel composer has a compact **ModelThinkingControls**
 row below the textarea:
 
-- **Model selector** (`<select>`): M3, M2.7, M2.7-highspeed. Persisted
-  per-panel via `localStorage` (`chat-model-override` /
-  `code-model-override`).
+- **Model selector** (`<select>`): M3.1-Flash-Preview, M3, M2.7,
+  M2.7-highspeed. Persisted per-panel via `localStorage`
+  (`chat-model-override` / `code-model-override`).
 - **Thinking toggle** (button with Brain icon): only visible for M3.
   When ON, sends the Anthropic `thinking: {type: "adaptive"}` param.
   Persisted via `localStorage` (`chat-thinking-enabled` /
   `code-thinking-enabled`).
+- **Effort selector** (replaces the toggle on M3.1-Flash-Preview): see
+  "Always-on thinking models" below. Persisted via `localStorage`
+  (`global-effort`).
 
-The model and thinking override are sent in the WebSocket payload
-and forwarded to `agent.run(model_override, thinking_override)`,
-which passes them to `llm.generate(model=..., thinking=...)`.
+The model, thinking and effort overrides are sent in the WebSocket
+payload and forwarded to `agent.run(model_override, thinking_override,
+effort_override)`, which passes them to `llm.generate(model=...,
+thinking=..., effort=...)`.
+
+### Always-on thinking models (M3.1-Flash-Preview)
+
+`MiniMax-M3.1-Flash-Preview` **reasons unconditionally** — MiniMax
+enables thinking by default and offers no way to disable it. The
+on/off `ThinkingToggle` is therefore meaningless for it, so the UI
+swaps in an **effort selector** instead (low / medium / high / xhigh /
+max, default `max`). Two consequences in the LLM client
+(`mini_agent/llm/anthropic_client.py`):
+
+- `THINKING_ALWAYS_ON` — the `thinking` param is **never** sent for
+  these models (no `disabled` value exists for them). Only
+  `output_config: {effort: ...}` is sent, via the Anthropic SDK's
+  native `output_config` field (requires `anthropic>=0.92`).
+- `xhigh` is documented by MiniMax but missing from the SDK's own
+  `Literal` for effort. TypedDicts aren't enforced at runtime, so it
+  serializes fine — don't "fix" it by dropping the level.
+- **Billing caveat:** M3.1 is *not* covered by the Token Plan. Calling it
+  bills the pay-as-you-go balance, so a Token Plan-only account gets
+  `HTTP 402 insufficient_balance_error` on the first message. The
+  `coding_plan/remains` endpoint still returns 200 in that state, which
+  makes it look like a key/config problem when it isn't. That's why M3.1
+  is selectable but never the default model.
 
 ### Real-time Thinking + Text Streaming
 
@@ -300,6 +327,10 @@ feature back to the web SPA, do it in the fork.
 - **Naming**: `snake_case` functions/variables, `PascalCase` classes
 - **Logging**: `logging.getLogger(__name__)`
 - **Error Handling**: Tools return `ToolResult(success=False, error=...)` rather than raising
+- **Subprocess env on Linux**: every `subprocess` / `asyncio.create_subprocess_*`
+  call MUST pass `env=sanitized_subprocess_env()` (from
+  `mini_agent/process_env.py`). See the pitfall below — omitting it breaks
+  every shell command in packaged Linux builds.
 
 ## Security Considerations
 
@@ -325,8 +356,21 @@ feature back to the web SPA, do it in the fork.
 - **Token Plan web_search uses `"q"` not `"query"`** — see the
   warning in section 4 above. Hardcoding the legacy field name
   silently breaks the tool with HTTP 400.
-- **Default model is MiniMax-M3**, not M2.7 or M2.5. The settings
-  picker offers M3 / M2.7 / M2.7-highspeed.
+- **Default model is MiniMax-M3**, not M3.1 or M2.7. The settings picker
+  offers M3.1-Flash-Preview / M3 / M2.7 / M2.7-highspeed. **M3.1 is
+  deliberately not the default**: it is billed as pay-as-you-go, *not*
+  against the Token Plan quota, so a Token Plan-only account gets
+  `HTTP 402 insufficient_balance_error` on its first message. Keep it
+  selectable, never the default, until MiniMax covers it in the plan.
+  M3.1 also has no published per-token price, so it's intentionally
+  **absent** from `mini_max_mcp/pricing.py` — cost shows 0. Don't
+  invent one.
+- **Permanent 4xx must not be retried.** `mini_agent/retry.py` fails fast
+  on 400/401/**402**/403/404/422 via `is_retryable_exception()` and raises
+  `NonRetryableError`. Only 408/409/429, 5xx, and connection errors retry.
+  `agent._describe_llm_error()` turns those into an actionable message
+  (e.g. 402 → "top up pay-as-you-go") instead of a raw provider payload.
+  Retrying a billing error only delays the message the user needs.
 - **Anthropic SDK blocks non-streaming calls >10 min.** Any LLM
   call must use `messages.stream()` (already the default in
   `anthropic_client.py`).
@@ -334,6 +378,26 @@ feature back to the web SPA, do it in the fork.
   `video`, `speech`, `music`). The legacy `minimax-m2.7` etc. names
   no longer appear. If you grep for them, you'll find nothing.
 - **Model is user-selectable in Settings** — system prompts use the `{model}` placeholder, do not hardcode M3 (or M2.7) in new code.
+- **Never spawn a subprocess without a sanitized env on Linux.** The
+  AppImage runtime (`AppRun`) and the PyInstaller bootloader each push
+  their own library directory into `LD_LIBRARY_PATH` (the FUSE mount
+  `/tmp/.mount_*` and `sys._MEIPASS`). Inheriting that into a child makes
+  the dynamic linker resolve the *bundle's* shared libraries instead of
+  the system's. Symptom when it regresses: every `bash()` call dies with
+  `symbol lookup error: undefined symbol: rl_print_keybinding` (bash →
+  `libreadline.so.8`), while the user's own terminal keeps working
+  (issue #2). Fix: `env=sanitized_subprocess_env()`. The helper strips
+  only entries pointing into our bundle — a user's deliberate
+  `LD_LIBRARY_PATH` is preserved, and the module is a no-op on
+  Windows/macOS and when running from source.
+  - Already wired: `bash_tool.py` (both foreground + background),
+    `web/backend/main.py` (`/api/shell`, `/ws/shell`, git status/branches),
+    `web/backend/context_refs.py` (git), `mcp_loader.py` (stdio servers).
+  - `mini_agent.process_env` is listed in `backend.spec` hiddenimports —
+    a missed import there only surfaces at runtime on packaged Linux.
+  - Do **not** "fix" this by switching the shell to `dash`. The tool is
+    `bash()`; dash breaks `[[ ]]`, arrays and process substitution in
+    commands users have already written.
 
 ## Auto-updater
 

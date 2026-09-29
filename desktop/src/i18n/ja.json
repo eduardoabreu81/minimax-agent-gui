@@ -80,7 +80,7 @@
     "placeholder": "MiniMaxエージェントにメッセージ...",
     "sendHint": "Ctrl+Enter で送信",
     "emptyTitle": "MiniMaxエージェントとの会話を始めましょう",
-    "emptySubtitle": "Powered by MiniMax-M3",
+    "emptySubtitle": "Powered by MiniMax-M3.1-Flash-Preview",
     "thinking": "考え中...",
     "newChat": "新しいチャット",
     "clearHistory": "履歴を消去"
@@ -276,7 +276,7 @@
     "welcome": "MiniMax エージェントへようこそ",
     "welcomeDesc": "MiniMax Token Plan のオールインワンプラットフォーム。チャット、メディア生成、コーディング、タスク管理がすべてここで。",
     "chat": "エージェントチャット",
-    "chatDesc": "MiniMax-M3 搭載のエージェントとチャット。質問、コーディングのヘルプ、アイデア出しができます。",
+    "chatDesc": "MiniMax-M3.1-Flash-Preview 搭載のエージェントとチャット。質問、コーディングのヘルプ、アイデア出しができます。",
     "media": "メディア生成",
     "mediaDesc": "MiniMax API を使用してテキスト読み上げ、画像、音楽、動画を生成。",
     "code": "コーディングワークスペース",

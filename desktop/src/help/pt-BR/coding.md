@@ -20,8 +20,9 @@ simulação.
 ## Modelo e raciocínio
 
 Como o Chat, o Agente de Código usa o modelo e a configuração de raciocínio
-estendido da barra de status. `MiniMax-M3` com raciocínio ativado é a opção
-mais forte para tarefas complexas.
+estendido da barra de status. `MiniMax-M3.1-Flash-Preview` (com effort alto)
+ou `MiniMax-M3` com raciocínio ativado são as opções mais fortes para
+tarefas complexas.
 
 ## Dicas
 

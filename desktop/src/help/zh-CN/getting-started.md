@@ -15,7 +15,9 @@ MiniMax Studio 是面向 MiniMax 平台的桌面工作区——与专家模型�
 
 ## 选择模型
 
-使用状态栏中的模型选择器来选择处理下一条消息的模型。扩展思考在 `MiniMax-M3` 上可用；不支持的模型会禁用该开关。
+使用状态栏中的模型选择器来选择处理下一条消息的模型。扩展思考在 `MiniMax-M3` 和 `MiniMax-M3.1-Flash-Preview` 上可用；不支持的模型会禁用该开关。
+
+`MiniMax-M3.1-Flash-Preview` 始终会进行思考 —— MiniMax 默认开启思考，且不提供关闭方式。因此状态栏不显示开关，而是显示 **effort 选择器**（`low` / `medium` / `high` / `xhigh` / `max`，默认为 `max`）。effort 越高，思考越深入，回答越慢但越详尽。
 
 ## 后续步骤
 

@@ -80,7 +80,7 @@
     "placeholder": "Mensaje para MiniMax Studio...",
     "sendHint": "Ctrl+Enter para enviar",
     "emptyTitle": "Inicia una conversación con MiniMax Studio",
-    "emptySubtitle": "Powered by MiniMax-M3",
+    "emptySubtitle": "Powered by MiniMax-M3.1-Flash-Preview",
     "thinking": "pensando...",
     "newChat": "Nuevo Chat",
     "clearHistory": "Borrar Historial"
@@ -276,7 +276,7 @@
     "welcome": "Bienvenido a MiniMax Studio",
     "welcomeDesc": "Tu plataforma todo-en-uno para MiniMax Token Plan. Chat, genera media, programa y gestiona tareas — todo en un solo lugar.",
     "chat": "Chat del Agente",
-    "chatDesc": "Chatea con el agente powered by MiniMax-M3. Haz preguntas, obtén ayuda con código o brainstorming.",
+    "chatDesc": "Chatea con el agente powered by MiniMax-M3.1-Flash-Preview. Haz preguntas, obtén ayuda con código o brainstorming.",
     "media": "Generación de Medios",
     "mediaDesc": "Genera texto-a-voz, imágenes, música y videos usando las APIs de MiniMax.",
     "code": "Workspace de Código",

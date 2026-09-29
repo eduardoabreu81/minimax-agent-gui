@@ -28,7 +28,15 @@ contexto de tu proyecto.
 
 Usa el selector de modelo en la barra de estado para elegir qué modelo atiende
 tu siguiente mensaje. El razonamiento extendido está disponible en
-`MiniMax-M3`; el interruptor se desactiva para modelos que no lo admiten.
+`MiniMax-M3` y `MiniMax-M3.1-Flash-Preview`; el interruptor se desactiva para
+modelos que no lo admiten.
+
+`MiniMax-M3.1-Flash-Preview` siempre razona — MiniMax activa el
+razonamiento por defecto y no ofrece forma de desactivarlo. En lugar del
+interruptor on/off, la barra de estado muestra un **selector de effort**
+(`low` / `medium` / `high` / `xhigh` / `max`, con `max` por defecto). Un
+effort mayor significa un razonamiento más profundo y respuestas más
+lentas y completas.
 
 ## Próximos pasos
 

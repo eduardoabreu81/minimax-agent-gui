@@ -159,8 +159,15 @@ your project context.
 ### Picking a model
 
 Use the model picker in the status bar to choose which model handles your
-next message. Extended thinking is available on `MiniMax-M3`; the toggle is
-disabled for models that don't support it.
+next message. Extended thinking is available on `MiniMax-M3` and
+`MiniMax-M3.1-Flash-Preview`; the toggle is disabled for models that don't
+support it.
+
+`MiniMax-M3.1-Flash-Preview` always thinks — MiniMax turns reasoning on by
+default and offers no way to switch it off. Instead of the on/off toggle,
+the status bar shows an **effort** selector (`low` / `medium` / `high` /
+`xhigh` / `max`, defaulting to `max`). Higher effort means deeper reasoning
+and slower, more thorough answers.
 
 ### Next steps
 
@@ -223,8 +230,9 @@ than a simulation.
 ### Model & thinking
 
 Like Chat, the Code Agent uses the model and extended-thinking setting from
-the status bar. `MiniMax-M3` with thinking enabled is the strongest option
-for complex tasks.
+the status bar. `MiniMax-M3.1-Flash-Preview` (with a high effort level) or
+`MiniMax-M3` with thinking enabled are the strongest options for complex
+tasks.
 
 ### Tips
 

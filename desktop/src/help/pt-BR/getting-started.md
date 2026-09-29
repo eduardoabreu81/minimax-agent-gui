@@ -25,8 +25,15 @@ contexto do seu projeto.
 ## Escolhendo um modelo
 
 Use o seletor de modelo na barra de status para escolher qual modelo cuida da
-sua próxima mensagem. O raciocínio estendido está disponível no `MiniMax-M3`;
-o botão fica desabilitado para modelos que não o suportam.
+sua próxima mensagem. O raciocínio estendido está disponível no
+`MiniMax-M3` e no `MiniMax-M3.1-Flash-Preview`; o botão fica desabilitado
+para modelos que não o suportam.
+
+O `MiniMax-M3.1-Flash-Preview` sempre raciocina — a MiniMax liga o raciocínio
+por padrão e não oferece forma de desligá-lo. Em vez do botão on/off, a barra
+de status mostra um **seletor de effort** (`low` / `medium` / `high` /
+`xhigh` / `max`, com `max` como padrão). Effort maior significa raciocínio
+mais profundo e respostas mais lentas e completas.
 
 ## Próximos passos
 
