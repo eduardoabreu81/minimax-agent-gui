@@ -47,6 +47,10 @@ from urllib.parse import urlparse
 
 import httpx
 
+# mini_agent must be importable — web/backend/main.py puts the project root
+# on sys.path before importing this module (same as the tests do).
+from mini_agent.process_env import sanitized_subprocess_env
+
 logger = logging.getLogger(__name__)
 
 
@@ -383,6 +387,7 @@ def _run_git(workspace: Path, *args: str, max_bytes: int = 5_000_000) -> str:
             timeout=10,
             encoding="utf-8",
             errors="replace",
+            env=sanitized_subprocess_env(),
         )
     except FileNotFoundError:
         return f"[BLOCKED: git binary not found in PATH]"

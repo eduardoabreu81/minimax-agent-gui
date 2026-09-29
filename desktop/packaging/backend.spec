@@ -67,6 +67,11 @@ hiddenimports = [
     "mini_agent",
     "mini_agent.tools",
     "mini_agent.tools.media_tools",
+    # Sanitizes LD_LIBRARY_PATH for spawned subprocesses (issue #2).
+    # Imported statically, so PyInstaller finds it anyway — listed
+    # explicitly because a missed import here only shows up at runtime
+    # on packaged Linux builds, where every bash() call would fail.
+    "mini_agent.process_env",
     "mini_max_mcp",
     "mini_max_mcp.mcp_tool_wrapper",
     "mini_max_mcp.mcp_tools",

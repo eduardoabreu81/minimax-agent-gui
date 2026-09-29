@@ -39,6 +39,9 @@ from mini_agent import Agent, LLMClient
 from mini_agent.tools import ReadTool, WriteTool, BashTool
 from mini_agent.schema import Message
 from mini_agent.tools.skill_loader import SkillLoader
+# Keep our own bundle's LD_LIBRARY_PATH out of every subprocess we spawn
+# (shell, git, terminal). See mini_agent/process_env.py and issue #2.
+from mini_agent.process_env import sanitized_subprocess_env
 
 # Agent context system (SOUL/IDENTITY/USER/MEMORY/daily).
 # See web/backend/agent_context.py + web/backend/i18n.py.
@@ -3134,10 +3137,13 @@ async def chat_websocket(websocket: WebSocket, session_id: str):
             permission_mode = data.get("permission_mode", "agent")
             # Per-turn model + thinking overrides. The user can pick a
             # different chat model and toggle the thinking param (only
-            # M3 supports thinking) from the composer; these fields are
-            # optional and fall back to the session's defaults.
+            # M3 / M3.1 Flash support thinking) from the composer; these
+            # fields are optional and fall back to the session's defaults.
+            # `effort` replaces the on/off toggle for M3.1 Flash, whose
+            # thinking is always on and tuned by depth instead.
             model_override = data.get("model")
             thinking_override = data.get("thinking")  # True/False/None
+            effort_override = data.get("effort")      # low|medium|high|xhigh|max
 
             if not message and not attachment:
                 continue
@@ -3371,6 +3377,7 @@ async def chat_websocket(websocket: WebSocket, session_id: str):
                     permission_callback=permission_callback,
                     model_override=model_override,
                     thinking_override=thinking_override,
+                    effort_override=effort_override,
                     stream_callback=stream_callback,
                     tool_result_post_processor=_build_subdir_post_processor(agent),
                 )
@@ -5070,6 +5077,7 @@ async def shell_command(data: dict):
             text=True,
             cwd=cwd,
             timeout=30,
+            env=sanitized_subprocess_env(),
         )
         return {
             "output": result.stdout,
@@ -5090,15 +5098,15 @@ async def git_status(session_id: str = ""):
         cwd = str(_resolve_session_root(session_id))
         branch = subprocess.run(
             ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-            capture_output=True, text=True, cwd=cwd,
+            capture_output=True, text=True, cwd=cwd, env=sanitized_subprocess_env(),
         )
         status = subprocess.run(
             ["git", "status", "--short"],
-            capture_output=True, text=True, cwd=cwd,
+            capture_output=True, text=True, cwd=cwd, env=sanitized_subprocess_env(),
         )
         log = subprocess.run(
             ["git", "log", "--oneline", "-10"],
-            capture_output=True, text=True, cwd=cwd,
+            capture_output=True, text=True, cwd=cwd, env=sanitized_subprocess_env(),
         )
         return {
             "branch": branch.stdout.strip() if branch.returncode == 0 else None,
@@ -5117,7 +5125,7 @@ async def git_branches(session_id: str = ""):
         cwd = str(_resolve_session_root(session_id))
         result = subprocess.run(
             ["git", "branch", "-a"],
-            capture_output=True, text=True, cwd=cwd,
+            capture_output=True, text=True, cwd=cwd, env=sanitized_subprocess_env(),
         )
         branches = []
         if result.returncode == 0:
@@ -5181,6 +5189,7 @@ async def shell_websocket(websocket: WebSocket):
             cwd=str(PROJECT_ROOT),
             text=False,
             bufsize=0,
+            env=sanitized_subprocess_env(),
         )
         
         loop = asyncio.get_event_loop()

@@ -270,3 +270,43 @@ async def test_timeout_validation():
     result = await bash_tool.execute(command="echo 'test'", timeout=0)
     assert result.success
     print("Timeout < 1 handled correctly")
+
+
+@pytest.mark.asyncio
+async def test_subprocess_receives_sanitized_env(monkeypatch):
+    """The child process must be spawned with a sanitized env (issue #2).
+
+    A packaged Linux build (AppImage + PyInstaller) inherits an
+    LD_LIBRARY_PATH pointing at the bundle, which made the dynamic linker
+    resolve the bundle's libreadline and killed every command. The fix is
+    passing an explicit `env=`; this test guards against that being
+    dropped in a future refactor.
+    """
+    captured = {}
+
+    class _FakeProcess:
+        async def communicate(self):
+            return b"", b""
+
+    async def _fake_exec(*args, **kwargs):
+        captured["exec"] = kwargs
+        return _FakeProcess()
+
+    async def _fake_shell(*args, **kwargs):
+        captured["shell"] = kwargs
+        return _FakeProcess()
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", _fake_exec)
+    monkeypatch.setattr(asyncio, "create_subprocess_shell", _fake_shell)
+
+    bash_tool = BashTool()
+    await bash_tool.execute(command="echo test")
+
+    # Whichever branch this platform took, an env must have been passed.
+    kwargs = captured.get("exec") or captured.get("shell")
+    assert kwargs is not None, "no subprocess was spawned"
+    assert "env" in kwargs, "subprocess spawned without an explicit env"
+    # A copy, not os.environ itself — the helper must never hand the live
+    # environ to a child it intends to mutate.
+    assert isinstance(kwargs["env"], dict)
+    assert "PATH" in kwargs["env"] or "Path" in kwargs["env"]

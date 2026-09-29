@@ -13,6 +13,7 @@ from mcp.client.stdio import stdio_client
 from mcp.client.streamable_http import streamablehttp_client
 
 from .base import Tool, ToolResult
+from ..process_env import sanitized_subprocess_env
 
 # Connection type aliases
 ConnectionType = Literal["stdio", "sse", "http", "streamable_http"]
@@ -233,7 +234,13 @@ class MCPServerConnection:
 
     async def _connect_stdio(self):
         """Connect via STDIO transport."""
-        server_params = StdioServerParameters(command=self.command, args=self.args, env=self.env if self.env else None)
+        # When the server declares its own env, drop any LD_LIBRARY_PATH /
+        # LD_PRELOAD entry pointing into our bundle before handing it over —
+        # a packaged Linux build would otherwise shadow the server's system
+        # libraries (issue #2). Stays None when unset so the MCP SDK keeps
+        # using its own minimal default environment.
+        child_env = sanitized_subprocess_env(self.env) if self.env else None
+        server_params = StdioServerParameters(command=self.command, args=self.args, env=child_env)
         return await self.exit_stack.enter_async_context(stdio_client(server_params))
 
     async def _connect_sse(self):

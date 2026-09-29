@@ -13,6 +13,7 @@ from typing import Any
 from pydantic import Field, model_validator
 
 from .base import Tool, ToolResult
+from ..process_env import sanitized_subprocess_env
 
 
 class BashOutputResult(ToolResult):
@@ -338,6 +339,15 @@ Examples:
                 # Unix/Linux/macOS: Use bash
                 shell_cmd = command
 
+            # Strip our own bundle's library path from the child env.
+            # Without this, a packaged Linux build (AppImage + PyInstaller)
+            # leaks LD_LIBRARY_PATH into the shell and the dynamic linker
+            # resolves the bundle's libs instead of the system's — which
+            # killed every command with
+            # "symbol lookup error: undefined symbol: rl_print_keybinding"
+            # on Arch/Wayland. See mini_agent/process_env.py and issue #2.
+            child_env = sanitized_subprocess_env()
+
             if run_in_background:
                 # Background execution: Create isolated process
                 bash_id = str(uuid.uuid4())[:8]
@@ -349,6 +359,7 @@ Examples:
                         stdout=asyncio.subprocess.PIPE,
                         stderr=asyncio.subprocess.STDOUT,
                         cwd=self.workspace_dir,
+                        env=child_env,
                     )
                 else:
                     process = await asyncio.create_subprocess_shell(
@@ -356,6 +367,7 @@ Examples:
                         stdout=asyncio.subprocess.PIPE,
                         stderr=asyncio.subprocess.STDOUT,
                         cwd=self.workspace_dir,
+                        env=child_env,
                     )
 
                 # Create background shell and add to manager
@@ -386,6 +398,7 @@ Examples:
                         stdout=asyncio.subprocess.PIPE,
                         stderr=asyncio.subprocess.PIPE,
                         cwd=self.workspace_dir,
+                        env=child_env,
                     )
                 else:
                     process = await asyncio.create_subprocess_shell(
@@ -393,6 +406,7 @@ Examples:
                         stdout=asyncio.subprocess.PIPE,
                         stderr=asyncio.subprocess.PIPE,
                         cwd=self.workspace_dir,
+                        env=child_env,
                     )
 
                 try:
