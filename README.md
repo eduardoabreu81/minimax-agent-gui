@@ -169,5 +169,5 @@ MIT — see [LICENSE](LICENSE).
 ---
 
 <div align="center">
-<sub>Made with care for the MiniMax community · Powered by <b>MiniMax M3</b></sub>
+<sub>Made with care for the MiniMax community · Powered by <b>MiniMax M3</b> · <a href="https://ko-fi.com/eduardoabreu81">☕ Ko-fi</a></sub>
 </div>
